@@ -22,7 +22,7 @@ const NAV: { id: TabId; label: string; Icon: typeof Compass }[] = [
   { id: 'overview', label: 'Overview', Icon: Compass },
   { id: 'places', label: 'Places', Icon: MapPin },
   { id: 'days', label: 'Days', Icon: CalendarDays },
-  { id: 'budget', label: 'Budget', Icon: Wallet },
+  { id: 'budget', label: 'Spending', Icon: Wallet },
 ]
 
 const NEXT_THEME: Record<Theme, Theme> = { auto: 'light', light: 'dark', dark: 'auto' }

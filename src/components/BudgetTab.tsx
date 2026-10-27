@@ -75,7 +75,7 @@ export function BudgetTab() {
   if (!trip) {
     return (
       <div className="page">
-        <h1 className="display">Budget</h1>
+        <h1 className="display">Spending</h1>
         <p className="muted">Create a trip first.</p>
       </div>
     )
@@ -120,8 +120,8 @@ export function BudgetTab() {
     <div className="page money-page">
       <header className="page-head">
         <div>
-          <p className="eyebrow">Money</p>
-          <h1 className="display">Budget</h1>
+          <p className="eyebrow">Budget and expenses</p>
+          <h1 className="display">Spending</h1>
         </div>
         <div className="head-actions">
           {hasHome && (
