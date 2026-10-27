@@ -97,7 +97,7 @@ function TripCard({ trip }: { trip: Trip }) {
           {menu && <div className="menu-scrim" onClick={() => setMenu(false)} />}
           {menu && (
             <div className="menu-pop" role="menu">
-              <button role="menuitem" onClick={() => { setMenu(false); setEditing(true) }}><Pencil size={16} /> Edit name and dates</button>
+              <button role="menuitem" onClick={() => { setMenu(false); setEditing(true) }}><Pencil size={16} /> Edit</button>
               <button
                 role="menuitem"
                 className="danger"
@@ -106,7 +106,7 @@ function TripCard({ trip }: { trip: Trip }) {
                   if (confirm(`Delete “${trip.name}” and all its places? This can’t be undone.`)) deleteTrip(trip.id)
                 }}
               >
-                <Trash2 size={16} /> Delete trip
+                <Trash2 size={16} /> Delete
               </button>
             </div>
           )}
