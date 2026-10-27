@@ -68,14 +68,14 @@ export async function runAutoLookup() {
       if (todo.length === 0) break
       setProgress({ running: true, done, total: done + todo.length })
 
-      const batch = todo.slice(0, 8)
+      const batch = todo.slice(0, 12)
       const results = await lookupMany(batch)
       const updates: Parameters<typeof applyLookups>[0] = []
       let unavailable = false
       for (const p of batch) {
         const r = results.get(p.id)
         if (!r || r.status === 'unavailable') unavailable = true
-        else if (r.status === 'none') updates.push({ id: p.id, lookup: 'none' })
+        else if (r.status === 'none') updates.push({ id: p.id, lookup: r.complete ? 'none' : 'partial' })
         else updates.push({ id: p.id, lookup: r.complete ? 'found' : 'partial', details: r.details })
       }
       if (updates.length > 0) applyLookups(updates)
@@ -87,10 +87,10 @@ export async function runAutoLookup() {
           retryAt = Date.now() + 5 * 60_000
           break
         }
-        await sleep(15_000)
+        await sleep(8_000)
       } else {
         failures = 0
-        await sleep(1_500)
+        await sleep(600)
       }
     }
   } finally {

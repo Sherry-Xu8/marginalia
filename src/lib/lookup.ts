@@ -59,8 +59,8 @@ const tidy = (v: string | undefined) => v?.replace(/;/g, ', ').replace(/_/g, ' '
 
 export type LookupResult =
   | { status: 'found'; details: PlaceDetails; complete: boolean } // complete = every source answered
-  | { status: 'none' }
-  | { status: 'unavailable' }
+  | { status: 'none'; complete: boolean } // nothing found (complete=false: OpenStreetMap didn't answer, try again later)
+  | { status: 'unavailable' } // couldn't reach anything at all
 
 const distMetres = (a: { lat: number; lon: number }, b: { lat: number; lon: number }) => {
   const rad = Math.PI / 180
@@ -83,19 +83,25 @@ function detailsFromTags(t: Tags): { details: PlaceDetails; wiki?: string } {
   return { details, wiki: t.wikipedia }
 }
 
-// One Overpass request for several places at once: everything named within 80 m of any of them.
+// OpenStreetMap's public servers are often slow or busy. When they don't answer, they're left
+// alone for a few minutes so photos and descriptions from Wikipedia aren't held up.
+let overpassDownUntil = 0
+
+// One Overpass request for a few places at once: everything named within 60 m of any of them.
 // Returns null if no server answered.
 async function overpassNear(places: Place[]): Promise<Element[] | null> {
-  const around = places.map((p) => `nwr(around:80,${p.lat.toFixed(6)},${p.lon.toFixed(6)})["name"];`).join('')
-  const query = `[out:json][timeout:20];(${around});out tags center 800;`
+  if (Date.now() < overpassDownUntil) return null
+  const around = places.map((p) => `nwr(around:60,${p.lat.toFixed(6)},${p.lon.toFixed(6)})["name"];`).join('')
+  const query = `[out:json][timeout:10];(${around});out tags center 300;`
   for (const server of OVERPASS) {
     const data = await getJson<{ elements?: Element[] }>(
       server,
       { method: 'POST', body: 'data=' + encodeURIComponent(query), headers: { 'Content-Type': 'application/x-www-form-urlencoded' } },
-      20000,
+      9000,
     )
     if (data?.elements) return data.elements
   }
+  overpassDownUntil = Date.now() + 4 * 60_000
   return null
 }
 
@@ -130,13 +136,24 @@ async function fromWikipedia(place: Place, taggedArticle?: string): Promise<{ su
   return { summary: w.extract, imageUrl: w.thumbnail?.source?.replace(/\/\d+px-/, '/500px-') }
 }
 
-// Looks up several places, kindly: one OpenStreetMap request for the lot, then Wikipedia a few at a time.
+// Looks up several places, kindly: OpenStreetMap a few at a time, Wikipedia four at a time. Wikipedia
+// is quick and reliable, so a slow OpenStreetMap never stops photos and descriptions arriving.
 export async function lookupMany(places: Place[]): Promise<Map<string, LookupResult>> {
   const out = new Map<string, LookupResult>()
   if (places.length === 0) return out
-  const elements = await overpassNear(places)
+
+  const elementsFor = new Map<string, Element[] | null>()
+  const chunks: Place[][] = []
+  for (let i = 0; i < places.length; i += 6) chunks.push(places.slice(i, i + 6))
+  await Promise.all(
+    chunks.map(async (chunk) => {
+      const els = await overpassNear(chunk)
+      chunk.forEach((p) => elementsFor.set(p.id, els))
+    }),
+  )
 
   const work = places.map((place) => async () => {
+    const elements = elementsFor.get(place.id) ?? null
     let details: PlaceDetails | undefined
     let wikiTag: string | undefined
     if (elements) {
@@ -146,7 +163,7 @@ export async function lookupMany(places: Place[]): Promise<Map<string, LookupRes
           const at = e.center ?? (e.lat !== undefined && e.lon !== undefined ? { lat: e.lat, lon: e.lon } : null)
           return { tags: e.tags!, at, score: nameScore(place, e.tags!) }
         })
-        .filter((x) => x.at && distMetres(place, x.at) <= 90 && x.score >= 0.34)
+        .filter((x) => x.at && distMetres(place, x.at) <= 70 && x.score >= 0.34)
         .sort((a, b) => b.score - a.score)[0]
       if (best) {
         const d = detailsFromTags(best.tags)
@@ -165,14 +182,13 @@ export async function lookupMany(places: Place[]): Promise<Map<string, LookupRes
     merged.source = details && wiki ? 'OpenStreetMap and Wikipedia' : wiki ? 'Wikipedia' : details ? 'OpenStreetMap' : undefined
     const useful = merged.summary || merged.website || merged.hours || merged.phone || merged.cuisine || merged.imageUrl
     if (useful) out.set(place.id, { status: 'found', details: merged, complete: !!elements && wikiAnswered })
-    else if (!elements || !wikiAnswered) out.set(place.id, { status: 'unavailable' })
-    else out.set(place.id, { status: 'none' })
+    else if (!wikiAnswered && !elements) out.set(place.id, { status: 'unavailable' })
+    else out.set(place.id, { status: 'none', complete: !!elements && wikiAnswered })
   })
 
-  // Wikipedia: three places at a time.
   const queue = [...work]
   await Promise.all(
-    Array.from({ length: 3 }, async () => {
+    Array.from({ length: 4 }, async () => {
       for (let job = queue.shift(); job; job = queue.shift()) await job()
     }),
   )

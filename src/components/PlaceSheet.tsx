@@ -56,7 +56,7 @@ export function PlaceSheet({
       return
     }
     if (result.status === 'none') {
-      applyLookups([{ id: place!.id, lookup: 'none' }])
+      applyLookups([{ id: place!.id, lookup: result.complete ? 'none' : 'partial' }])
       setStatus('Couldn’t find a matching listing online. Try the search links below, or add details yourself.')
       return
     }
