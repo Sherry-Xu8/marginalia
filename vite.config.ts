@@ -11,8 +11,8 @@ export default defineConfig({
       registerType: 'autoUpdate',
       includeAssets: ['favicon.svg', 'apple-touch-icon.png'],
       manifest: {
-        name: 'Wayfarer',
-        short_name: 'Wayfarer',
+        name: 'Marginalia',
+        short_name: 'Marginalia',
         description: 'A little room for the road — your personal trip planner',
         start_url: '.',
         display: 'standalone',

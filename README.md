@@ -1,4 +1,4 @@
-# Trip Planner
+# Marginalia
 
 A personal trip planner that runs entirely in your browser. No server, no accounts —
 everything is saved on your device. Works on a phone; can be added to the home screen

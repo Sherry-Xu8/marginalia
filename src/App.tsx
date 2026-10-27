@@ -27,7 +27,7 @@ function TopBar() {
     <header className="topbar">
       <a className="brand" href="#/">
         <span className="logo"><Compass size={22} strokeWidth={1.8} /></span>
-        Wayfarer
+        Marginalia
       </a>
       <span className="tagline">A little room for the road</span>
       <button
