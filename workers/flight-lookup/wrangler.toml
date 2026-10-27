@@ -1,0 +1,4 @@
+# Only needed if you use the command line (wrangler). The Cloudflare website works without this file.
+name = "marginalia-flights"
+main = "worker.js"
+compatibility_date = "2025-01-01"

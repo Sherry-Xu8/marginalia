@@ -1,7 +1,8 @@
 import { useMemo, useState } from 'react'
-import { fmtMoney } from '../lib/money'
+import { fmtMoney, roundToCurrency } from '../lib/money'
 import { shortDate, toISO } from '../lib/days'
-import { addExpense, deleteExpense, setBudget, useAppData } from '../lib/store'
+import { getRate, useRate } from '../lib/rates'
+import { addExpense, deleteExpense, setBudget, setHomeCurrency, useAppData } from '../lib/store'
 import { EXPENSE_CATEGORIES, type ExpenseCategory } from '../types'
 
 function Bar({ value, max, over }: { value: number; max: number; over?: boolean }) {
@@ -22,6 +23,26 @@ export function BudgetTab() {
   const [category, setCategory] = useState<ExpenseCategory>('Food & drink')
   const [date, setDate] = useState(toISO(new Date()))
   const [error, setError] = useState('')
+  const [paidIn, setPaidIn] = useState<'local' | 'home'>('local')
+  const [showFx, setShowFxState] = useState(() => {
+    try {
+      return localStorage.getItem('show-fx') === 'on'
+    } catch {
+      return false
+    }
+  })
+  const setShowFx = (on: boolean) => {
+    setShowFxState(on)
+    try {
+      localStorage.setItem('show-fx', on ? 'on' : 'off')
+    } catch {
+      // not saved — fine
+    }
+  }
+  const local = (trip?.currency ?? 'USD').toUpperCase()
+  const home = (trip?.homeCurrency ?? '').toUpperCase()
+  const hasHome = /^[A-Z]{3}$/.test(home) && home !== local
+  const { rate: fxRate } = useRate(local, hasHome ? home : local)
 
   const mine = useMemo(
     () => expenses.filter((e) => e.tripId === activeTripId).sort((a, b) => b.date.localeCompare(a.date)),
@@ -43,6 +64,12 @@ export function BudgetTab() {
 
   const cur = trip.currency ?? 'USD'
   const money = (n: number) => fmtMoney(n, cur)
+  // The home-currency equivalent of an amount in the local currency, when conversions are on.
+  const fx = (n: number) => (showFx && hasHome && fxRate ? fmtMoney(n * fxRate.rate, home) : null)
+  const Fx = ({ n }: { n: number }) => {
+    const v = fx(n)
+    return v ? <small className="fx">≈ {v}</small> : null
+  }
   const planned =
     tripDays.reduce((s, d) => s + d.items.reduce((t, i) => t + (i.cost ?? 0), 0), 0) +
     transfers.filter((t) => t.tripId === activeTripId).reduce((s, t) => s + (t.cost ?? 0), 0)
@@ -60,11 +87,18 @@ export function BudgetTab() {
     setBudget(trip!.id, raw.trim() === '' || !Number.isFinite(n) || n < 0 ? undefined : n, currency)
   }
 
-  function add() {
+  async function add() {
     const n = parseFloat(amount)
     if (!title.trim()) return setError('What was it for?')
     if (!Number.isFinite(n) || n <= 0) return setError('Enter an amount greater than zero.')
-    addExpense({ tripId: trip!.id, date, title: title.trim(), amount: n, category })
+    if (paidIn === 'home' && hasHome) {
+      // Paid in your home currency: store the local equivalent (so budgets add up) and remember what you paid.
+      const r = fxRate ?? (await getRate(local, home))
+      if (!r) return setError(`Couldn’t get the ${home}→${local} exchange rate. Try again, or enter the amount in ${local}.`)
+      addExpense({ tripId: trip!.id, date, title: title.trim(), amount: roundToCurrency(n / r.rate, local), category, paid: { amount: n, currency: home } })
+    } else {
+      addExpense({ tripId: trip!.id, date, title: title.trim(), amount: n, category })
+    }
     setTitle('')
     setAmount('')
     setError('')
@@ -99,12 +133,32 @@ export function BudgetTab() {
             />
           </label>
         </div>
-        <p className="muted">Use a 3-letter currency code, such as USD, EUR or KRW.</p>
+        <div className="row">
+          <label>
+            Home currency
+            <input
+              maxLength={4}
+              value={trip.homeCurrency ?? ''}
+              placeholder="e.g. USD"
+              onChange={(e) => setHomeCurrency(trip.id, e.target.value)}
+              aria-label="Your home currency code, for example USD or GBP"
+            />
+          </label>
+          <label className="inline fx-toggle">
+            <input type="checkbox" checked={showFx} disabled={!hasHome} onChange={(e) => setShowFx(e.target.checked)} />
+            Show conversions
+          </label>
+        </div>
+        <p className="muted">
+          Use 3-letter codes, such as KRW for the local currency and USD for home.
+          {hasHome && fxRate && ` 1 ${local} ≈ ${fxRate.rate.toPrecision(3)} ${home} (${fxRate.source}, ${fxRate.asOf}${fxRate.stale ? ', offline: older rate' : ''}).`}
+          {hasHome && !fxRate && ' Looking up the exchange rate…'}
+        </p>
 
         <div className="stats">
-          <div><span className="muted">Budget</span><strong>{budget !== undefined ? money(budget) : '—'}</strong></div>
-          <div><span className="muted">Planned</span><strong>{money(planned)}</strong></div>
-          <div><span className="muted">Spent</span><strong>{money(spent)}</strong></div>
+          <div><span className="muted">Budget</span><strong>{budget !== undefined ? money(budget) : '—'}</strong>{budget !== undefined && <Fx n={budget} />}</div>
+          <div><span className="muted">Planned</span><strong>{money(planned)}</strong><Fx n={planned} /></div>
+          <div><span className="muted">Spent</span><strong>{money(spent)}</strong><Fx n={spent} /></div>
         </div>
         {budget !== undefined && (
           <>
@@ -128,9 +182,18 @@ export function BudgetTab() {
         </label>
         <div className="row">
           <label>
-            Amount ({cur})
+            Amount ({paidIn === 'home' && hasHome ? home : cur})
             <input inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)} />
           </label>
+          {hasHome && (
+            <label>
+              Paid in
+              <select value={paidIn} onChange={(e) => setPaidIn(e.target.value as 'local' | 'home')}>
+                <option value="local">{cur} (local)</option>
+                <option value="home">{home} (home)</option>
+              </select>
+            </label>
+          )}
           <label>
             Date
             <input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
@@ -154,7 +217,7 @@ export function BudgetTab() {
           <div className="card">
             {byCategory.map(({ c, total }) => (
               <div key={c}>
-                <div className="row between"><span>{c}</span><strong>{money(total)}</strong></div>
+                <div className="row between"><span>{c}</span><strong>{money(total)}<Fx n={total} /></strong></div>
                 <Bar value={total} max={spent} />
               </div>
             ))}
@@ -174,7 +237,7 @@ export function BudgetTab() {
                 <div key={d.id} className="row between day-money">
                   <span>{shortDate(d.date)}</span>
                   <span className="muted">planned {money(p)}</span>
-                  <strong className={sp > p && p > 0 ? 'error' : ''}>spent {money(sp)}</strong>
+                  <strong className={sp > p && p > 0 ? 'error' : ''}>spent {money(sp)}<Fx n={sp} /></strong>
                 </div>
               )
             })}
@@ -193,7 +256,11 @@ export function BudgetTab() {
                 {e.title}
                 <small className="muted"> · {e.category}</small>
               </span>
-              <strong>{money(e.amount)}</strong>
+              <strong className="amt">
+                {money(e.amount)}
+                {e.paid && <small className="fx">paid {fmtMoney(e.paid.amount, e.paid.currency)}</small>}
+                <Fx n={e.amount} />
+              </strong>
               <button aria-label={`Delete ${e.title}`} onClick={() => confirm(`Delete “${e.title}”?`) && deleteExpense(e.id)}>×</button>
             </div>
           ))}

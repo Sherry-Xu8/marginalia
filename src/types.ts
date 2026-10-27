@@ -45,7 +45,8 @@ export type Trip = {
   stops: Stop[]
   checklist: ChecklistItem[]
   budget?: number // total trip budget, in `currency`
-  currency?: string // e.g. "USD", "KRW"
+  currency?: string // the local currency you spend in, e.g. "KRW"
+  homeCurrency?: string // your own currency, for showing equivalents, e.g. "USD"
 }
 
 export const EXPENSE_CATEGORIES = ['Food & drink', 'Transport', 'Accommodation', 'Activities', 'Shopping', 'Other'] as const
@@ -60,6 +61,7 @@ export type Expense = {
   amount: number
   category: ExpenseCategory
   placeId?: string // set when you logged it from a place on your itinerary
+  paid?: { amount: number; currency: string } // what you actually paid, if it was in another currency (amount is the local equivalent)
 }
 
 // One planned visit in a day.

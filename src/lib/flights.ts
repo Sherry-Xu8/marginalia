@@ -131,13 +131,39 @@ export type FlightInfo = { from?: string; to?: string; departTime?: string; arri
 //   GET <VITE_FLIGHT_PROXY_URL>?flight=KE123&date=2026-11-13
 // with {"from":"ICN","to":"PUS","departTime":"09:10","arriveTime":"10:20","note":"Terminal 2"}.
 // Without it, this returns null and the app just fills in the airline and airport names.
+const SERVICE_KEY = 'flight-service'
+
+// The address of your flight service: typed into Trip settings (saved on this device), or set when building.
+export function getFlightService(): string {
+  try {
+    const saved = localStorage.getItem(SERVICE_KEY)
+    if (saved) return saved
+  } catch {
+    // no saved setting available
+  }
+  return (import.meta.env as Record<string, string | undefined>).VITE_FLIGHT_PROXY_URL ?? ''
+}
+
+// Only a secure web address is accepted. An empty value switches the service off.
+export function setFlightService(url: string): boolean {
+  const clean = url.trim()
+  if (clean && !/^https:\/\/[^\s]+$/i.test(clean)) return false
+  try {
+    if (clean) localStorage.setItem(SERVICE_KEY, clean)
+    else localStorage.removeItem(SERVICE_KEY)
+  } catch {
+    return false
+  }
+  return true
+}
+
 export async function lookupFlight(f: FlightNumber, date: string): Promise<FlightInfo | null> {
-  const proxy = (import.meta.env as Record<string, string | undefined>).VITE_FLIGHT_PROXY_URL
+  const proxy = getFlightService()
   if (!proxy) return null
   const ctrl = new AbortController()
   const timer = setTimeout(() => ctrl.abort(), 8000)
   try {
-    const res = await fetch(`${proxy}?flight=${encodeURIComponent(f.airlineCode + f.number)}&date=${date}`, { signal: ctrl.signal })
+    const res = await fetch(`${proxy}${proxy.includes('?') ? '&' : '?'}flight=${encodeURIComponent(f.airlineCode + f.number)}&date=${date}`, { signal: ctrl.signal })
     if (!res.ok) return null
     const d = (await res.json()) as Record<string, unknown>
     const time = (v: unknown) => (typeof v === 'string' && /^\d{2}:\d{2}$/.test(v) ? v : undefined)

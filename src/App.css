@@ -705,3 +705,8 @@ h3 { font-size: 1.05rem; margin: 22px 0 8px; }
 .stay-tile { width: 52px; height: 52px; border-radius: 28%; }
 .leg { padding-left: 40px; }
 @media (min-width: 760px) { .leg { padding-left: 40px; } }
+
+/* currency conversion */
+.fx { display: block; color: var(--muted); font-weight: 500; font-size: 0.75rem; margin-top: 1px; }
+.amt { text-align: right; display: flex; flex-direction: column; align-items: flex-end; }
+.fx-toggle { align-self: flex-end; min-height: 42px; margin-bottom: 12px; white-space: nowrap; }

@@ -519,6 +519,11 @@ export function setBudget(tripId: string, budget: number | undefined, currency: 
   }))
 }
 
+export function setHomeCurrency(tripId: string, code: string) {
+  const clean = code.trim().toUpperCase().slice(0, 4)
+  update((s) => ({ ...s, trips: s.trips.map((t) => (t.id === tripId ? { ...t, homeCurrency: clean || undefined } : t)) }))
+}
+
 export function addExpense(e: Omit<Expense, 'id'>) {
   update((s) => ({ ...s, expenses: [...s.expenses, { ...e, id: newId() }] }))
 }

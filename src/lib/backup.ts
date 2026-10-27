@@ -110,6 +110,7 @@ function cleanTrip(v: unknown): Trip | null {
     id, name, startDate, endDate, stops, checklist,
     budget: num(o.budget) ?? undefined,
     currency: str(o.currency, 4) ?? undefined,
+    homeCurrency: str(o.homeCurrency, 4) ?? undefined,
   }
 }
 
@@ -211,6 +212,12 @@ function cleanExpense(v: unknown): Expense | null {
     id, tripId, date: d, title, amount,
     category: EXPENSE_CATEGORIES.find((c) => c === o.category) ?? 'Other',
     placeId: str(o.placeId, 100) ?? undefined,
+    paid: (() => {
+      const p = obj(o.paid)
+      const a = num(p?.amount)
+      const c = str(p?.currency, 4)
+      return p && a !== null && c ? { amount: a, currency: c } : undefined
+    })(),
   }
 }
 

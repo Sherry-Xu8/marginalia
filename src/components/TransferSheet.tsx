@@ -1,7 +1,7 @@
 import { Bus, CarFront, Plane, Route, Ship, TrainFront, X } from 'lucide-react'
 import { useState, type ComponentType } from 'react'
 import { stopsOn } from '../lib/days'
-import { expandAirport, flightLinks, flightTitle, lookupFlight, parseFlightNumber } from '../lib/flights'
+import { expandAirport, flightLinks, flightTitle, getFlightService, lookupFlight, parseFlightNumber } from '../lib/flights'
 import { addTransfer, deleteTransfer, updateTransfer } from '../lib/store'
 import { TRANSFER_KINDS, type Transfer, type TransferKind, type Trip } from '../types'
 
@@ -59,6 +59,8 @@ export function TransferSheet({
       if (info.arriveTime) setArrive(info.arriveTime)
       if (info.note) setNote(info.note)
       setFlightMsg('Filled in from the flight-data service. Check the times against your booking.')
+    } else if (getFlightService()) {
+      setFlightMsg('The flight service couldn’t find that flight on that date. Check the number and the date, or use the links below.')
     } else {
       setFlightMsg(
         f.airline

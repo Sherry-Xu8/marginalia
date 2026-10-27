@@ -8,6 +8,7 @@ import { addStop, deleteStop, deleteTrip, moveStop, updateStop, useAppData } fro
 import type { Stop, Transfer, Trip } from '../types'
 import { BackupCard } from './BackupCard'
 import { isAutoLookupOn, setAutoLookup } from '../lib/autolookup'
+import { getFlightService, setFlightService } from '../lib/flights'
 import { Checklist } from './Checklist'
 import { MapImport } from './MapImport'
 import { StaySheet } from './StaySheet'
@@ -94,6 +95,30 @@ function StopCard({ trip, stop, index }: { trip: Trip; stop: Stop; index: number
       </details>
       {suggesting && <SuggestSheet trip={trip} stop={stop} onClose={() => setSuggesting(false)} />}
       {staying && <StaySheet trip={trip} stop={stop} onClose={() => setStaying(false)} />}
+    </div>
+  )
+}
+
+// Optional: the address of your own flight-lookup service, for live times when you add a flight.
+function FlightServiceSetting() {
+  const [value, setValue] = useState(getFlightService)
+  const [msg, setMsg] = useState('')
+  return (
+    <div className="card">
+      <strong>Flight times service (optional)</strong>
+      <p className="muted">
+        Paste the address of your flight-lookup service to fill in times when you add a flight. Leave it empty to switch it off.
+        Saved on this device only.
+      </p>
+      <div className="row">
+        <input value={value} placeholder="https://marginalia-flights.your-name.workers.dev" onChange={(e) => { setValue(e.target.value); setMsg('') }} aria-label="Flight service address" />
+        <button
+          onClick={() => setMsg(setFlightService(value) ? (value.trim() ? 'Saved.' : 'Switched off.') : 'That needs to be a secure address starting with https://')}
+        >
+          Save
+        </button>
+      </div>
+      {msg && <p className="muted" role="status">{msg}</p>}
     </div>
   )
 }
@@ -289,6 +314,7 @@ export function TripOverview({ trip }: { trip: Trip }) {
 
       <h3 className="section-title">Trip settings</h3>
       <AutoLookupToggle />
+      <FlightServiceSetting />
       <div className="card row buttons">
         <button
           className="danger"

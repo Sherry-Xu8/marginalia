@@ -49,12 +49,6 @@ It must answer `GET ?from=lat,lon&to=lat,lon` with `{"km": 4.2, "minutes": 25}`.
 
 ## Later: automatic flight times (optional)
 
-Entering a flight number fills in the airline and, if you type airport codes like ICN or PUS, the airport names. Times and the exact
-route change from day to day, so they come from a flight-data service. Those need an account and a key, which must **never** go in
-this app's code. If you set up a small web service that holds the key privately, point the app at it when building:
-
-```bash
-VITE_FLIGHT_PROXY_URL=https://your-service.example/flight npm run build
-```
-
-It must answer `GET ?flight=KE123&date=2026-11-13` with `{"from":"ICN","to":"PUS","departTime":"09:10","arriveTime":"10:20","note":"Terminal 2"}`.
+Entering a flight number fills in the airline and airport names. For **times and terminals**, see
+[workers/flight-lookup/README.md](workers/flight-lookup/README.md): it walks through setting up a free flight-data key and a small
+Cloudflare Worker that keeps the key private. The key must **never** go in this app's code.
