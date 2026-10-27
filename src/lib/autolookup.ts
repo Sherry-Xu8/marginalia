@@ -1,6 +1,6 @@
 import { useSyncExternalStore } from 'react'
-import { lookupMany } from './lookup'
-import { applyLookups, getState } from './store'
+import { POOR_IMAGE, cityImage, lookupMany } from './lookup'
+import { applyLookups, getState, setStopCover } from './store'
 import type { Place } from '../types'
 
 // Fetches photos, descriptions and opening hours for your places in the background, a few at a
@@ -50,12 +50,26 @@ export const useLookupProgress = (): Progress =>
   )
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
+
+// A photo of each city for the stop cards.
+async function findCovers() {
+  for (const trip of getState().trips) {
+    for (const stop of trip.stops) {
+      const checked = stop.coverCheckedAt ? Date.now() - new Date(stop.coverCheckedAt).getTime() : Infinity
+      // A cover that is only a flag or emblem is replaced with a real photo.
+      if ((stop.coverUrl && !POOR_IMAGE.test(stop.coverUrl)) || (!stop.coverUrl && checked < 7 * DAY)) continue
+      const url = await cityImage(stop.name)
+      if (url !== undefined) setStopCover(trip.id, stop.id, url ?? undefined)
+    }
+  }
+}
 let running = false
 let retryAt = 0
 
 export async function runAutoLookup() {
   if (running || !isAutoLookupOn() || Date.now() < retryAt || (typeof navigator !== 'undefined' && !navigator.onLine)) return
   running = true
+  void findCovers()
   let done = 0
   let failures = 0
   try {

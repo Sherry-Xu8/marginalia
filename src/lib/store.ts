@@ -698,3 +698,10 @@ export function applyLookups(
     }),
   }))
 }
+
+// Saves a city photo for a stop (or records that none was found, so we don't keep asking).
+export function setStopCover(tripId: string, stopId: string, coverUrl: string | undefined) {
+  mapStops(tripId, (stops) =>
+    stops.map((st) => (st.id === stopId ? { ...st, coverUrl: coverUrl ?? (st.coverUrl && /flag_of|coat_of_arms|emblem|locator|location_map|map_of|seal_of|logo/i.test(st.coverUrl) ? undefined : st.coverUrl), coverCheckedAt: new Date().toISOString() } : st)),
+  )
+}

@@ -7,6 +7,8 @@ export type Stop = {
   arrival: string // yyyy-mm-dd
   departure: string // yyyy-mm-dd
   stayPlaceId?: string // where you're sleeping in this stop (a place tagged Accommodation)
+  coverUrl?: string // a photo of the city, found automatically
+  coverCheckedAt?: string // when we last looked for one
 }
 
 export const TRANSFER_KINDS = ['flight', 'train', 'bus', 'ferry', 'car', 'other'] as const

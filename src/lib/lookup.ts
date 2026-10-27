@@ -198,3 +198,29 @@ export async function lookupMany(places: Place[]): Promise<Map<string, LookupRes
 export async function lookupPlace(place: Place): Promise<LookupResult> {
   return (await lookupMany([place])).get(place.id) ?? { status: 'unavailable' }
 }
+
+// Flags, emblems and maps make poor cover photos.
+export const POOR_IMAGE = /flag_of|coat_of_arms|emblem|locator|location_map|map_of|seal_of|logo/i
+
+// A photo of a city or country, from its Wikipedia article. "Singapore/Malaysia" tries the whole
+// name, then each part. If the main picture is just a flag, the "Tourism in …" article is tried.
+// Returns undefined if Wikipedia couldn't be reached (try again later), null if there's no photo.
+export async function cityImage(name: string): Promise<string | null | undefined> {
+  const candidates = [name, ...name.split(/[/,&]| and /i)].map((n) => n.trim()).filter((n, i, all) => n && all.indexOf(n) === i)
+  let answered = false
+  const thumb = async (title: string): Promise<string | null> => {
+    const w = await getJson<{ type?: string; thumbnail?: { source?: string } }>(
+      `https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(title.replace(/ /g, '_'))}`,
+      undefined,
+      8000,
+    )
+    if (w) answered = true
+    const src = w && w.type !== 'disambiguation' ? w.thumbnail?.source : undefined
+    return src && !POOR_IMAGE.test(src) ? src.replace(/\/\d+px-/, '/960px-') : null
+  }
+  for (const c of candidates) {
+    const found = (await thumb(c)) ?? (await thumb(`Tourism in ${c}`))
+    if (found) return found
+  }
+  return answered ? null : undefined
+}

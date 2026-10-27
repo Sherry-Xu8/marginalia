@@ -95,7 +95,7 @@ function cleanTrip(v: unknown): Trip | null {
     const arrival = date(so?.arrival)
     const departure = date(so?.departure)
     return so && sid && sname && arrival && departure
-      ? [{ id: sid, name: sname, arrival, departure, stayPlaceId: str(so.stayPlaceId, 100) ?? undefined }]
+      ? [{ id: sid, name: sname, arrival, departure, stayPlaceId: str(so.stayPlaceId, 100) ?? undefined, coverUrl: url(so.coverUrl) }]
       : []
   })
   const checklist = arr(o.checklist).flatMap((c): ChecklistItem[] => {

@@ -33,7 +33,8 @@ function StopCard({ trip, stop, index }: { trip: Trip; stop: Stop; index: number
   const placeCount = places.filter((p) => p.groupId && areaIds.includes(p.groupId)).length
   const dates = stopDays(trip, stop).map((d) => d.date)
   const coverPlace = places.find((p) => p.groupId && areaIds.includes(p.groupId) && (p.photos?.[0] ?? p.details?.imageUrl))
-  const cover = coverPlace?.photos?.[0] ?? coverPlace?.details?.imageUrl
+  // A photo of the city comes first; failing that, a photo of one of its places.
+  const cover = stop.coverUrl ?? coverPlace?.photos?.[0] ?? coverPlace?.details?.imageUrl
   const [coverFailed, setCoverFailed] = useState(false)
   const planned = days.filter((d) => d.tripId === trip.id && dates.includes(d.date) && d.items.length > 0).length
   const last = index === trip.stops.length - 1
