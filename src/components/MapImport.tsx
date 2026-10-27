@@ -1,10 +1,19 @@
+import { Upload } from 'lucide-react'
 import { useRef, useState } from 'react'
 import { ImportError, readMapFile } from '../lib/kml'
 import { importPlaces, useAppData } from '../lib/store'
 import type { ImportSummary } from '../types'
 
 // Choose a Google My Maps export (KML/KMZ) and add its places to the trip.
-export function MapImport({ tripId }: { tripId: string }) {
+export function MapImport({
+  tripId,
+  compact,
+  onResult,
+}: {
+  tripId: string
+  compact?: boolean // just the button; the parent shows the result
+  onResult?: (summary: ImportSummary | null, error: string) => void
+}) {
   const { groups } = useAppData()
   const fileInput = useRef<HTMLInputElement>(null)
   const [busy, setBusy] = useState(false)
@@ -22,13 +31,28 @@ export function MapImport({ tripId }: { tripId: string }) {
       if (parsed.places.length === 0) {
         throw new ImportError('We read the file but found no places with a location in it.')
       }
-      setSummary(importPlaces(tripId, parsed, file.name))
+      const done = importPlaces(tripId, parsed, file.name)
+      setSummary(done)
+      onResult?.(done, '')
     } catch (e) {
-      setError(e instanceof ImportError ? e.message : 'Something went wrong reading that file.')
+      const msg = e instanceof ImportError ? e.message : 'Something went wrong reading that file.'
+      setError(msg)
+      onResult?.(null, msg)
     } finally {
       setBusy(false)
       if (fileInput.current) fileInput.current.value = '' // allow choosing the same file again
     }
+  }
+
+  if (compact) {
+    return (
+      <>
+        <input ref={fileInput} type="file" accept=".kml,.kmz" hidden onChange={(e) => onFile(e.target.files?.[0])} />
+        <button className="soft-btn import-top" disabled={busy} onClick={() => fileInput.current?.click()}>
+          <Upload size={18} /> {busy ? 'Reading…' : 'Import map'}
+        </button>
+      </>
+    )
   }
 
   return (

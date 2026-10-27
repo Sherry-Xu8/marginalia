@@ -1,12 +1,12 @@
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { fromISO, stopsOn } from '../lib/days'
-import { addToDay, getState, useAppData } from '../lib/store'
+import { addToDay, getState } from '../lib/store'
 import { TAG_STYLE } from '../lib/tagging'
 import { attachBaseLayer, getMapLabels, setMapLabels, type MapLabels } from '../lib/tiles'
 import type { Place } from '../types'
-import { FilterChips, tagOf } from './FilterChips'
+import { tagOf } from './FilterChips'
 
 // The popup shown when you tap a pin. Built when it opens (so the day list is current)
 // from plain elements, not HTML strings, so text from a file can't inject code.
@@ -53,39 +53,33 @@ function buildPopup(p: Place): HTMLElement {
   return box
 }
 
-export function MapTab({ tagFilter, setTagFilter }: { tagFilter: string[]; setTagFilter: (v: string[]) => void }) {
-  const { places, groups, activeTripId } = useAppData()
-  const [groupId, setGroupId] = useState('all')
-  const mine = useMemo(() => places.filter((p) => p.tripId === activeTripId), [places, activeTripId])
-  const myGroups = useMemo(() => groups.filter((g) => g.tripId === activeTripId), [groups, activeTripId])
-  const visible = useMemo(
-    () =>
-      mine.filter(
-        (p) => (tagFilter.length === 0 || tagFilter.includes(tagOf(p))) && (groupId === 'all' || p.groupId === groupId),
-      ),
-    [mine, tagFilter, groupId],
-  )
+// The map of your saved places. Picking a place in the list zooms here; tapping a pin picks it in the list.
+export function PlacesMap({
+  places,
+  focusId,
+  onFocus,
+  visible,
+}: {
+  places: Place[]
+  focusId?: string
+  onFocus?: (id: string) => void
+  visible: boolean
+}) {
   const el = useRef<HTMLDivElement>(null)
   const map = useRef<L.Map | null>(null)
   const pins = useRef<L.LayerGroup | null>(null)
+  const markers = useRef(new Map<string, L.CircleMarker>())
   const detachTiles = useRef<(() => void) | null>(null)
+  const onFocusRef = useRef(onFocus)
+  onFocusRef.current = onFocus
   const [labels, setLabels] = useState<MapLabels>(getMapLabels)
-
-  // Switching label language swaps the map pictures underneath the pins.
-  useEffect(() => {
-    const m = map.current
-    if (!m) return
-    detachTiles.current?.()
-    detachTiles.current = attachBaseLayer(m, labels)
-    setMapLabels(labels)
-  }, [labels])
 
   useEffect(() => {
     if (!el.current) return
     const m = L.map(el.current, { zoomControl: true }).setView([20, 0], 2)
     pins.current = L.layerGroup().addTo(m)
     map.current = m
-    detachTiles.current = attachBaseLayer(m, labels)
+    detachTiles.current = attachBaseLayer(m, getMapLabels())
     setTimeout(() => m.invalidateSize(), 0)
     return () => {
       detachTiles.current?.()
@@ -94,51 +88,75 @@ export function MapTab({ tagFilter, setTagFilter }: { tagFilter: string[]; setTa
     }
   }, [])
 
+  // Switching label language swaps the map pictures underneath the pins.
+  const first = useRef(true)
+  useEffect(() => {
+    if (first.current) {
+      first.current = false
+      return
+    }
+    const m = map.current
+    if (!m) return
+    detachTiles.current?.()
+    detachTiles.current = attachBaseLayer(m, labels)
+    setMapLabels(labels)
+  }, [labels])
+
+  const fit = (list: Place[]) => {
+    const m = map.current
+    if (!m || list.length === 0) return
+    m.invalidateSize()
+    m.fitBounds(L.latLngBounds(list.map((p) => [p.lat, p.lon] as [number, number])), { padding: [40, 40], maxZoom: 16 })
+  }
+
+  // Redraw the pins when the places change.
   useEffect(() => {
     const group = pins.current
-    const m = map.current
-    if (!group || !m) return
+    if (!group) return
     group.clearLayers()
-    for (const p of visible) {
+    markers.current.clear()
+    for (const p of places) {
       const style = TAG_STYLE[tagOf(p) as keyof typeof TAG_STYLE]
-      const marker = L.circleMarker([p.lat, p.lon], {
-        radius: 10,
-        color: '#fff',
-        weight: 2,
-        fillColor: style.colour,
-        fillOpacity: 0.95,
-      })
+      const marker = L.circleMarker([p.lat, p.lon], { radius: 9, color: '#fff', weight: 2, fillColor: style.colour, fillOpacity: 0.95 })
       marker.bindPopup(() => buildPopup(p))
+      marker.on('click', () => onFocusRef.current?.(p.id))
       group.addLayer(marker)
+      markers.current.set(p.id, marker)
     }
-    if (visible.length > 0) {
-      m.invalidateSize() // make sure the map knows its real size before zooming to fit
-      m.fitBounds(L.latLngBounds(visible.map((p) => [p.lat, p.lon] as [number, number])), { padding: [30, 30], maxZoom: 16 })
-    }
+    fit(places)
+  }, [places])
+
+  // When the map becomes visible (phone: switching to Map), make sure it is sized and framed.
+  useEffect(() => {
+    if (visible) setTimeout(() => (focusId ? undefined : fit(places)), 60)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [visible])
 
+  // Zoom to the place you picked.
+  useEffect(() => {
+    markers.current.forEach((marker, id) => {
+      const focused = id === focusId
+      marker.setStyle({ radius: focused ? 13 : 9, weight: focused ? 4 : 2, color: focused ? '#2f5646' : '#fff' })
+      if (focused) marker.bringToFront()
+    })
+    const m = map.current
+    const marker = focusId ? markers.current.get(focusId) : undefined
+    if (m && marker) {
+      setTimeout(() => {
+        m.invalidateSize()
+        m.flyTo(marker.getLatLng(), Math.max(m.getZoom(), 15), { duration: 0.7 })
+        marker.openPopup()
+      }, 40)
+    }
+  }, [focusId])
+
   return (
-    <section className="map-section">
-      <div className="map-bar">
-        {mine.length > 0 && <FilterChips places={mine} value={tagFilter} onChange={setTagFilter} />}
-        {myGroups.length > 1 && (
-          <select aria-label="Show area" value={groupId} onChange={(e) => setGroupId(e.target.value)}>
-            <option value="all">All areas</option>
-            {myGroups.map((g) => (
-              <option key={g.id} value={g.id}>{g.name}</option>
-            ))}
-          </select>
-        )}
-        <div className="segmented" role="group" aria-label="Map labels">
-          <button className={labels === 'english' ? 'on' : ''} onClick={() => setLabels('english')}>English labels</button>
-          <button className={labels === 'local' ? 'on' : ''} onClick={() => setLabels('local')}>Local language</button>
-        </div>
-        {labels === 'english' && (
-          <p className="muted">English labels show for cities and regions. Korea’s street-level map is only available in Korean.</p>
-        )}
-        {mine.length === 0 && <p className="muted">No places yet — import a file on the Places tab to see pins here.</p>}
+    <div className="places-map-wrap">
+      <div ref={el} className="places-map-canvas" role="region" aria-label="Map of your saved places" />
+      <div className="map-labels" role="group" aria-label="Map labels">
+        <button className={labels === 'english' ? 'on' : ''} onClick={() => setLabels('english')}>English</button>
+        <button className={labels === 'local' ? 'on' : ''} onClick={() => setLabels('local')}>Local</button>
       </div>
-      <div ref={el} className="map" />
-    </section>
+    </div>
   )
 }

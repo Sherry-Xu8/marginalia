@@ -1,5 +1,5 @@
 import { ExternalLink, ImagePlus, Phone, Search, Trash2, X } from 'lucide-react'
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { lookupPlace } from '../lib/lookup'
 import { fileToDataUrl } from '../lib/photo'
 import { fmtMoney } from '../lib/money'
@@ -8,15 +8,47 @@ import {
   applyLookups,
   removeDayItem,
   removePlacePhoto,
+  renamePlace,
+  resetPlaceName,
+  setPlaceTag,
   setPlaceDetails,
   updateDayItem,
   useAppData,
 } from '../lib/store'
-import { TAG_STYLE } from '../lib/tagging'
-import type { Day, DayItem, PlaceDetails } from '../types'
+import { TAGS, TAG_STYLE } from '../lib/tagging'
+import type { Day, DayItem, Place, PlaceDetails, Tag } from '../types'
 import { TagIcon, tagName } from './TagIcon'
 
 const enc = encodeURIComponent
+
+// Rename a place. The original name is kept so you can undo.
+function NameField({ place }: { place: Place }) {
+  const [text, setText] = useState(place.name)
+  useEffect(() => setText(place.name), [place.name])
+  return (
+    <>
+      <label>
+        Name
+        <input
+          value={text}
+          onChange={(e) => setText(e.target.value)}
+          onKeyDown={(e) => e.key === 'Enter' && e.currentTarget.blur()}
+          onBlur={(e) => {
+            const v = e.currentTarget.value.trim()
+            if (v && v !== place.name) renamePlace(place.id, v)
+            else setText(place.name)
+          }}
+        />
+      </label>
+      {place.originalName && (
+        <p className="muted">
+          Originally “{place.originalName}”{' '}
+          <button className="linklike" onClick={() => resetPlaceName(place.id)}>Undo</button>
+        </p>
+      )}
+    </>
+  )
+}
 
 // Everything about one place: photos, what it is, opening hours, links — and, when you open it
 // from a day, the details of that visit (time, cost, note).
@@ -153,6 +185,16 @@ export function PlaceSheet({
         <button className="wide" onClick={() => setEditing(!editing)}>{editing ? 'Done editing' : 'Edit details yourself'}</button>
         {editing && (
           <div className="card form">
+            <NameField place={place} />
+            <label>
+              Category
+              <select value={place.tag ?? ''} onChange={(e) => setPlaceTag(place.id, (e.target.value || undefined) as Tag | undefined)}>
+                <option value="">Untagged</option>
+                {TAGS.map((t) => (
+                  <option key={t} value={t}>{t}</option>
+                ))}
+              </select>
+            </label>
             <label>About<textarea rows={3} value={d.summary ?? ''} onChange={(e) => setField('summary', e.target.value)} /></label>
             <label>Opening hours<input value={d.hours ?? ''} onChange={(e) => setField('hours', e.target.value)} /></label>
             <label>Website<input inputMode="url" placeholder="https://…" value={d.website ?? ''} onChange={(e) => setField('website', /^https?:\/\//i.test(e.target.value) || e.target.value === '' ? e.target.value : 'https://' + e.target.value)} /></label>

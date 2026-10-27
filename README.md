@@ -28,7 +28,7 @@ Import it on the **Places** tab.
 
 - **Your trips** (front page): all trips, and a way to start a new one.
 - **Overview** (inside a trip): stops with progress, what's next, checklists, sharing and backup.
-- **Places**, **Map**, **Days**, **Budget**: the working screens.
+- **Places** (list and map together), **Days**, **Budget**: the working screens.
 
 ## Progress
 

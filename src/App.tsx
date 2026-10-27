@@ -1,9 +1,8 @@
-import { ArrowLeft, CalendarDays, Compass, FileJson, MapPin, Map as MapIcon, Wallet } from 'lucide-react'
+import { ArrowLeft, CalendarDays, Compass, FileJson, MapPin, Wallet } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { BudgetTab } from './components/BudgetTab'
 import { DaysTab } from './components/DaysTab'
 import { LogoMark, Wordmark } from './components/Logo'
-import { MapTab } from './components/MapTab'
 import { PlacesTab } from './components/PlacesTab'
 import { TripHero } from './components/TripHero'
 import { TripOverview } from './components/TripOverview'
@@ -18,7 +17,6 @@ import './App.css'
 const NAV: { id: TabId; label: string; Icon: typeof Compass }[] = [
   { id: 'overview', label: 'Overview', Icon: Compass },
   { id: 'places', label: 'Places', Icon: MapPin },
-  { id: 'map', label: 'Map', Icon: MapIcon },
   { id: 'days', label: 'Days', Icon: CalendarDays },
   { id: 'budget', label: 'Budget', Icon: Wallet },
 ]
@@ -83,6 +81,7 @@ export default function App() {
   }
 
   const tab = route.tab
+  const navTab = tab === 'map' ? 'places' : tab // the old Map address opens Places
   const ready = activeTripId === trip.id
   return (
     <div className="app">
@@ -98,8 +97,8 @@ export default function App() {
             <a
               key={id}
               href={`#/trip/${trip.id}/${id}`}
-              className={tab === id ? 'active' : ''}
-              aria-current={tab === id ? 'page' : undefined}
+              className={navTab === id ? 'active' : ''}
+              aria-current={navTab === id ? 'page' : undefined}
             >
               <Icon size={18} strokeWidth={1.8} aria-hidden />
               {label}
@@ -107,10 +106,11 @@ export default function App() {
           ))}
         </nav>
       </div>
-      <main className={tab === 'map' ? 'main-wide' : ''}>
+      <main>
         {ready && tab === 'overview' && <TripOverview trip={trip} />}
-        {ready && tab === 'places' && <PlacesTab tagFilter={tagFilter} setTagFilter={setTagFilter} />}
-        {ready && tab === 'map' && <MapTab tagFilter={tagFilter} setTagFilter={setTagFilter} />}
+        {ready && (tab === 'places' || tab === 'map') && (
+          <PlacesTab key={tab} tagFilter={tagFilter} setTagFilter={setTagFilter} initialPane={tab === 'map' ? 'map' : 'list'} />
+        )}
         {ready && tab === 'days' && <DaysTab initialDate={route.date} />}
         {ready && tab === 'budget' && <BudgetTab />}
       </main>
@@ -120,8 +120,8 @@ export default function App() {
           <a
             key={id}
             href={`#/trip/${trip.id}/${id}`}
-            className={tab === id ? 'active' : ''}
-            aria-current={tab === id ? 'page' : undefined}
+            className={navTab === id ? 'active' : ''}
+            aria-current={navTab === id ? 'page' : undefined}
           >
             <Icon size={22} strokeWidth={1.8} aria-hidden />
             {label}
