@@ -1,4 +1,4 @@
-import { Info, MapPin, MoreHorizontal } from 'lucide-react'
+import { ChevronDown, Info, MapPin, MoreHorizontal } from 'lucide-react'
 import { useEffect, useMemo, useState, useSyncExternalStore } from 'react'
 import {
   applyEnglishNames,
@@ -90,6 +90,8 @@ function GroupSection({
   total,
   stops,
   otherGroups,
+  collapsed,
+  onToggle,
   children,
 }: {
   group: Group
@@ -97,13 +99,20 @@ function GroupSection({
   total: number
   stops: Stop[]
   otherGroups: Group[]
+  collapsed: boolean
+  onToggle: () => void
   children: React.ReactNode
 }) {
   const stop = stops.find((s) => s.id === group.stopId)
   return (
-    <section className="group">
+    <section className={'group' + (collapsed ? ' collapsed' : '')}>
       <header className="group-head">
-        <h2 className="display">{group.name}</h2>
+        <h2 className="display">
+          <button className="group-toggle" aria-expanded={!collapsed} onClick={onToggle}>
+            <ChevronDown size={22} className="chev" aria-hidden />
+            {group.name}
+          </button>
+        </h2>
         <span className="tag-pill">{count === total ? `${total} places` : `${count} of ${total}`}</span>
         {stop && <span className="tag-pill warm">Stop: {stop.name}</span>}
         <details className="group-more">
@@ -143,7 +152,7 @@ function GroupSection({
           </div>
         </details>
       </header>
-      <div className="place-grid">{children}</div>
+      {!collapsed && <div className="place-grid">{children}</div>}
     </section>
   )
 }
@@ -168,6 +177,27 @@ export function PlacesTab({
   const [detailsId, setDetailsId] = useState<string | null>(null)
   const [focusId, setFocusId] = useState<string | undefined>()
   const [pane, setPane] = useState<'list' | 'map'>(initialPane)
+  // Areas you've folded away, so you can see another one without scrolling past it.
+  const [collapsed, setCollapsed] = useState<Set<string>>(() => {
+    try {
+      return new Set<string>(JSON.parse(localStorage.getItem('collapsed-areas') ?? '[]'))
+    } catch {
+      return new Set<string>()
+    }
+  })
+  const saveCollapsed = (next: Set<string>) => {
+    setCollapsed(next)
+    try {
+      localStorage.setItem('collapsed-areas', JSON.stringify([...next]))
+    } catch {
+      // not saved — fine
+    }
+  }
+  const toggleArea = (id: string) => {
+    const next = new Set(collapsed)
+    if (!next.delete(id)) next.add(id)
+    saveCollapsed(next)
+  }
   const [importResult, setImportResult] = useState<{ summary: ImportSummary | null; error: string } | null>(null)
 
   const mine = useMemo(() => places.filter((p) => p.tripId === activeTripId), [places, activeTripId])
@@ -308,9 +338,17 @@ export function PlacesTab({
 
           <div className="places-split">
             <div className={'places-list' + (narrow && pane === 'map' ? ' is-hidden' : '')}>
-              <p className="muted">
+              <p className="muted count-line">
                 {shown.length} of {mine.length} places
                 {waitingForNames && ' · looking up area names…'}
+                {myGroups.length > 1 && (
+                  <button
+                    className="link-btn"
+                    onClick={() => saveCollapsed(collapsed.size >= myGroups.length ? new Set() : new Set(myGroups.map((g) => g.id)))}
+                  >
+                    {collapsed.size >= myGroups.length ? 'Expand all' : 'Collapse all'}
+                  </button>
+                )}
               </p>
               <button className="soft-btn move-btn" onClick={() => (selectMode ? stopSelecting() : setSelectMode(true))}>
                 {selectMode ? 'Cancel moving' : 'Move or split places'}
@@ -327,6 +365,8 @@ export function PlacesTab({
                       total={mine.filter((p) => p.groupId === g.id).length}
                       stops={trip.stops}
                       otherGroups={myGroups.filter((o) => o.id !== g.id)}
+                      collapsed={collapsed.has(g.id)}
+                      onToggle={() => toggleArea(g.id)}
                     >
                       {inGroup.map(card)}
                     </GroupSection>
@@ -342,7 +382,16 @@ export function PlacesTab({
             </div>
 
             <div className={'places-map' + (narrow && pane === 'list' ? ' is-hidden' : '')}>
-              <PlacesMap places={shown} focusId={focusId} onFocus={(id) => { setFocusId(id) }} visible={!narrow || pane === 'map'} />
+              <PlacesMap
+                places={shown}
+                focusId={focusId}
+                onFocus={(id) => {
+                  setFocusId(id)
+                  const gid = mine.find((p) => p.id === id)?.groupId
+                  if (gid && collapsed.has(gid)) toggleArea(gid) // show the card for the pin you tapped
+                }}
+                visible={!narrow || pane === 'map'}
+              />
             </div>
           </div>
 
