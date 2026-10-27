@@ -699,3 +699,9 @@ h3 { font-size: 1.05rem; margin: 22px 0 8px; }
   .group-more summary { width: 40px; height: 40px; }
   .check, .pick { min-height: 44px; }
 }
+
+/* every icon in the day list sits in one column: handle space, then a 52 px tile */
+.item.stay-card, .item.transfer-card { display: grid; grid-template-columns: 34px 52px minmax(0, 1fr) auto; align-items: center; gap: 6px; padding: 10px 8px 10px 0; }
+.stay-tile { width: 52px; height: 52px; border-radius: 28%; }
+.leg { padding-left: 40px; }
+@media (min-width: 760px) { .leg { padding-left: 40px; } }

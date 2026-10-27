@@ -138,7 +138,8 @@ function DayTravel({ day, points }: { day: Day; points: Place[] }) {
 function StayCard({ label, place, onClick }: { label: string; place: Place; onClick: () => void }) {
   return (
     <div className="item stay-card">
-      <span className="stay-tile"><BedDouble size={20} aria-hidden /></span>
+      <span aria-hidden /> {/* keeps the icon in the same column as the place icons below */}
+      <span className="stay-tile"><BedDouble size={22} aria-hidden /></span>
       <button className="item-main" onClick={onClick}>
         <span className="muted">{label}</span>
         <strong className="serif">{place.name}</strong>
@@ -152,7 +153,8 @@ function TransferCard({ t, onEdit }: { t: Transfer; onEdit: () => void }) {
   const times = [t.departTime, t.arriveTime].filter(Boolean).join(' → ')
   return (
     <div className="item transfer-card">
-      <span className="stay-tile transfer"><Icon size={20} /></span>
+      <span aria-hidden />
+      <span className="stay-tile transfer"><Icon size={22} /></span>
       <div className="item-main static">
         <strong className="serif">{t.title}</strong>
         <span className="muted">
