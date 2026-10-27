@@ -22,6 +22,21 @@ export type Trip = {
   endDate: string
   stops: Stop[]
   checklist: ChecklistItem[]
+  budget?: number // total trip budget, in `currency`
+  currency?: string // e.g. "USD", "KRW"
+}
+
+export const EXPENSE_CATEGORIES = ['Food & drink', 'Transport', 'Accommodation', 'Activities', 'Shopping', 'Other'] as const
+export type ExpenseCategory = (typeof EXPENSE_CATEGORIES)[number]
+
+// Money actually spent during the trip.
+export type Expense = {
+  id: string
+  tripId: string
+  date: string // yyyy-mm-dd
+  title: string
+  amount: number
+  category: ExpenseCategory
 }
 
 // One planned visit in a day.
@@ -31,6 +46,7 @@ export type DayItem = {
   time?: string // "HH:MM", optional
   note: string // e.g. opening hours
   done: boolean
+  cost?: number // planned cost, optional
 }
 
 // A day of the trip. Days are created automatically for every date of the trip.
@@ -84,6 +100,7 @@ export type AppData = {
   places: Place[]
   groups: Group[]
   days: Day[]
+  expenses: Expense[]
   activeTripId: string | null
 }
 

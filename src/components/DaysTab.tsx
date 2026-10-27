@@ -23,6 +23,7 @@ import {
   type Commute,
   type Mode,
 } from '../lib/commute'
+import { fmtMoney } from '../lib/money'
 import { fromISO, shortDate, stopLabel, stopsOn, toISO } from '../lib/days'
 import { addToDay, moveDayItem, removeDayItem, sortDayByTime, updateDayItem, useAppData } from '../lib/store'
 import { TAG_STYLE } from '../lib/tagging'
@@ -103,7 +104,7 @@ function DayTravel({ places, mode }: { places: Place[]; mode: Mode }) {
   )
 }
 
-function ItemRow({ day, item, place, next, mode }: { day: Day; item: DayItem; place: Place | undefined; next: Place | undefined; mode: Mode }) {
+function ItemRow({ day, item, place, next, mode, currency }: { day: Day; item: DayItem; place: Place | undefined; next: Place | undefined; mode: Mode; currency: string }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: item.id })
   const [open, setOpen] = useState(false)
   const style = { transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.6 : 1 }
@@ -121,8 +122,10 @@ function ItemRow({ day, item, place, next, mode }: { day: Day; item: DayItem; pl
       />
       <button className="item-main" onClick={() => setOpen(!open)} aria-expanded={open}>
         <strong>{emoji} {place?.name ?? '(place removed)'}</strong>
-        {(item.time || item.note) && (
-          <span className="muted">{[item.time, item.note].filter(Boolean).join(' · ')}</span>
+        {(item.time || item.note || item.cost) && (
+          <span className="muted">
+            {[item.time, item.cost ? fmtMoney(item.cost, currency) : '', item.note].filter(Boolean).join(' · ')}
+          </span>
         )}
       </button>
       {open && (
@@ -130,6 +133,17 @@ function ItemRow({ day, item, place, next, mode }: { day: Day; item: DayItem; pl
           <label>
             Time (optional)
             <input type="time" value={item.time ?? ''} onChange={(e) => updateDayItem(day.id, item.id, { time: e.target.value || undefined })} />
+          </label>
+          <label>
+            Planned cost (optional)
+            <input
+              inputMode="decimal"
+              value={item.cost ?? ''}
+              onChange={(e) => {
+                const n = parseFloat(e.target.value)
+                updateDayItem(day.id, item.id, { cost: Number.isFinite(n) && n >= 0 ? n : undefined })
+              }}
+            />
           </label>
           <label>
             Note (e.g. opening hours)
@@ -272,7 +286,11 @@ export function DaysTab() {
       </div>
 
       <h2>Day {dayNumber} · {shortDate(day.date)}</h2>
-      <p className="muted">{label || 'No trip stop for this date yet'}</p>
+      <p className="muted">
+        {label || 'No trip stop for this date yet'}
+        {day.items.some((i) => i.cost) &&
+          ` · planned ${fmtMoney(day.items.reduce((s, i) => s + (i.cost ?? 0), 0), trip.currency ?? 'USD')}`}
+      </p>
 
       {day.items.length === 0 ? (
         <div className="card">
@@ -291,6 +309,7 @@ export function DaysTab() {
                   place={placeById.get(item.placeId)}
                   next={placeById.get(day.items[i + 1]?.placeId ?? '')}
                   mode={mode}
+                  currency={trip.currency ?? 'USD'}
                 />
               ))}
             </SortableContext>

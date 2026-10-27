@@ -1,0 +1,222 @@
+import type { AppData, ChecklistItem, Day, Expense, Group, Place, Stop, Trip } from '../types'
+import { EXPENSE_CATEGORIES, TAGS } from '../types'
+
+// Saving to / loading from a JSON file. A file can hold the whole plan (a backup) or one trip
+// (for sharing). Files can come from anyone, so everything is checked and cleaned on the way in.
+
+export class BackupError extends Error {}
+
+export type TripData = {
+  trip: Trip
+  places: Place[]
+  groups: Group[]
+  days: Day[]
+  expenses: Expense[]
+}
+
+type Bundle =
+  | { app: 'trip-planner'; kind: 'full-backup'; version: 1; exportedAt: string; data: AppData }
+  | { app: 'trip-planner'; kind: 'trip'; version: 1; exportedAt: string; data: TripData }
+
+export function buildFullBackup(state: AppData): string {
+  const b: Bundle = { app: 'trip-planner', kind: 'full-backup', version: 1, exportedAt: new Date().toISOString(), data: state }
+  return JSON.stringify(b)
+}
+
+export function buildTripShare(state: AppData, tripId: string, includeMoney: boolean): string {
+  const trip = state.trips.find((t) => t.id === tripId)
+  if (!trip) throw new BackupError('That trip no longer exists.')
+  const shared: Trip = includeMoney ? trip : { ...trip, budget: undefined, currency: undefined }
+  const days = state.days
+    .filter((d) => d.tripId === tripId)
+    .map((d) => (includeMoney ? d : { ...d, items: d.items.map((i) => ({ ...i, cost: undefined })) }))
+  const data: TripData = {
+    trip: shared,
+    places: state.places.filter((p) => p.tripId === tripId),
+    groups: state.groups.filter((g) => g.tripId === tripId),
+    days,
+    expenses: includeMoney ? state.expenses.filter((e) => e.tripId === tripId) : [],
+  }
+  const b: Bundle = { app: 'trip-planner', kind: 'trip', version: 1, exportedAt: new Date().toISOString(), data }
+  return JSON.stringify(b)
+}
+
+export function fileNameFor(label: string): string {
+  const safe = label.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'plan'
+  return `trip-planner-${safe}-${new Date().toISOString().slice(0, 10)}.json`
+}
+
+// Shares the file with your phone's Share menu if there is one, otherwise downloads it.
+export async function shareOrDownload(json: string, filename: string): Promise<'shared' | 'downloaded' | 'cancelled'> {
+  const file = new File([json], filename, { type: 'application/json' })
+  try {
+    if (navigator.canShare?.({ files: [file] })) {
+      await navigator.share({ files: [file], title: filename })
+      return 'shared'
+    }
+  } catch (e) {
+    if (e instanceof DOMException && e.name === 'AbortError') return 'cancelled'
+    // any other sharing problem: fall through to a plain download
+  }
+  const url = URL.createObjectURL(file)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = filename
+  document.body.append(a)
+  a.click()
+  a.remove()
+  setTimeout(() => URL.revokeObjectURL(url), 1000)
+  return 'downloaded'
+}
+
+// ---- Reading files back in ----
+
+const str = (v: unknown, max = 2000): string | null => (typeof v === 'string' ? v.slice(0, max) : null)
+const num = (v: unknown): number | null => (typeof v === 'number' && Number.isFinite(v) ? v : null)
+const date = (v: unknown): string | null => (typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v) ? v : null)
+const arr = (v: unknown): unknown[] => (Array.isArray(v) ? v : [])
+const obj = (v: unknown): Record<string, unknown> | null => (v && typeof v === 'object' && !Array.isArray(v) ? (v as Record<string, unknown>) : null)
+
+function cleanTrip(v: unknown): Trip | null {
+  const o = obj(v)
+  const id = str(o?.id, 100)
+  const name = str(o?.name, 200)
+  const startDate = date(o?.startDate)
+  const endDate = date(o?.endDate)
+  if (!o || !id || !name || !startDate || !endDate) return null
+  const stops = arr(o.stops).flatMap((s): Stop[] => {
+    const so = obj(s)
+    const sid = str(so?.id, 100)
+    const sname = str(so?.name, 200)
+    const arrival = date(so?.arrival)
+    const departure = date(so?.departure)
+    return so && sid && sname && arrival && departure ? [{ id: sid, name: sname, arrival, departure }] : []
+  })
+  const checklist = arr(o.checklist).flatMap((c): ChecklistItem[] => {
+    const co = obj(c)
+    const cid = str(co?.id, 100)
+    const text = str(co?.text, 300)
+    return co && cid && text && (co.section === 'pre' || co.section === 'packing')
+      ? [{ id: cid, section: co.section, text, done: co.done === true }]
+      : []
+  })
+  return {
+    id, name, startDate, endDate, stops, checklist,
+    budget: num(o.budget) ?? undefined,
+    currency: str(o.currency, 4) ?? undefined,
+  }
+}
+
+function cleanPlace(v: unknown): Place | null {
+  const o = obj(v)
+  const id = str(o?.id, 100)
+  const tripId = str(o?.tripId, 100)
+  const name = str(o?.name, 300)
+  const lat = num(o?.lat)
+  const lon = num(o?.lon)
+  if (!o || !id || !tripId || !name || lat === null || lon === null || Math.abs(lat) > 90 || Math.abs(lon) > 180) return null
+  const tag = TAGS.find((t) => t === o.tag)
+  return {
+    id, tripId, name, lat, lon,
+    description: str(o.description, 5000) ?? '',
+    layer: str(o.layer, 300) ?? '',
+    dedupeKey: str(o.dedupeKey, 500) ?? `${name.toLowerCase()}|${lat.toFixed(5)}|${lon.toFixed(5)}`,
+    groupId: str(o.groupId, 100) ?? undefined,
+    tag,
+    tagSource: tag ? (o.tagSource === 'user' ? 'user' : 'rule') : undefined,
+  }
+}
+
+function cleanGroup(v: unknown): Group | null {
+  const o = obj(v)
+  const id = str(o?.id, 100)
+  const tripId = str(o?.tripId, 100)
+  const name = str(o?.name, 200)
+  if (!o || !id || !tripId || !name) return null
+  const sources = ['auto', 'geocoded', 'fallback', 'user'] as const
+  return {
+    id, tripId, name,
+    nameSource: sources.find((s) => s === o.nameSource) ?? 'user',
+    stopId: str(o.stopId, 100) ?? undefined,
+  }
+}
+
+function cleanDay(v: unknown): Day | null {
+  const o = obj(v)
+  const id = str(o?.id, 100)
+  const tripId = str(o?.tripId, 100)
+  const d = date(o?.date)
+  if (!o || !id || !tripId || !d) return null
+  const items = arr(o.items).flatMap((i) => {
+    const io = obj(i)
+    const iid = str(io?.id, 100)
+    const placeId = str(io?.placeId, 100)
+    if (!io || !iid || !placeId) return []
+    const time = typeof io.time === 'string' && /^\d{2}:\d{2}$/.test(io.time) ? io.time : undefined
+    return [{ id: iid, placeId, time, note: str(io.note, 2000) ?? '', done: io.done === true, cost: num(io.cost) ?? undefined }]
+  })
+  return { id, tripId, date: d, items }
+}
+
+function cleanExpense(v: unknown): Expense | null {
+  const o = obj(v)
+  const id = str(o?.id, 100)
+  const tripId = str(o?.tripId, 100)
+  const d = date(o?.date)
+  const title = str(o?.title, 300)
+  const amount = num(o?.amount)
+  if (!o || !id || !tripId || !d || !title || amount === null) return null
+  return { id, tripId, date: d, title, amount, category: EXPENSE_CATEGORIES.find((c) => c === o.category) ?? 'Other' }
+}
+
+const collect = <T,>(v: unknown, clean: (x: unknown) => T | null): T[] => arr(v).flatMap((x) => clean(x) ?? [])
+
+export type Parsed =
+  | { kind: 'full-backup'; data: AppData }
+  | { kind: 'trip'; data: TripData }
+
+export function parseBackup(text: string): Parsed {
+  if (text.length > 25_000_000) throw new BackupError('That file is too large to be a trip plan.')
+  let raw: unknown
+  try {
+    raw = JSON.parse(text)
+  } catch {
+    throw new BackupError('That file isn’t a Trip Planner file (it couldn’t be read as JSON).')
+  }
+  const b = obj(raw)
+  const data = obj(b?.data)
+  if (!b || b.app !== 'trip-planner' || b.version !== 1 || !data) {
+    throw new BackupError('That file wasn’t made by this app, so it can’t be imported.')
+  }
+  if (b.kind === 'trip') {
+    const trip = cleanTrip(data.trip)
+    if (!trip) throw new BackupError('That trip file is damaged — the trip details are missing.')
+    return {
+      kind: 'trip',
+      data: {
+        trip,
+        places: collect(data.places, cleanPlace),
+        groups: collect(data.groups, cleanGroup),
+        days: collect(data.days, cleanDay),
+        expenses: collect(data.expenses, cleanExpense),
+      },
+    }
+  }
+  if (b.kind === 'full-backup') {
+    const trips = collect(data.trips, cleanTrip)
+    const active = str(data.activeTripId, 100)
+    return {
+      kind: 'full-backup',
+      data: {
+        version: 1,
+        trips,
+        places: collect(data.places, cleanPlace),
+        groups: collect(data.groups, cleanGroup),
+        days: collect(data.days, cleanDay),
+        expenses: collect(data.expenses, cleanExpense),
+        activeTripId: trips.some((t) => t.id === active) ? active : (trips[0]?.id ?? null),
+      },
+    }
+  }
+  throw new BackupError('That file wasn’t made by this app, so it can’t be imported.')
+}

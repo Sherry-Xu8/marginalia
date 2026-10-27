@@ -15,14 +15,9 @@ npm run dev
 
 Then open the address it prints (usually http://localhost:5173).
 
-## Build the files for hosting
+## Put it online
 
-```bash
-npm run build
-```
-
-This creates a `dist` folder — plain website files you can put on any free static host.
-(Stage 6 walks through this step by step.)
+See [DEPLOY.md](DEPLOY.md) for step-by-step instructions (Netlify Drop or GitHub Pages).
 
 ## Test data
 
@@ -36,5 +31,5 @@ Import it on the **Places** tab.
 - [x] Stage 3 — daily plan, checklist, countdown
 - [x] Stage 4 — suggested itinerary
 - [x] Stage 5 — commute times
-- [ ] Stage 6 — free hosting
-- [ ] Also requested: offline mode (set up now), budget and expense tracker, sharing via file
+- [x] Stage 6 — free hosting (instructions and GitHub Pages workflow; you press the buttons)
+- [x] Offline support, budget and expense tracker, sharing and backup via JSON file

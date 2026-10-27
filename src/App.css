@@ -159,3 +159,13 @@ a.btn { display: inline-flex; align-items: center; min-height: 48px; padding: 0 
 .travel.warn { border-color: var(--danger); }
 .travel.warn span { color: var(--danger); }
 .segmented button { font-size: 0.85rem; padding: 0 6px; }
+
+/* Budget */
+.stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin: 12px 0; text-align: center; }
+.stats div { display: flex; flex-direction: column; background: var(--bg); border-radius: 12px; padding: 10px 4px; }
+.stats strong { font-size: 1rem; word-break: break-word; }
+.bar { height: 10px; border-radius: 6px; background: var(--bg); overflow: hidden; margin: 4px 0 8px; }
+.bar div { height: 100%; background: var(--accent); }
+.bar div.over { background: var(--danger); }
+.day-money { padding: 6px 0; font-size: 0.92rem; gap: 6px; }
+.tabbar button { font-size: 0.72rem; }

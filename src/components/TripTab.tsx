@@ -12,6 +12,7 @@ import {
 } from '../lib/store'
 import { daysUntil } from '../lib/days'
 import type { Stop, Trip } from '../types'
+import { BackupCard } from './BackupCard'
 import { Checklist } from './Checklist'
 import { SuggestSheet } from './SuggestSheet'
 
@@ -163,6 +164,7 @@ export function TripTab() {
           }}
           onCancel={trips.length > 0 ? () => setCreating(false) : undefined}
         />
+        <BackupCard />
       </section>
     )
   }
@@ -238,6 +240,7 @@ export function TripTab() {
       )}
 
       <Checklist trip={trip} />
+      <BackupCard trip={trip} />
     </section>
   )
 }

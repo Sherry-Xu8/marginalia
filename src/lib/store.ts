@@ -1,9 +1,10 @@
 import { get, set } from 'idb-keyval'
 import { useSyncExternalStore } from 'react'
-import type { AppData, ChecklistItem, Day, DayItem, Group, ImportSummary, Place, Stop, Tag, Trip } from '../types'
+import type { AppData, ChecklistItem, Day, DayItem, Expense, Group, ImportSummary, Place, Stop, Tag, Trip } from '../types'
 import { eachDate } from './days'
 import { distanceKm } from './geo'
 import { GROUP_RADIUS_KM, clusterPlaces, nextAreaName } from './grouping'
+import type { TripData } from './backup'
 import type { ParseResult } from './kml'
 import { suggestTags } from './tagging'
 
@@ -11,7 +12,7 @@ import { suggestTags } from './tagging'
 // after each change. Components read it with useAppData().
 
 const KEY = 'trip-planner-data'
-const empty: AppData = { version: 1, trips: [], places: [], groups: [], days: [], activeTripId: null }
+const empty: AppData = { version: 1, trips: [], places: [], groups: [], days: [], expenses: [], activeTripId: null }
 
 let state: AppData = empty
 const listeners = new Set<() => void>()
@@ -26,6 +27,7 @@ export async function loadData(): Promise<void> {
         ...saved,
         groups: saved.groups ?? [],
         days: saved.days ?? [],
+        expenses: saved.expenses ?? [],
         trips: saved.trips.map((t) => ({ ...t, checklist: t.checklist ?? seedChecklist() })),
       }
       for (const t of state.trips) state = syncDays(assignGroups(state, t.id), t.id)
@@ -83,6 +85,7 @@ export function deleteTrip(id: string) {
       places: s.places.filter((p) => p.tripId !== id),
       groups: s.groups.filter((g) => g.tripId !== id),
       days: s.days.filter((d) => d.tripId !== id),
+      expenses: s.expenses.filter((e) => e.tripId !== id),
       activeTripId: s.activeTripId === id ? (trips[0]?.id ?? null) : s.activeTripId,
     }
   })
@@ -340,7 +343,7 @@ export function addToDay(dayId: string, placeId: string): boolean {
   return true
 }
 
-export function updateDayItem(dayId: string, itemId: string, patch: Partial<Pick<DayItem, 'time' | 'note' | 'done'>>) {
+export function updateDayItem(dayId: string, itemId: string, patch: Partial<Pick<DayItem, 'time' | 'note' | 'done' | 'cost'>>) {
   mapDay(dayId, (d) => ({ ...d, items: d.items.map((i) => (i.id === itemId ? { ...i, ...patch } : i)) }))
 }
 
@@ -429,4 +432,95 @@ export function applySuggestion(plan: { dayId: string; placeIds: string[] }[]) {
         : d,
     ),
   }))
+}
+
+// ---- Budget and expenses ----
+
+export function setBudget(tripId: string, budget: number | undefined, currency: string) {
+  update((s) => ({
+    ...s,
+    trips: s.trips.map((t) => (t.id === tripId ? { ...t, budget, currency: currency.trim().toUpperCase() || 'USD' } : t)),
+  }))
+}
+
+export function addExpense(e: Omit<Expense, 'id'>) {
+  update((s) => ({ ...s, expenses: [...s.expenses, { ...e, id: newId() }] }))
+}
+
+export function deleteExpense(id: string) {
+  update((s) => ({ ...s, expenses: s.expenses.filter((e) => e.id !== id) }))
+}
+
+// ---- Backup and sharing ----
+
+// A place pointing at a group that isn't there (e.g. a damaged file) is put back in the "ungrouped" pile.
+function clearOrphans(s: AppData): AppData {
+  const ok = new Set(s.groups.map((g) => g.id))
+  return { ...s, places: s.places.map((p) => (p.groupId && !ok.has(p.groupId) ? { ...p, groupId: undefined } : p)) }
+}
+
+// Replaces everything on this device with a backup file's contents.
+export function replaceAllData(data: AppData) {
+  update(() => {
+    let next = clearOrphans({ ...data, trips: data.trips.map((t) => ({ ...t, checklist: t.checklist ?? seedChecklist() })) })
+    for (const t of next.trips) next = syncDays(assignGroups(next, t.id), t.id)
+    return next
+  })
+  void tagUntagged()
+}
+
+// Adds a shared trip as a new trip. Every id is replaced with a fresh one so it can never
+// clash with (or overwrite) anything already here, even if you import the same file twice.
+export function importTripData(d: TripData): string {
+  const ids = new Map<string, string>()
+  const fresh = (old: string) => {
+    if (!ids.has(old)) ids.set(old, newId())
+    return ids.get(old)!
+  }
+  const tripId = fresh('trip:' + d.trip.id)
+  const trip: Trip = {
+    ...d.trip,
+    id: tripId,
+    stops: d.trip.stops.map((s) => ({ ...s, id: fresh('stop:' + s.id) })),
+    checklist: d.trip.checklist.map((c) => ({ ...c, id: newId() })),
+  }
+  const placeIds = new Set(d.places.map((p) => p.id))
+  const places = d.places.map((p) => ({
+    ...p,
+    id: fresh('place:' + p.id),
+    tripId,
+    groupId: p.groupId ? fresh('group:' + p.groupId) : undefined,
+  }))
+  const groups = d.groups.map((g) => ({
+    ...g,
+    id: fresh('group:' + g.id),
+    tripId,
+    stopId: g.stopId && d.trip.stops.some((s) => s.id === g.stopId) ? fresh('stop:' + g.stopId) : undefined,
+  }))
+  const days = d.days.map((day) => ({
+    ...day,
+    id: newId(),
+    tripId,
+    items: day.items.filter((i) => placeIds.has(i.placeId)).map((i) => ({ ...i, id: newId(), placeId: fresh('place:' + i.placeId) })),
+  }))
+  const expenses = d.expenses.map((e) => ({ ...e, id: newId(), tripId }))
+  update((s) =>
+    syncDays(
+      assignGroups(
+        clearOrphans({
+          ...s,
+          trips: [...s.trips, trip],
+          places: [...s.places, ...places],
+          groups: [...s.groups, ...groups],
+          days: [...s.days, ...days],
+          expenses: [...s.expenses, ...expenses],
+          activeTripId: tripId,
+        }),
+        tripId,
+      ),
+      tripId,
+    ),
+  )
+  void tagUntagged()
+  return trip.name
 }
