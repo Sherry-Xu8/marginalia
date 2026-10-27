@@ -24,7 +24,7 @@ import { TagIcon, tagName } from './TagIcon'
 const enc = encodeURIComponent
 
 // A sensible starting category for an expense, from the place's own category.
-function categoryFor(tag: string | undefined): ExpenseCategory {
+export function categoryFor(tag: string | undefined): ExpenseCategory {
   switch (tag) {
     case 'Food & drink': return 'Food & drink'
     case 'Accommodation': return 'Accommodation'

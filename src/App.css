@@ -632,3 +632,17 @@ main > section > h2 { font-family: var(--serif); font-weight: 420; }
 .group.collapsed { margin-bottom: 8px; }
 .count-line { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
 .count-line .link-btn { min-height: 32px; padding: 0 6px; margin-left: auto; font-size: 0.9rem; }
+
+/* itinerary card: tap to open */
+.place-item { grid-template-columns: 34px 52px minmax(0, 1fr) 34px; }
+.item-main.row-main { display: flex; flex-direction: row; align-items: center; justify-content: space-between; gap: 8px; width: 100%; text-align: left; }
+.item-text { display: flex; flex-direction: column; min-width: 0; align-items: flex-start; }
+.item-text .muted { margin: 0; }
+.item-chev { color: var(--muted); flex: none; transition: transform 0.18s; }
+.place-item.expanded .item-chev { transform: rotate(180deg); }
+.place-item.expanded { border-color: var(--accent); }
+.item-panel { grid-column: 1 / -1; padding: 4px 12px 8px 14px; }
+.item-meta { display: flex; flex-wrap: wrap; gap: 6px 14px; color: var(--muted); font-size: 0.88rem; margin-bottom: 10px; }
+.item-panel .chips { margin: 0; gap: 8px; }
+.item-panel .chips button { min-height: 42px; padding: 0 14px; font-size: 0.9rem; }
+.quick-panel { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--line); }

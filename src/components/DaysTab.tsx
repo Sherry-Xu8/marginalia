@@ -9,7 +9,7 @@ import {
 } from '@dnd-kit/core'
 import { SortableContext, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
-import { BedDouble, ChevronDown, ChevronUp, GripVertical, Info, Pencil, Plus, Sparkles } from 'lucide-react'
+import { BedDouble, ChevronDown, ChevronUp, GripVertical, Pencil, Plus, Sparkles } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import {
   LONG_TRAVEL_MINUTES,
@@ -26,11 +26,11 @@ import {
 } from '../lib/commute'
 import { fromISO, shortDate, stopLabel, stopsOn, toISO } from '../lib/days'
 import { fmtMoney } from '../lib/money'
-import { addToDay, moveDayItem, sortDayByTime, updateDayItem, useAppData } from '../lib/store'
-import type { Day, DayItem, Place, Stop, Transfer, Trip } from '../types'
+import { addExpense, addToDay, moveDayItem, removeDayItem, sortDayByTime, updateDayItem, useAppData } from '../lib/store'
+import { EXPENSE_CATEGORIES, type Day, type DayItem, type ExpenseCategory, type Place, type Stop, type Transfer, type Trip } from '../types'
 import { DayMap } from './DayMap'
 import { FilterChips, tagOf } from './FilterChips'
-import { PlaceSheet } from './PlaceSheet'
+import { PlaceSheet, categoryFor } from './PlaceSheet'
 import { StaySheet } from './StaySheet'
 import { SuggestSheet } from './SuggestSheet'
 import { PlaceThumb, TagIcon } from './TagIcon'
@@ -142,30 +142,90 @@ function TransferCard({ t, onEdit }: { t: Transfer; onEdit: () => void }) {
   )
 }
 
+// A small amount field right on the card, so logging a spend takes a few seconds.
+function QuickExpense({ place, day, currency, onDone }: { place: Place; day: Day; currency: string; onDone: () => void }) {
+  const [amount, setAmount] = useState('')
+  const [note, setNote] = useState('')
+  const [category, setCategory] = useState<ExpenseCategory>(categoryFor(place.tag))
+  const [error, setError] = useState('')
+
+  function add() {
+    const n = parseFloat(amount)
+    if (!Number.isFinite(n) || n <= 0) return setError('Enter an amount greater than zero.')
+    addExpense({
+      tripId: place.tripId,
+      date: day.date,
+      title: note.trim() ? `${place.name}: ${note.trim()}` : place.name,
+      amount: n,
+      category,
+      placeId: place.id,
+    })
+    onDone()
+  }
+
+  return (
+    <div className="quick-panel">
+      <div className="row">
+        <label>
+          Amount ({currency})
+          <input autoFocus inputMode="decimal" value={amount} onChange={(e) => { setAmount(e.target.value); setError('') }} onKeyDown={(e) => e.key === 'Enter' && add()} />
+        </label>
+        <label>
+          Category
+          <select value={category} onChange={(e) => setCategory(e.target.value as ExpenseCategory)}>
+            {EXPENSE_CATEGORIES.map((c) => (
+              <option key={c}>{c}</option>
+            ))}
+          </select>
+        </label>
+      </div>
+      <label>
+        What was it for? (optional)
+        <input value={note} onChange={(e) => setNote(e.target.value)} />
+      </label>
+      {error && <p className="error">{error}</p>}
+      <div className="row buttons">
+        <button className="primary" onClick={add}>Add expense</button>
+        <button onClick={onDone}>Cancel</button>
+      </div>
+    </div>
+  )
+}
+
 function ItemRow({
-  index, day, item, place, next, mode, currency, focused, onFocus, onOpen,
+  index, day, item, place, next, mode, currency, focused, expanded, onToggle, onOpen,
 }: {
   index: number; day: Day; item: DayItem; place: Place | undefined; next: Place | undefined; mode: Mode
-  currency: string; focused: boolean; onFocus: () => void; onOpen: () => void
+  currency: string; focused: boolean; expanded: boolean; onToggle: () => void; onOpen: () => void
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: item.id })
+  const { expenses } = useAppData()
+  const [panel, setPanel] = useState<'expense' | 'edit' | null>(null)
   const style = { transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.6 : 1 }
   const tag = place ? tagOf(place) : 'Untagged'
+  const spent = expenses
+    .filter((e) => e.placeId === item.placeId && e.date === day.date)
+    .reduce((s, e) => s + e.amount, 0)
   const sub = [item.time, item.cost ? fmtMoney(item.cost, currency) : '', item.note].filter(Boolean).join(' · ')
+  useEffect(() => {
+    if (!expanded) setPanel(null)
+  }, [expanded])
 
   return (
     <div ref={setNodeRef} style={style} className="item-wrap">
-      <div className={'item place-item' + (item.done ? ' done' : '') + (focused ? ' focused' : '')}>
+      <div className={'item place-item' + (item.done ? ' done' : '') + (focused ? ' focused' : '') + (expanded ? ' expanded' : '')}>
         <button className="handle" aria-label="Drag to reorder" {...attributes} {...listeners}>
           <GripVertical size={20} />
         </button>
         <PlaceThumb place={place} size={52} number={index + 1} />
-        <button className="item-main" onClick={onFocus} aria-label={`Show ${place?.name ?? 'place'} on the map`}>
-          <strong className="serif">{place?.name ?? '(place removed)'}</strong>
-          <span className="muted">{tag}</span>
-          {sub && <span className="muted">{sub}</span>}
+        <button className="item-main row-main" onClick={onToggle} aria-expanded={expanded} aria-label={`${place?.name ?? 'Place'}: show on the map and open options`}>
+          <span className="item-text">
+            <strong className="serif">{place?.name ?? '(place removed)'}</strong>
+            <span className="muted">{tag}</span>
+            {sub && <span className="muted">{sub}</span>}
+          </span>
+          <ChevronDown size={18} className="item-chev" aria-hidden />
         </button>
-        <button className="icon-btn" aria-label="Details, photos and notes" onClick={onOpen}><Info size={19} /></button>
         <input
           type="checkbox"
           className="tick"
@@ -173,6 +233,49 @@ function ItemRow({
           checked={item.done}
           onChange={(e) => updateDayItem(day.id, item.id, { done: e.target.checked })}
         />
+        {expanded && place && (
+          <div className="item-panel">
+            <div className="item-meta">
+              {item.time && <span>{item.time}</span>}
+              {place.details?.hours && <span>Open {place.details.hours}</span>}
+              {item.cost ? <span>Planned {fmtMoney(item.cost, currency)}</span> : null}
+              {spent > 0 && <span>{fmtMoney(spent, currency)} spent</span>}
+              {item.note && <span>Note: {item.note}</span>}
+            </div>
+            <div className="chips">
+              <button className="primary" onClick={onOpen}>Details and photos</button>
+              <button onClick={() => setPanel(panel === 'expense' ? null : 'expense')}><Plus size={15} /> Expense</button>
+              <button onClick={() => setPanel(panel === 'edit' ? null : 'edit')}>Time and note</button>
+              <button className="danger" onClick={() => confirm(`Remove “${place.name}” from this day?`) && removeDayItem(day.id, item.id)}>Remove</button>
+            </div>
+            {panel === 'expense' && <QuickExpense place={place} day={day} currency={currency} onDone={() => setPanel(null)} />}
+            {panel === 'edit' && (
+              <div className="quick-panel">
+                <div className="row">
+                  <label>
+                    Time
+                    <input type="time" value={item.time ?? ''} onChange={(e) => updateDayItem(day.id, item.id, { time: e.target.value || undefined })} />
+                  </label>
+                  <label>
+                    Planned cost
+                    <input
+                      inputMode="decimal"
+                      value={item.cost ?? ''}
+                      onChange={(e) => {
+                        const n = parseFloat(e.target.value)
+                        updateDayItem(day.id, item.id, { cost: Number.isFinite(n) && n >= 0 ? n : undefined })
+                      }}
+                    />
+                  </label>
+                </div>
+                <label>
+                  Note, such as the dish to order
+                  <textarea rows={2} value={item.note} onChange={(e) => updateDayItem(day.id, item.id, { note: e.target.value })} />
+                </label>
+              </div>
+            )}
+          </div>
+        )}
       </div>
       {place && next && <LegRow from={place} to={next} mode={mode} />}
     </div>
@@ -245,6 +348,7 @@ export function DaysTab({ initialDate }: { initialDate?: string }) {
   const [stayFor, setStayFor] = useState<Stop | null>(null)
   const [focusId, setFocusId] = useState<string | undefined>()
   const [openItem, setOpenItem] = useState<string | null>(null)
+  const [expandedId, setExpandedId] = useState<string | null>(null)
   const [transferSheet, setTransferSheet] = useState<{ transfer?: Transfer } | null>(null)
   const [mode, setModeState] = useState<Mode>(() => {
     try {
@@ -278,7 +382,10 @@ export function DaysTab({ initialDate }: { initialDate?: string }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tripDays, initialDate])
 
-  useEffect(() => setFocusId(undefined), [selected])
+  useEffect(() => {
+    setFocusId(undefined)
+    setExpandedId(null)
+  }, [selected])
 
   const day = tripDays.find((d) => d.id === selected)
   const placeById = useMemo(() => new Map(places.map((p) => [p.id, p])), [places])
@@ -429,7 +536,12 @@ export function DaysTab({ initialDate }: { initialDate?: string }) {
                       mode={mode}
                       currency={trip.currency ?? 'USD'}
                       focused={item.placeId === focusId}
-                      onFocus={() => setFocusId(item.placeId)}
+                      expanded={expandedId === item.id}
+                      onToggle={() => {
+                        // One tap: zoom the map to the place and open (or close) its options.
+                        setFocusId(item.placeId)
+                        setExpandedId(expandedId === item.id ? null : item.id)
+                      }}
                       onOpen={() => setOpenItem(item.id)}
                     />
                   ))}
