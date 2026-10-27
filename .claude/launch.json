@@ -10,16 +10,6 @@
         "5173"
       ],
       "port": 5173
-    },
-    {
-      "name": "trip-planner-test",
-      "runtimeExecutable": "/Users/sherry/tools/node/bin/node",
-      "runtimeArgs": [
-        "node_modules/vite/bin/vite.js",
-        "--port",
-        "5174"
-      ],
-      "port": 5174
     }
   ]
 }

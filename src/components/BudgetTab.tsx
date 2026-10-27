@@ -80,11 +80,11 @@ export function BudgetTab() {
               inputMode="decimal"
               placeholder="e.g. 3000"
               value={budgetText ?? (budget !== undefined ? String(budget) : '')}
-              onChange={(e) => setBudgetText(e.target.value)}
-              onBlur={() => {
-                if (budgetText !== null) saveBudget(budgetText, cur)
-                setBudgetText(null)
+              onChange={(e) => {
+                setBudgetText(e.target.value)
+                saveBudget(e.target.value, cur)
               }}
+              onBlur={() => setBudgetText(null)}
             />
           </label>
           <label style={{ maxWidth: 110 }}>
