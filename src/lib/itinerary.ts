@@ -39,7 +39,8 @@ export type SuggestedDay = { dayId: string; date: string; mode: DayMode; placeId
 export type Suggestion = { days: SuggestedDay[]; unscheduled: string[] }
 export type Slot = { dayId: string; date: string; mode: DayMode }
 
-const isFood = (p: Place) => p.tag === 'Food & drink'
+// Meals and cafés both count as "food stops" when mixing a day.
+const isFood = (p: Place) => p.tag === 'Food' || p.tag === 'Cafes'
 
 export function suggestItinerary(opts: { places: Place[]; slots: Slot[]; pace: Pace; variant?: number; stay?: Place }): Suggestion {
   const { places, slots, pace, variant = 0, stay } = opts

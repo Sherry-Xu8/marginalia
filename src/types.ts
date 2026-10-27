@@ -86,7 +86,8 @@ export type Day = {
 }
 
 export const TAGS = [
-  'Food & drink',
+  'Food',
+  'Cafes',
   'Sightseeing',
   'Accommodation',
   'Shopping',

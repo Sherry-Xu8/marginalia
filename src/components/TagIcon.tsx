@@ -1,6 +1,7 @@
 import {
   BedDouble,
   CircleHelp,
+  Coffee,
   Landmark,
   MapPin,
   ShoppingBag,
@@ -14,7 +15,8 @@ import { TAG_STYLE } from '../lib/tagging'
 import type { Place } from '../types'
 
 const ICONS: Record<string, ComponentType<{ size?: number; strokeWidth?: number }>> = {
-  'Food & drink': Utensils,
+  Food: Utensils,
+  Cafes: Coffee,
   Sightseeing: Landmark,
   Accommodation: BedDouble,
   Shopping: ShoppingBag,

@@ -7,7 +7,7 @@ import { GROUP_RADIUS_KM, clusterPlaces, nextAreaName } from './grouping'
 import type { TripData } from './backup'
 import type { ParseResult } from './kml'
 import { englishPart } from './names'
-import { suggestTags } from './tagging'
+import { migrateLegacyTag, suggestTags } from './tagging'
 
 // One small store holds everything and saves it to the browser (IndexedDB)
 // after each change. Components read it with useAppData().
@@ -26,6 +26,7 @@ export async function loadData(): Promise<void> {
       // Data saved by Stage 1 has no groups yet — fill them in.
       state = {
         ...saved,
+        places: saved.places.map(migrateLegacyTag),
         groups: saved.groups ?? [],
         days: saved.days ?? [],
         expenses: saved.expenses ?? [],

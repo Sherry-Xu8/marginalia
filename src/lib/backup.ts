@@ -148,7 +148,8 @@ function cleanPlace(v: unknown): Place | null {
   const lat = num(o?.lat)
   const lon = num(o?.lon)
   if (!o || !id || !tripId || !name || lat === null || lon === null || Math.abs(lat) > 90 || Math.abs(lon) > 180) return null
-  const tag = TAGS.find((t) => t === o.tag)
+  const legacy = (o.tag as unknown) === 'Food & drink' ? 'Food' : o.tag
+  const tag = TAGS.find((t) => t === legacy)
   return {
     id, tripId, name, lat, lon,
     originalName: str(o.originalName, 300) ?? undefined,

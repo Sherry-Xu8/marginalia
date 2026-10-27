@@ -16,18 +16,21 @@ export type Tagger = {
 
 // ---- Keyword rules ----
 // The order of this list is also the tie-break: if two categories score the same,
-// the one listed first wins (so "Station Exit 2 – Tteok" is Food, not Transport).
+// the one listed first wins (so "Station Exit 2 – Tteok" is Food, not Transport, and
+// "London Bagel Museum" is a café, not Sightseeing).
 
 const KEYWORDS: Record<Exclude<Tag, 'Other'>, string[]> = {
-  'Food & drink': [
-    'restaurant', 'cafe', 'café', 'coffee', 'bakery', 'bread', 'bagel', 'bbq', 'grill', 'ramen',
-    'sushi', 'noodle', 'soup', 'rice', 'pork', 'beef', 'chicken', 'seafood', 'dessert', 'tea',
-    'dumpling', 'pizza', 'burger', 'brunch', 'bistro', 'kitchen', 'eatery', 'diner', 'street food',
-    'food street', 'food', 'tteok', 'tteokbokki', 'tteokboki', 'bibimbap', 'gopchang', 'jokbal',
-    'galbi', 'dakgalbi', 'gejang', 'samgyetang', 'hotteok', 'toast', 'bingsu', 'ice cream', 'gelato',
-    'donut', 'pastry', 'sandwich', 'curry', 'udon', 'tempura', 'fried', 'porridge', 'jjajangmyeon',
-    'gamjatang', 'claypot', 'braised', 'italian', 'korean', 'japanese', 'bakeries', 'tapas',
-    '식당', '카페', '국밥', '죽', '곱창', '족발', '떡볶이', '맛집',
+  Food: [
+    'restaurant', 'bbq', 'grill', 'ramen', 'sushi', 'noodle', 'soup', 'rice', 'pork', 'beef', 'chicken', 'seafood',
+    'dumpling', 'pizza', 'burger', 'bistro', 'kitchen', 'eatery', 'diner', 'street food', 'food street', 'food',
+    'tteok', 'tteokbokki', 'tteokboki', 'bibimbap', 'gopchang', 'jokbal', 'galbi', 'dakgalbi', 'gejang', 'samgyetang',
+    'hotteok', 'sandwich', 'curry', 'udon', 'tempura', 'fried', 'porridge', 'jjajangmyeon', 'gamjatang', 'claypot',
+    'braised', 'italian', 'korean', 'japanese', 'tapas', 'brunch', 'cheese',
+    '식당', '국밥', '죽', '곱창', '족발', '떡볶이', '맛집',
+  ],
+  Cafes: [
+    'cafe', 'café', 'coffee', 'bakery', 'bakeries', 'bread', 'bagel', 'dessert', 'tea', 'donut', 'pastry', 'toast',
+    'bingsu', 'ice cream', 'gelato', 'patisserie', 'roastery', 'espresso', 'latte', '카페', '커피', '베이커리',
   ],
   Sightseeing: [
     'museum', 'temple', 'palace', 'tower', 'gallery', 'monument', 'castle', 'shrine', 'cathedral',
@@ -119,9 +122,10 @@ export async function suggestTags(places: TagInput[]): Promise<Map<string, Tag>>
 
 // colour = map pin, tint/ink = the soft tile and its icon colour in lists.
 export const TAG_STYLE: Record<Tag | 'Untagged', { colour: string; tint: string; ink: string }> = {
-  'Food & drink': { colour: '#C2582F', tint: '#F6E1D6', ink: '#8F3F1E' },
+  Food: { colour: '#C2582F', tint: '#F6E1D6', ink: '#8F3F1E' },
+  Cafes: { colour: '#B0763C', tint: '#F3E2CC', ink: '#724517' },
   Sightseeing: { colour: '#3F6E73', tint: '#D9E8E8', ink: '#274B4F' },
-  Accommodation: { colour: '#8A6B4F', tint: '#EBDFD3', ink: '#5C4530' },
+  Accommodation: { colour: '#7A5C48', tint: '#EADFD6', ink: '#503B2D' },
   Shopping: { colour: '#C9993A', tint: '#F5E8C8', ink: '#7A5814' },
   'Nature & outdoors': { colour: '#4A7461', tint: '#DCE7DD', ink: '#2F5646' },
   Nightlife: { colour: '#26352E', tint: '#D8DFDA', ink: '#1B2822' },
@@ -131,3 +135,11 @@ export const TAG_STYLE: Record<Tag | 'Untagged', { colour: string; tint: string;
 }
 
 export { TAGS }
+
+// Places tagged before Food and Cafes were split: the old "Food & drink" becomes Cafes if the name reads
+// like a café (and you hadn't chosen it yourself), otherwise Food.
+export function migrateLegacyTag<T extends { tag?: unknown; tagSource?: string; name: string; description: string; layer: string }>(p: T): T {
+  if ((p.tag as string | undefined) !== 'Food & drink') return p
+  const guess = p.tagSource === 'user' ? 'Food' : keywordTag(p) === 'Cafes' ? 'Cafes' : 'Food'
+  return { ...p, tag: guess }
+}

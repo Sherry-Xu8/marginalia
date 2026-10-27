@@ -18,3 +18,16 @@ export function roundToCurrency(amount: number, currency: string): number {
     return Math.round(amount * 100) / 100
   }
 }
+
+const ALIASES: Record<string, string> = {
+  WON: 'KRW', KOREANWON: 'KRW', YEN: 'JPY', JAPANESEYEN: 'JPY', DOLLAR: 'USD', DOLLARS: 'USD', USDOLLAR: 'USD',
+  POUND: 'GBP', POUNDS: 'GBP', STERLING: 'GBP', EURO: 'EUR', EUROS: 'EUR', BAHT: 'THB', YUAN: 'CNY', RMB: 'CNY',
+  RUPEE: 'INR', RUPEES: 'INR', DONG: 'VND', PESO: 'MXN', FRANC: 'CHF', AUD: 'AUD', AUSSIEDOLLAR: 'AUD',
+}
+
+// Turns what someone types ("won", "krw", " Yen ") into a 3-letter code. Returns '' if it can't tell.
+export function normaliseCurrency(input: string): string {
+  const k = input.trim().toUpperCase().replace(/[^A-Z]/g, '')
+  if (ALIASES[k]) return ALIASES[k]
+  return /^[A-Z]{3}$/.test(k) ? k : ''
+}
