@@ -1,11 +1,13 @@
 import { useMemo, useState } from 'react'
 import { shortDate } from '../lib/days'
 import {
+  DEFAULT_PREFS,
   PACE_COUNT,
   stopDays,
   suggestItinerary,
   type DayMode,
   type Pace,
+  type Prefs,
   type Suggestion,
 } from '../lib/itinerary'
 import { applySuggestion, setGroupStop, useAppData } from '../lib/store'
@@ -18,6 +20,20 @@ const PACES: { id: Pace; label: string }[] = [
   { id: 'standard', label: 'Standard' },
   { id: 'packed', label: 'Packed' },
 ]
+const MEALS: { id: Prefs['meals']; label: string; hint: string }[] = [
+  { id: 3, label: 'All three meals', hint: 'breakfast, lunch, dinner' },
+  { id: 2, label: 'Lunch and dinner', hint: 'skip breakfast' },
+  { id: 0, label: 'I’ll sort my own', hint: 'no meals planned' },
+]
+const PREFS_KEY = 'plan-prefs'
+function loadPrefs(): Prefs {
+  try {
+    const o = JSON.parse(localStorage.getItem(PREFS_KEY) ?? '{}')
+    return { meals: o.meals === 0 || o.meals === 2 || o.meals === 3 ? o.meals : DEFAULT_PREFS.meals, cafe: typeof o.cafe === 'boolean' ? o.cafe : DEFAULT_PREFS.cafe }
+  } catch {
+    return DEFAULT_PREFS
+  }
+}
 const MODE_LABEL: Record<DayMode, string> = { full: 'Full day', half: 'Half day', off: 'Day off' }
 
 // Choose which location groups ("areas") belong to this stop, right here.
@@ -53,6 +69,15 @@ function AreaPicker({ trip, stop }: { trip: Trip; stop: Stop }) {
 export function SuggestSheet({ trip, stop, onClose }: { trip: Trip; stop: Stop; onClose: () => void }) {
   const { days, places, groups } = useAppData()
   const [pace, setPace] = useState<Pace>('standard')
+  const [prefs, setPrefsState] = useState<Prefs>(loadPrefs)
+  const setPrefs = (p: Prefs) => {
+    setPrefsState(p)
+    try {
+      localStorage.setItem(PREFS_KEY, JSON.stringify(p))
+    } catch {
+      // not remembered — fine
+    }
+  }
   const dates = useMemo(() => stopDays(trip, stop), [trip, stop])
   const tripDays = days.filter((d) => d.tripId === trip.id)
   const dayFor = (date: string) => tripDays.find((d) => d.date === date)
@@ -83,6 +108,7 @@ export function SuggestSheet({ trip, stop, onClose }: { trip: Trip; stop: Stop; 
       places: stopPlaces.filter((p) => !taken.has(p.id)),
       slots: usable.map((u) => ({ dayId: dayFor(u.date)!.id, date: u.date, mode: modes[u.date] ?? u.mode })),
       pace,
+      prefs,
       variant: v,
       stay: places.find((p) => p.id === stop.stayPlaceId),
     })
@@ -144,10 +170,28 @@ export function SuggestSheet({ trip, stop, onClose }: { trip: Trip; stop: Stop; 
               {PACES.map((p) => (
                 <button key={p.id} className={pace === p.id ? 'chip on' : 'chip'} onClick={() => setPace(p.id)}>
                   {p.label}
-                  <small>~{PACE_COUNT[p.id]} a day</small>
+                  <small>~{PACE_COUNT[p.id]} sights a day</small>
                 </button>
               ))}
             </div>
+
+            <h3>How do you like to travel?</h3>
+            <p className="muted">Meals and coffee are added around your sights, so days don’t turn into back-to-back restaurants.</p>
+            <div className="tag-grid three">
+              {MEALS.map((o) => (
+                <button key={o.id} className={prefs.meals === o.id ? 'chip on' : 'chip'} onClick={() => setPrefs({ ...prefs, meals: o.id })}>
+                  {o.label}
+                  <small>{o.hint}</small>
+                </button>
+              ))}
+            </div>
+            <label className="check">
+              <input type="checkbox" checked={prefs.cafe} onChange={(e) => setPrefs({ ...prefs, cafe: e.target.checked })} />
+              <span>A coffee stop every day <small className="muted">· explore local cafés (uses places tagged Cafes)</small></span>
+            </label>
+            {stopPlaces.length > 0 && !stopPlaces.some((p) => p.tag !== 'Food' && p.tag !== 'Cafes' && p.tag !== 'Accommodation' && p.tag !== 'Transport') && (
+              <p className="muted">Heads up: these places are all food and cafés, so days will be mostly meals. Add sights to the map for a fuller mix.</p>
+            )}
 
             <h3>Your days in {stop.name}</h3>
             <p className="muted">Arrival and departure days start as half days. Change any day below.</p>
@@ -206,7 +250,10 @@ export function SuggestSheet({ trip, stop, onClose }: { trip: Trip; stop: Stop; 
                   {d.mode !== 'off' && d.placeIds.length === 0 && <p className="muted">Nothing scheduled</p>}
                   {d.placeIds.map((id, n) => (
                     <div key={id} className="check">
-                      <span style={{ flex: 1 }}>{n + 1}. {row(placeById.get(id))}</span>
+                      <span style={{ flex: 1 }}>
+                        {n + 1}. {row(placeById.get(id))}
+                        {d.labels?.[id] && <small className="muted"> · {d.labels[id]}</small>}
+                      </span>
                       <button aria-label="Set aside" onClick={() => removeFromDay(d.dayId, id)}>×</button>
                     </div>
                   ))}
