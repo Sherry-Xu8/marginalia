@@ -9,6 +9,7 @@ export type ParsedPlace = {
 }
 
 export type ParseResult = {
+  mapName: string // the name of the map inside the file (used to recognise a re-import of the same map)
   places: ParsedPlace[]
   noLocation: number // placemarks that are lines/areas, not single points
 }
@@ -102,5 +103,5 @@ export function parseKml(text: string): ParseResult {
       layer: layerOf(pm, docName),
     })
   }
-  return { places, noLocation }
+  return { mapName: docName, places, noLocation }
 }

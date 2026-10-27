@@ -155,6 +155,7 @@ function cleanPlace(v: unknown): Place | null {
     photos: cleanPhotos(o.photos),
     description: str(o.description, 5000) ?? '',
     layer: str(o.layer, 300) ?? '',
+    sourceMap: str(o.sourceMap, 300) ?? undefined,
     dedupeKey: str(o.dedupeKey, 500) ?? `${name.toLowerCase()}|${lat.toFixed(5)}|${lon.toFixed(5)}`,
     groupId: str(o.groupId, 100) ?? undefined,
     tag,

@@ -119,6 +119,7 @@ export type Place = {
   lat: number
   lon: number
   layer: string // the original My Maps layer (folder)
+  sourceMap?: string // the name of the map file it was imported from
   dedupeKey: string // used so re-importing never creates duplicates
   groupId?: string
   tag?: Tag // no tag = "Untagged"

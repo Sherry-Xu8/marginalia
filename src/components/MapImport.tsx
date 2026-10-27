@@ -1,8 +1,9 @@
 import { Upload } from 'lucide-react'
 import { useRef, useState } from 'react'
 import { ImportError, readMapFile } from '../lib/kml'
-import { importPlaces, useAppData } from '../lib/store'
-import type { ImportSummary } from '../types'
+import { importPlaces, placesGoneFromFile, useAppData } from '../lib/store'
+import type { ImportSummary, Place } from '../types'
+import { ReviewGoneSheet } from './ReviewGoneSheet'
 
 // Choose a Google My Maps export (KML/KMZ) and add its places to the trip.
 export function MapImport({
@@ -19,6 +20,7 @@ export function MapImport({
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const [summary, setSummary] = useState<ImportSummary | null>(null)
+  const [gone, setGone] = useState<Place[]>([])
   const groupCount = groups.filter((g) => g.tripId === tripId).length
 
   async function onFile(file: File | undefined) {
@@ -34,6 +36,7 @@ export function MapImport({
       const done = importPlaces(tripId, parsed, file.name)
       setSummary(done)
       onResult?.(done, '')
+      setGone(placesGoneFromFile(tripId, parsed)) // places that vanished from the map since last time
     } catch (e) {
       const msg = e instanceof ImportError ? e.message : 'Something went wrong reading that file.'
       setError(msg)
@@ -51,6 +54,7 @@ export function MapImport({
         <button className="soft-btn import-top" disabled={busy} onClick={() => fileInput.current?.click()}>
           <Upload size={18} /> {busy ? 'Reading…' : 'Import map'}
         </button>
+        {gone.length > 0 && <ReviewGoneSheet gone={gone} onClose={() => setGone([])} />}
       </>
     )
   }
@@ -78,6 +82,7 @@ export function MapImport({
           </ul>
         </div>
       )}
+      {gone.length > 0 && <ReviewGoneSheet gone={gone} onClose={() => setGone([])} />}
     </>
   )
 }

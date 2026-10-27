@@ -656,3 +656,4 @@ main > section > h2 { font-family: var(--serif); font-weight: 420; }
 .leg { padding-left: 28px; }
 .pin-map { height: min(52vh, 420px); border-radius: 22px; border: 1px solid var(--line); overflow: hidden; margin: 8px 0 12px; }
 .head-actions { display: flex; gap: 10px; flex-wrap: wrap; }
+input[type='checkbox'] { accent-color: var(--accent); }

@@ -174,12 +174,28 @@ export function importPlaces(tripId: string, parsed: ParseResult, fileName: stri
       continue
     }
     existing.add(key)
-    added.push({ id: newId(), tripId, dedupeKey: key, ...p })
+    added.push({ id: newId(), tripId, dedupeKey: key, sourceMap: parsed.mapName, ...p })
   }
 
-  if (added.length > 0) {
-    update((s) => assignGroups({ ...s, places: [...s.places, ...added] }, tripId))
-    void tagUntagged()
+  // Places already here that are in this file now belong to this map (so a later re-import knows).
+  const inFile = new Set(parsed.places.map((p) => dedupeKeyOf(p.name, p.lat, p.lon)))
+  const adopt = state.places.some((p) => p.tripId === tripId && !p.sourceMap && inFile.has(p.dedupeKey))
+  if (added.length > 0 || adopt) {
+    update((s) =>
+      assignGroups(
+        {
+          ...s,
+          places: [
+            ...s.places.map((p) =>
+              p.tripId === tripId && !p.sourceMap && inFile.has(p.dedupeKey) ? { ...p, sourceMap: parsed.mapName } : p,
+            ),
+            ...added,
+          ],
+        },
+        tripId,
+      ),
+    )
+    if (added.length > 0) void tagUntagged()
   }
 
   return {
@@ -190,6 +206,35 @@ export function importPlaces(tripId: string, parsed: ParseResult, fileName: stri
     noLocation: parsed.noLocation,
     layers: [...layerCounts].map(([name, count]) => ({ name, count })),
   }
+}
+
+// Places that came from an earlier import of this map but are not in this file any more.
+// Places you added yourself are never listed.
+export function placesGoneFromFile(tripId: string, parsed: ParseResult): Place[] {
+  const keys = new Set(parsed.places.map((p) => dedupeKeyOf(p.name, p.lat, p.lon)))
+  const layers = new Set(parsed.places.map((p) => p.layer))
+  return state.places.filter(
+    (p) =>
+      p.tripId === tripId &&
+      p.layer !== 'Added by you' &&
+      !keys.has(p.dedupeKey) &&
+      // same map, or (for places imported before maps were recorded) a layer that is in this file
+      (p.sourceMap ? p.sourceMap === parsed.mapName : layers.has(p.layer)),
+  )
+}
+
+// Removes places, and everything that pointed at them: day plans, accommodation, links on expenses.
+export function removePlaces(ids: string[]) {
+  const gone = new Set(ids)
+  update((s) =>
+    dropEmptyGroups({
+      ...s,
+      places: s.places.filter((p) => !gone.has(p.id)),
+      days: s.days.map((d) => (d.items.some((i) => gone.has(i.placeId)) ? { ...d, items: d.items.filter((i) => !gone.has(i.placeId)) } : d)),
+      trips: s.trips.map((t) => (t.stops.some((st) => st.stayPlaceId && gone.has(st.stayPlaceId)) ? { ...t, stops: t.stops.map((st) => (st.stayPlaceId && gone.has(st.stayPlaceId) ? { ...st, stayPlaceId: undefined } : st)) } : t)),
+      expenses: s.expenses.map((e) => (e.placeId && gone.has(e.placeId) ? { ...e, placeId: undefined } : e)),
+    }),
+  )
 }
 
 export function clearPlaces(tripId: string) {
