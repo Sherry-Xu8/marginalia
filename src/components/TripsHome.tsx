@@ -86,7 +86,11 @@ function TripCard({ trip }: { trip: Trip }) {
     <article className="card tcard">
       <div className="tcard-photos">
         <Collage trip={trip} photos={photos} status={when(trip.startDate, trip.endDate)} />
-        <div className="tcard-menu">
+      </div>
+      <div className="tcard-body">
+        <div className="tcard-title">
+          <h2 className="display">{trip.name}</h2>
+          <div className="tcard-menu">
           <button className="menu-btn" aria-label={`Options for ${trip.name}`} aria-expanded={menu} onClick={() => setMenu(!menu)}>
             <MoreHorizontal size={18} />
           </button>
@@ -107,9 +111,7 @@ function TripCard({ trip }: { trip: Trip }) {
             </div>
           )}
         </div>
-      </div>
-      <div className="tcard-body">
-        <h2 className="display">{trip.name}</h2>
+        </div>
         <p className="lede small">
           {fmt(trip.startDate)} — {fmt(trip.endDate)}
           {trip.stops.length > 0 && ` · ${trip.stops.map((s) => s.name).join(', ')}`}

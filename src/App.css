@@ -857,16 +857,36 @@ i.spent.over { background: #c2582f; }
 .collage.n1 { grid-template-columns: 1fr; grid-template-rows: minmax(0, 1fr); }
 .collage > span.collage-letter { display: grid; place-items: center; font-family: var(--serif); font-size: 4.2rem; }
 .collage-pill { position: absolute; top: 12px; left: 12px; background: rgba(252, 251, 248, 0.94); color: #22332c; font-size: 0.78rem; font-weight: 650; border-radius: 999px; padding: 4px 12px; }
-.tcard-menu { position: absolute; top: 10px; right: 10px; z-index: 5; }
-.menu-btn { width: 40px; height: 40px; min-height: 0; padding: 0; border-radius: 50%; background: rgba(252, 251, 248, 0.94); color: #62736a; display: grid; place-items: center; }
-.menu-btn:hover:not(:disabled) { background: #fff; }
+.tcard-title { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
+.tcard-menu { position: relative; z-index: 5; flex: none; margin-top: -2px; }
+.menu-btn { width: 40px; height: 40px; min-height: 0; min-width: 0; padding: 0; border-radius: 50%; background: var(--soft); color: var(--muted); display: grid; place-items: center; border: 0; box-shadow: none; }
+.menu-btn:hover:not(:disabled), .menu-btn[aria-expanded='true'] { background: var(--accent-soft); color: var(--accent-dark); }
+.menu-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .menu-scrim { position: fixed; inset: 0; z-index: 1; }
-.menu-pop { position: absolute; right: 0; top: 46px; z-index: 2; min-width: 210px; background: var(--card); border: 1px solid var(--line); border-radius: 18px; box-shadow: var(--shadow); padding: 6px; display: flex; flex-direction: column; }
-.menu-pop button { justify-content: flex-start; gap: 10px; min-height: 46px; background: transparent; border-radius: 12px; color: var(--text); font-weight: 550; }
+.menu-pop { position: absolute; right: 0; top: 46px; z-index: 2; width: max-content; min-width: 200px; background: var(--card); border: 1px solid var(--line); border-radius: 16px; box-shadow: var(--shadow); padding: 6px; display: flex; flex-direction: column; gap: 2px; }
+.menu-pop button { display: flex; align-items: center; justify-content: flex-start; gap: 12px; width: 100%; min-height: 44px; padding: 0 14px; text-align: left; white-space: nowrap; background: transparent; border: 0; box-shadow: none; border-radius: 10px; color: var(--text); font-weight: 550; font-size: 0.95rem; }
 .menu-pop button:hover:not(:disabled) { background: var(--soft); }
 .menu-pop button.danger { color: var(--danger); }
+.menu-pop button.danger:hover:not(:disabled) { background: color-mix(in srgb, var(--danger) 10%, transparent); }
 .tcard-body { padding: 18px 22px 22px; }
 .tcard-body h2 { font-size: 1.7rem; margin: 0 0 4px; padding: 0; }
 .tcard-body .trip-stats { margin-top: 14px; padding-top: 14px; gap: 22px; }
 .tcard-body .trip-stats strong { font-size: 1.2rem; }
 .tcard-body .open-btn { margin-top: 16px; min-height: 52px; }
+
+/* Trip cards, made more compact */
+.grid.trips { grid-template-columns: repeat(auto-fill, minmax(min(100%, 300px), 1fr)); gap: 18px; }
+.collage { height: 150px; }
+.collage-letter { font-size: 3rem; }
+.collage-pill { top: 10px; left: 10px; font-size: 0.74rem; padding: 3px 10px; }
+.tcard-body { padding: 14px 18px 16px; }
+.tcard-body h2 { font-size: 1.4rem; }
+.tcard-body .lede.small { font-size: 0.88rem; margin: 2px 0 0; }
+.tcard-body .trip-stats { margin-top: 10px; padding-top: 10px; gap: 18px; }
+.tcard-body .trip-stats strong { font-size: 1.05rem; }
+.tcard-body .trip-stats span { font-size: 0.82rem; }
+.tcard-body .trip-stats div { flex-direction: row; align-items: baseline; gap: 5px; }
+.tcard-body .open-btn { margin-top: 12px; min-height: 44px; padding: 0 18px; border-radius: 14px; font-size: 0.95rem; }
+.menu-btn { width: 34px; height: 34px; }
+.tcard-menu { margin-top: -1px; }
+.menu-pop { top: 40px; }
