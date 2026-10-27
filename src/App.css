@@ -890,3 +890,11 @@ i.spent.over { background: #c2582f; }
 .menu-btn { width: 34px; height: 34px; }
 .tcard-menu { margin-top: -1px; }
 .menu-pop { top: 40px; }
+
+/* Photos get more of the card; the text under them is leaner */
+.collage { height: 190px; }
+.tcard-body { padding: 12px 16px 14px; }
+.tcard-body h2 { font-size: 1.3rem; }
+.tcard-body .lede.small { font-size: 0.85rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tcard-body .trip-stats { margin-top: 8px; padding-top: 8px; }
+.tcard-body .open-btn { margin-top: 10px; min-height: 40px; font-size: 0.9rem; }
