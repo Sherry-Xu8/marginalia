@@ -47,4 +47,6 @@
 * { box-sizing: border-box; }
 body { margin: 0; background: var(--bg); line-height: 1.5; font-family: var(--sans); }
 a { color: inherit; }
-h1, h2, h3 { font-family: var(--serif); font-weight: 420; letter-spacing: -0.015em; line-height: 1.15; margin: 0; }
+/* One rule for type: serif for page titles and names (h1, h2); clean sans for everything smaller (h3 and below). */
+h1, h2 { font-family: var(--serif); font-weight: 420; letter-spacing: -0.015em; line-height: 1.15; margin: 0; }
+h3 { font-family: var(--sans); font-weight: 650; letter-spacing: -0.005em; line-height: 1.25; margin: 0; }

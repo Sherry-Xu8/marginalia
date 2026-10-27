@@ -657,3 +657,45 @@ main > section > h2 { font-family: var(--serif); font-weight: 420; }
 .pin-map { height: min(52vh, 420px); border-radius: 22px; border: 1px solid var(--line); overflow: hidden; margin: 8px 0 12px; }
 .head-actions { display: flex; gap: 10px; flex-wrap: wrap; }
 input[type='checkbox'] { accent-color: var(--accent); }
+
+/* =====================================================================
+   Type rule: serif for page titles and names, sans for everything else
+   ===================================================================== */
+h3 { font-size: 1.05rem; margin: 22px 0 8px; }
+.card h3 { margin-top: 0; }
+.empty h3 { font-family: var(--serif); font-weight: 420; letter-spacing: -0.02em; font-size: 1.6rem; }
+.section-title { font-family: var(--serif); font-weight: 420; font-size: 1.6rem; }
+.item-main strong, .place-name, .sheet-head strong, .summary strong small { font-family: var(--sans); }
+
+/* =====================================================================
+   Desktop sizing: a little smaller; phones keep the larger touch sizes
+   ===================================================================== */
+@media (min-width: 760px) {
+  :root { font-size: 15px; --topbar-h: 64px; }
+  button, select, input:not([type='checkbox']):not([type='radio']):not([type='range']), textarea { min-height: 42px; }
+  button, a.btn { padding: 0 16px; }
+  .soft-btn { min-height: 42px; padding: 0 18px; }
+  .open-btn { min-height: 52px; }
+  .home-head .primary { min-height: 48px; padding: 0 22px; font-size: 0.98rem; }
+  .places-toolbar input[type='search'] { min-height: 46px; }
+  .layer-select { min-height: 46px; }
+  .chip { min-height: 38px; padding: 0 12px; }
+  .tidy button { min-height: 34px; }
+  .stop-card .buttons button, .stop-card .buttons a.btn { min-height: 38px; }
+  .item-panel .chips button { min-height: 36px; padding: 0 12px; }
+  .place-main { min-height: 54px; }
+  .item-main { min-height: 44px; }
+  .mode-pick button { min-height: 32px; min-width: 34px; }
+  .leg-sum { min-height: 34px; }
+  .pills button { min-height: 68px; width: 54px; }
+  .segmented button, .map-labels button { min-height: 38px; }
+  .icon-btn { min-width: 38px; }
+  .tabs a { padding: 12px 4px 13px; }
+  .card { padding: 24px; }
+  .trip-card { padding: 26px 28px 28px; }
+  .hero-card { padding: 34px 40px; min-height: 200px; }
+  .logo-mark { width: 40px; height: 40px; }
+  .wordmark { font-size: 1.6rem; }
+  .group-more summary { width: 40px; height: 40px; }
+  .check, .pick { min-height: 44px; }
+}
