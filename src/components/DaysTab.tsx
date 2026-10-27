@@ -9,7 +9,7 @@ import {
 } from '@dnd-kit/core'
 import { SortableContext, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
-import { BedDouble, ChevronDown, ChevronUp, GripVertical, Pencil, Plus, Sparkles } from 'lucide-react'
+import { BedDouble, CalendarCheck, ChevronDown, ChevronUp, GripVertical, MoveRight, Pencil, Plus, Sparkles, TriangleAlert } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import {
   LONG_TRAVEL_MINUTES,
@@ -26,8 +26,10 @@ import {
   type Mode,
 } from '../lib/commute'
 import { fromISO, shortDate, stopLabel, stopsOn, toISO } from '../lib/days'
+import { hoursWarning } from '../lib/hours'
+import { dayStays } from '../lib/stays'
 import { fmtMoney } from '../lib/money'
-import { addExpense, addToDay, moveDayItem, removeDayItem, setLegMode, sortDayByTime, updateDayItem, useAppData } from '../lib/store'
+import { addExpense, addToDay, moveDayItem, moveItemToDay, removeDayItem, setLegMode, sortDayByTime, updateDayItem, useAppData } from '../lib/store'
 import { EXPENSE_CATEGORIES, type Day, type DayItem, type ExpenseCategory, type Place, type Stop, type Transfer, type Trip } from '../types'
 import { DayMap } from './DayMap'
 import { FilterChips, tagOf } from './FilterChips'
@@ -36,6 +38,7 @@ import { StaySheet } from './StaySheet'
 import { SuggestSheet } from './SuggestSheet'
 import { PlaceThumb, TagIcon } from './TagIcon'
 import { KIND_INFO, TransferSheet } from './TransferSheet'
+import { WeatherChip } from './WeatherChip'
 
 // ---- Travel between places ----
 
@@ -218,20 +221,21 @@ function QuickExpense({ place, day, currency, onDone }: { place: Place; day: Day
 }
 
 function ItemRow({
-  index, day, item, place, next, currency, focused, expanded, onToggle, onOpen,
+  index, day, allDays, item, place, next, currency, focused, expanded, onToggle, onOpen,
 }: {
-  index: number; day: Day; item: DayItem; place: Place | undefined; next: Place | undefined
+  index: number; day: Day; allDays: Day[]; item: DayItem; place: Place | undefined; next: Place | undefined
   currency: string; focused: boolean; expanded: boolean; onToggle: () => void; onOpen: () => void
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: item.id })
   const { expenses } = useAppData()
-  const [panel, setPanel] = useState<'expense' | 'edit' | null>(null)
+  const [panel, setPanel] = useState<'expense' | 'edit' | 'book' | 'move' | null>(null)
   const style = { transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.6 : 1 }
   const tag = place ? tagOf(place) : 'Untagged'
   const spent = expenses
     .filter((e) => e.placeId === item.placeId && e.date === day.date)
     .reduce((s, e) => s + e.amount, 0)
   const sub = [item.time, item.cost ? fmtMoney(item.cost, currency) : '', item.note].filter(Boolean).join(' · ')
+  const warning = place ? hoursWarning(place.details?.hours, day.date, item.time) : null
   useEffect(() => {
     if (!expanded) setPanel(null)
   }, [expanded])
@@ -248,6 +252,20 @@ function ItemRow({
             <strong className="serif">{place?.name ?? '(place removed)'}</strong>
             <span className="muted">{tag}</span>
             {sub && <span className="muted">{sub}</span>}
+            {(item.reservation || warning) && (
+              <span className="item-flags">
+                {item.reservation && (
+                  <span className={'rsv ' + item.reservation}>
+                    <CalendarCheck size={13} aria-hidden /> {item.reservation === 'booked' ? 'Booked' : 'Needs booking'}
+                  </span>
+                )}
+                {warning && (
+                  <span className="rsv warn">
+                    <TriangleAlert size={13} aria-hidden /> {warning}
+                  </span>
+                )}
+              </span>
+            )}
           </span>
           <ChevronDown size={18} className="item-chev" aria-hidden />
         </button>
@@ -266,14 +284,55 @@ function ItemRow({
               {item.cost ? <span>Planned {fmtMoney(item.cost, currency)}</span> : null}
               {spent > 0 && <span>{fmtMoney(spent, currency)} spent</span>}
               {item.note && <span>Note: {item.note}</span>}
+              {item.reservationNote && <span>Booking: {item.reservationNote}</span>}
             </div>
             <div className="chips">
               <button className="primary" onClick={onOpen}>Details and photos</button>
               <button onClick={() => setPanel(panel === 'expense' ? null : 'expense')}><Plus size={15} /> Expense</button>
               <button onClick={() => setPanel(panel === 'edit' ? null : 'edit')}>Time and note</button>
+              <button onClick={() => setPanel(panel === 'book' ? null : 'book')}><CalendarCheck size={15} /> Booking</button>
+              {allDays.length > 1 && <button onClick={() => setPanel(panel === 'move' ? null : 'move')}><MoveRight size={15} /> Move</button>}
               <button className="danger" onClick={() => confirm(`Remove “${place.name}” from this day?`) && removeDayItem(day.id, item.id)}>Remove</button>
             </div>
             {panel === 'expense' && <QuickExpense place={place} day={day} currency={currency} onDone={() => setPanel(null)} />}
+            {panel === 'book' && (
+              <div className="quick-panel">
+                <div className="mode-pick wide-pick" role="group" aria-label="Booking status">
+                  {([[undefined, 'Not needed'], ['todo', 'Need to book'], ['booked', 'Booked']] as const).map(([v, l]) => (
+                    <button key={l} className={item.reservation === v ? 'on' : ''} aria-pressed={item.reservation === v} onClick={() => updateDayItem(day.id, item.id, { reservation: v })}>
+                      {l}
+                    </button>
+                  ))}
+                </div>
+                {item.reservation && (
+                  <label>
+                    Confirmation, time or name it’s under
+                    <input value={item.reservationNote ?? ''} placeholder="e.g. 7:30pm, under Sherry, ref 48213" onChange={(e) => updateDayItem(day.id, item.id, { reservationNote: e.target.value || undefined })} />
+                  </label>
+                )}
+              </div>
+            )}
+            {panel === 'move' && (
+              <div className="quick-panel">
+                <label>
+                  Move to another day
+                  <select
+                    value=""
+                    onChange={(e) => {
+                      if (e.target.value) {
+                        moveItemToDay(day.id, item.id, e.target.value)
+                        onToggle()
+                      }
+                    }}
+                  >
+                    <option value="">Choose a day…</option>
+                    {allDays.filter((d) => d.id !== day.id).map((d) => (
+                      <option key={d.id} value={d.id}>{shortDate(d.date)}{d.items.length ? ` (${d.items.length} planned)` : ''}</option>
+                    ))}
+                  </select>
+                </label>
+              </div>
+            )}
             {panel === 'edit' && (
               <div className="quick-panel">
                 <div className="row">
@@ -363,7 +422,7 @@ function PlacePicker({ trip, day, onClose }: { trip: Trip; day: Day; onClose: ()
 // ---- The screen ----
 
 export function DaysTab({ initialDate }: { initialDate?: string }) {
-  const { trips, activeTripId, days, places, transfers } = useAppData()
+  const { trips, activeTripId, days, places, transfers, groups } = useAppData()
   const trip = trips.find((t) => t.id === activeTripId)
   const tripDays = useMemo(
     () => days.filter((d) => d.tripId === activeTripId).sort((a, b) => a.date.localeCompare(b.date)),
@@ -372,7 +431,7 @@ export function DaysTab({ initialDate }: { initialDate?: string }) {
   const [selected, setSelected] = useState('')
   const [picking, setPicking] = useState(false)
   const [suggestFor, setSuggestFor] = useState<Stop | null>(null)
-  const [stayFor, setStayFor] = useState<Stop | null>(null)
+  const [stayFor, setStayFor] = useState<{ checkIn: string; checkOut: string } | null>(null)
   const [focusId, setFocusId] = useState<string | undefined>()
   const [openItem, setOpenItem] = useState<string | null>(null)
   const [expandedId, setExpandedId] = useState<string | null>(null)
@@ -439,9 +498,9 @@ export function DaysTab({ initialDate }: { initialDate?: string }) {
   const label = stopLabel(trip, day.date)
   const dayStops = stopsOn(trip, day.date)
   const arriving = dayStops[dayStops.length - 1]
-  const leaving = dayStops[0]
-  const startStay = placeById.get(leaving?.stayPlaceId ?? '')
-  const endStay = placeById.get(arriving?.stayPlaceId ?? '')
+  const stays = dayStays(trip, day.date)
+  const startStay = placeById.get(stays.start?.placeId ?? '')
+  const endStay = placeById.get(stays.end?.placeId ?? '')
   const done = day.items.filter((i) => i.done).length
   const dayTransfers = transfers
     .filter((t) => t.tripId === trip.id && t.date === day.date)
@@ -450,6 +509,8 @@ export function DaysTab({ initialDate }: { initialDate?: string }) {
     day.items.reduce((s, i) => s + (i.cost ?? 0), 0) + dayTransfers.reduce((s, t) => s + (t.cost ?? 0), 0)
   const timed = day.items.filter((i) => i.time).length
   const route = [startStay, ...dayPlaces, endStay].filter((p): p is Place => !!p)
+  const weatherPoint =
+    route[0] ?? places.find((p) => p.tripId === trip.id && p.groupId && groups.some((g) => g.id === p.groupId && g.stopId === arriving?.id))
   const sheetItem = openItem ? day.items.find((i) => i.id === openItem) : undefined
 
   function onDragEnd(e: DragEndEvent) {
@@ -462,6 +523,7 @@ export function DaysTab({ initialDate }: { initialDate?: string }) {
         <div>
           <h1>{label || 'No stop for this date'}</h1>
           <p>{shortDate(day.date)} · Day {dayNumber} of {tripDays.length}</p>
+          <WeatherChip point={weatherPoint} date={day.date} />
         </div>
         <div className="hero-badge">
           <strong>{day.items.length}</strong>
@@ -521,16 +583,18 @@ export function DaysTab({ initialDate }: { initialDate?: string }) {
           </button>
 
           {startStay && <StayCard label="Start from" place={startStay} onClick={() => setFocusId(startStay.id)} />}
-          {!arriving?.stayPlaceId && arriving && (
-            <button className="wide subtle" onClick={() => setStayFor(arriving)}>
+          {!stays.end && arriving && arriving.departure > day.date && (
+            <button className="wide subtle" onClick={() => setStayFor({ checkIn: day.date, checkOut: arriving.departure })}>
               <BedDouble size={16} /> Add where you’re staying in {arriving.name}
             </button>
           )}
           {startStay && dayPlaces[0] && <LegRow day={day} from={startStay} to={dayPlaces[0]} />}
 
           {day.items.length === 0 ? (
-            <div className="card">
-              <p>Nothing planned yet. Add places from your imported list, or tap a pin on the Map and choose “Add to day”.</p>
+            <div className="empty">
+              <span className="empty-icon"><CalendarCheck size={30} /></span>
+              <h3 className="display">A day with room in it.</h3>
+              <p className="muted">Nothing planned yet. Add places from your list, or use “Suggest my days” to get a first draft.</p>
             </div>
           ) : (
             <>
@@ -541,6 +605,7 @@ export function DaysTab({ initialDate }: { initialDate?: string }) {
                       key={item.id}
                       index={i}
                       day={day}
+                      allDays={tripDays}
                       item={item}
                       place={placeById.get(item.placeId)}
                       next={placeById.get(day.items[i + 1]?.placeId ?? '') ?? (i === day.items.length - 1 ? endStay : undefined)}
@@ -570,7 +635,7 @@ export function DaysTab({ initialDate }: { initialDate?: string }) {
 
       {picking && <PlacePicker trip={trip} day={day} onClose={() => setPicking(false)} />}
       {suggestFor && <SuggestSheet trip={trip} stop={suggestFor} onClose={() => setSuggestFor(null)} />}
-      {stayFor && <StaySheet trip={trip} stop={stayFor} onClose={() => setStayFor(null)} />}
+      {stayFor && <StaySheet trip={trip} defaults={stayFor} onClose={() => setStayFor(null)} />}
       {transferSheet && (
         <TransferSheet trip={trip} date={day.date} transfer={transferSheet.transfer} onClose={() => setTransferSheet(null)} />
       )}

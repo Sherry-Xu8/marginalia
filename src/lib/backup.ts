@@ -1,4 +1,4 @@
-import type { AppData, ChecklistItem, Day, Expense, Group, Place, PlaceDetails, Stop, Transfer, Trip } from '../types'
+import type { AppData, ChecklistItem, Day, DayItem, Expense, Group, Note, Place, PlaceDetails, Stay, Stop, Transfer, Trip } from '../types'
 import { EXPENSE_CATEGORIES, TAGS, TRANSFER_KINDS } from '../types'
 
 // Saving to / loading from a JSON file. A file can hold the whole plan (a backup) or one trip
@@ -27,7 +27,9 @@ export function buildFullBackup(state: AppData): string {
 export function buildTripShare(state: AppData, tripId: string, includeMoney: boolean): string {
   const trip = state.trips.find((t) => t.id === tripId)
   if (!trip) throw new BackupError('That trip no longer exists.')
-  const shared: Trip = includeMoney ? trip : { ...trip, budget: undefined, currency: undefined }
+  const shared: Trip = includeMoney
+    ? trip
+    : { ...trip, budget: undefined, currency: undefined, foodPerDay: undefined, stays: (trip.stays ?? []).map((s) => ({ ...s, cost: undefined })) }
   const days = state.days
     .filter((d) => d.tripId === tripId)
     .map((d) => (includeMoney ? d : { ...d, items: d.items.map((i) => ({ ...i, cost: undefined })) }))
@@ -95,9 +97,33 @@ function cleanTrip(v: unknown): Trip | null {
     const arrival = date(so?.arrival)
     const departure = date(so?.departure)
     return so && sid && sname && arrival && departure
-      ? [{ id: sid, name: sname, arrival, departure, stayPlaceId: str(so.stayPlaceId, 100) ?? undefined, coverUrl: url(so.coverUrl) }]
+      ? [{ id: sid, name: sname, arrival, departure, coverUrl: url(so.coverUrl) }]
       : []
   })
+  const stays: Stay[] = arr(o.stays).flatMap((x): Stay[] => {
+    const xo = obj(x)
+    const xid = str(xo?.id, 100)
+    const placeId = str(xo?.placeId, 100)
+    const checkIn = date(xo?.checkIn)
+    const checkOut = date(xo?.checkOut)
+    return xo && xid && placeId && checkIn && checkOut && checkOut > checkIn
+      ? [{ id: xid, placeId, checkIn, checkOut, cost: num(xo.cost) ?? undefined, reference: str(xo.reference, 100) ?? undefined, note: str(xo.note, 1000) ?? undefined }]
+      : []
+  })
+  // Files from before multiple stays kept one place per stop.
+  for (const s of arr(o.stops)) {
+    const so = obj(s)
+    const legacy = str(so?.stayPlaceId, 100)
+    const a = date(so?.arrival)
+    const b = date(so?.departure)
+    if (legacy && a && b && a < b && !stays.some((x) => x.placeId === legacy && x.checkIn === a)) stays.push({ id: str(so?.id, 100) + ':stay', placeId: legacy, checkIn: a, checkOut: b })
+  }
+  const notes: Note[] = arr(o.notes).flatMap((x): Note[] => {
+    const xo = obj(x)
+    const xid = str(xo?.id, 100)
+    const title = str(xo?.title, 200)
+    return xo && xid && title ? [{ id: xid, title, text: str(xo.text, 5000) ?? '' }] : []
+  }).slice(0, 100)
   const checklist = arr(o.checklist).flatMap((c): ChecklistItem[] => {
     const co = obj(c)
     const cid = str(co?.id, 100)
@@ -107,7 +133,7 @@ function cleanTrip(v: unknown): Trip | null {
       : []
   })
   return {
-    id, name, startDate, endDate, stops, checklist,
+    id, name, startDate, endDate, stops, stays, notes, checklist,
     budget: num(o.budget) ?? undefined,
     currency: str(o.currency, 4) ?? undefined,
     foodPerDay: num(o.foodPerDay) !== null && num(o.foodPerDay)! >= 0 ? num(o.foodPerDay)! : undefined,
@@ -192,7 +218,8 @@ function cleanDay(v: unknown): Day | null {
     const placeId = str(io?.placeId, 100)
     if (!io || !iid || !placeId) return []
     const time = typeof io.time === 'string' && /^\d{2}:\d{2}$/.test(io.time) ? io.time : undefined
-    return [{ id: iid, placeId, time, note: str(io.note, 2000) ?? '', done: io.done === true, cost: num(io.cost) ?? undefined }]
+    const reservation: DayItem['reservation'] = io.reservation === 'todo' || io.reservation === 'booked' ? io.reservation : undefined
+    return [{ id: iid, placeId, time, note: str(io.note, 2000) ?? '', done: io.done === true, cost: num(io.cost) ?? undefined, reservation, reservationNote: str(io.reservationNote, 500) ?? undefined }]
   })
   const legModes = Object.fromEntries(
     Object.entries(obj(o.legModes) ?? {})

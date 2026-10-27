@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react'
 import { shortDate } from '../lib/days'
+import { stayForStop } from '../lib/stays'
 import {
   DEFAULT_PREFS,
   PACE_COUNT,
@@ -110,7 +111,7 @@ export function SuggestSheet({ trip, stop, onClose }: { trip: Trip; stop: Stop; 
       pace,
       prefs,
       variant: v,
-      stay: places.find((p) => p.id === stop.stayPlaceId),
+      stay: places.find((p) => p.id === stayForStop(trip, stop)?.placeId),
     })
     setVariant(v)
     setPlan(result)

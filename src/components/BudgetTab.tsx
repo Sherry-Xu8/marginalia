@@ -90,7 +90,8 @@ export function BudgetTab() {
   const foodPerDay = trip.foodPerDay ?? 0
   const ticketsPlanned =
     tripDays.reduce((s, d) => s + d.items.reduce((t, i) => t + (i.cost ?? 0), 0), 0) +
-    transfers.filter((t) => t.tripId === activeTripId).reduce((s, t) => s + (t.cost ?? 0), 0)
+    transfers.filter((t) => t.tripId === activeTripId).reduce((s, t) => s + (t.cost ?? 0), 0) +
+    (trip.stays ?? []).reduce((s, x) => s + (x.cost ?? 0), 0)
   const planned = ticketsPlanned + foodPerDay * tripDays.length
   const spent = mine.reduce((s, e) => s + e.amount, 0)
   const budget = trip.budget

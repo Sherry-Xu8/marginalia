@@ -5,6 +5,7 @@ import { go } from '../lib/route'
 import { addTrip, deleteTrip, getState, updateTrip, useAppData } from '../lib/store'
 import type { Trip } from '../types'
 import { BackupCard } from './BackupCard'
+import { BackupNudge } from './BackupNudge'
 import { NameDatesForm, fmt } from './TripForm'
 
 function month(date: string): string {
@@ -89,6 +90,8 @@ export function TripsHome() {
           <Plus size={18} /> Plan a trip
         </button>
       </header>
+
+      <BackupNudge />
 
       {(creating || trips.length === 0) && (
         <NameDatesForm

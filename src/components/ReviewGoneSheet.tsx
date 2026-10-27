@@ -8,7 +8,7 @@ import { PlaceThumb } from './TagIcon'
 // After a re-import: places that are no longer in your Google Map. You choose what to remove.
 export function ReviewGoneSheet({ gone, onClose }: { gone: Place[]; onClose: () => void }) {
   const { days, trips } = useAppData()
-  const stays = new Set(trips.flatMap((t) => t.stops.map((s) => s.stayPlaceId).filter(Boolean) as string[]))
+  const stays = new Set(trips.flatMap((t) => (t.stays ?? []).map((s) => s.placeId)))
   const plannedOn = (id: string) => days.filter((d) => d.items.some((i) => i.placeId === id)).length
 
   // Places you've planned a day around or sleep in start unticked, so nothing disappears by accident.

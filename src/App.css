@@ -783,3 +783,65 @@ i.spent.over { background: #c2582f; }
   .money-hero { grid-template-columns: 1.6fr 1fr; align-items: center; padding: 32px; }
   .money-grid { grid-template-columns: minmax(0, 5fr) minmax(0, 6fr); }
 }
+
+/* ---- Stays, bookings, weather, notes, sharing ---- */
+.topbar { grid-template-columns: 1fr auto auto; }
+.top-actions { grid-column: 3; display: flex; align-items: center; gap: 6px; justify-self: end; }
+.top-actions .link-btn { grid-column: auto; }
+.theme-btn { min-width: 44px; justify-content: center; }
+@media (max-width: 759px) {
+  .topbar { grid-template-columns: 1fr auto; }
+  .topbar .backup-btn { display: none; }
+  .topbar .top-actions .link-btn.theme-btn { display: inline-flex; }
+}
+.stay-line { align-items: center; padding: 10px 0; }
+.stay-line .stay-tile { width: 44px; height: 44px; }
+.stay-actions { display: inline-flex; gap: 6px; align-items: center; flex: none; }
+.stay-actions button, .stay-actions a.btn { min-height: 40px; padding: 0 14px; }
+.stay-actions .icon-btn { padding: 0; min-width: 36px; background: none; }
+.note { margin: 10px 0; }
+
+.item-flags { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
+.rsv { display: inline-flex; align-items: center; gap: 4px; border-radius: 999px; padding: 2px 10px; font-size: 0.78rem; font-weight: 600; background: var(--soft); color: var(--accent-dark); }
+.rsv.todo { background: #f5e8c8; color: #7a5814; }
+.rsv.booked { background: #dce7dd; color: #2f5646; }
+.rsv.warn { background: #f6e1d6; color: #8f3f1e; }
+.wide-pick { display: flex; width: 100%; }
+.wide-pick button { flex: 1; min-height: 44px; border-radius: 12px; background: transparent; padding: 0 8px; }
+.wide-pick button.on { background: var(--card); color: var(--accent-dark); box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+
+.wx { display: inline-flex; align-items: center; gap: 6px; margin-top: 6px; font-size: 0.92rem; font-weight: 550; }
+.hero .wx { color: inherit; opacity: 0.95; }
+
+.note-card { padding: 12px 0; border-bottom: 1px solid var(--line); }
+.note-text { margin: 6px 0 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+.note-edit { margin: 10px 0; }
+.big-note { position: fixed; inset: 0; z-index: 3000; background: #fbfaf6; color: #1b2822; display: flex; flex-direction: column; justify-content: center; gap: 12px; padding: 32px; text-align: center; cursor: pointer; }
+.big-note small { color: #62736a; font-size: 1rem; text-transform: uppercase; letter-spacing: 0.08em; }
+.big-note p { margin: 0; font-family: var(--serif); font-size: clamp(2rem, 8vw, 4rem); line-height: 1.25; white-space: pre-wrap; overflow-wrap: anywhere; }
+.big-close { position: absolute; top: 16px; right: 16px; background: #edf1e9 !important; color: #2f5646 !important; min-height: 48px; min-width: 48px; padding: 0 !important; border-radius: 50% !important; }
+
+.nudge { display: grid; grid-template-columns: auto 1fr; gap: 8px 14px; align-items: start; background: var(--accent-soft); color: var(--accent-dark); border-radius: 22px; padding: 16px 18px; margin: 0 0 16px; }
+.nudge p { margin: 0; color: var(--text); }
+.nudge .buttons { grid-column: 1 / -1; margin: 0; }
+.share-link { border-top: 1px solid var(--line); margin-top: 14px; padding-top: 14px; display: flex; flex-direction: column; gap: 10px; }
+.share-link p { margin: 0; }
+.qr { align-self: center; border-radius: 12px; background: #fff; padding: 8px; }
+.shared .line { padding: 10px 0; }
+.num-tile { width: 32px; height: 32px; background: var(--accent-soft); color: var(--accent-dark); font-weight: 650; }
+
+/* ---- A little life: gentle motion (switched off if you prefer less movement) ---- */
+@media (prefers-reduced-motion: no-preference) {
+  .page { animation: rise 0.35s ease backwards; }
+  .sheet { animation: slide-up 0.28s cubic-bezier(0.2, 0.8, 0.2, 1) backwards; }
+  .item-panel, .quick-panel { animation: rise 0.22s ease backwards; }
+  .num-pin span { animation: pin-drop 0.45s cubic-bezier(0.3, 1.5, 0.5, 1) backwards; }
+  .tick:checked { animation: tick-pop 0.3s ease; }
+  .empty-icon { animation: float 3.2s ease-in-out infinite; }
+  .card, .stop-card { transition: box-shadow 0.2s, transform 0.2s; }
+}
+@keyframes rise { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+@keyframes slide-up { from { opacity: 0; transform: translateY(24px); } to { opacity: 1; transform: none; } }
+@keyframes pin-drop { from { opacity: 0; transform: translateY(-14px) scale(0.8); } to { opacity: 1; transform: none; } }
+@keyframes tick-pop { 0% { transform: scale(1); } 45% { transform: scale(1.35); } 100% { transform: scale(1); } }
+@keyframes float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-5px); } }

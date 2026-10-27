@@ -1,6 +1,6 @@
 import { get, set } from 'idb-keyval'
 import { useSyncExternalStore } from 'react'
-import type { AppData, ChecklistItem, Day, DayItem, Expense, Group, ImportSummary, Place, PlaceDetails, Stop, Tag, Transfer, TravelMode, Trip } from '../types'
+import type { AppData, ChecklistItem, Day, DayItem, Expense, Group, ImportSummary, Note, Place, PlaceDetails, Stay, Stop, Tag, Transfer, TravelMode, Trip } from '../types'
 import { eachDate } from './days'
 import { distanceKm } from './geo'
 import { GROUP_RADIUS_KM, clusterPlaces, nextAreaName } from './grouping'
@@ -19,6 +19,20 @@ let state: AppData = empty
 const listeners = new Set<() => void>()
 let saveTimer: ReturnType<typeof setTimeout> | undefined
 
+// Older saves kept one hotel per stop (stayPlaceId on the stop). Those become stays covering the stop's nights.
+export function migrateStays(t: Trip): Trip {
+  const legacy = t.stops.filter((s) => (s as { stayPlaceId?: string }).stayPlaceId)
+  if (legacy.length === 0) return t
+  const stays: Stay[] = [...(t.stays ?? [])]
+  for (const s of legacy) {
+    const placeId = (s as { stayPlaceId?: string }).stayPlaceId!
+    if (s.arrival < s.departure && !stays.some((x) => x.placeId === placeId && x.checkIn === s.arrival)) {
+      stays.push({ id: newId(), placeId, checkIn: s.arrival, checkOut: s.departure })
+    }
+  }
+  return { ...t, stays, stops: t.stops.map((s) => { const { stayPlaceId: _drop, ...rest } = s as Stop & { stayPlaceId?: string }; return rest }) }
+}
+
 export async function loadData(): Promise<void> {
   try {
     const saved = await get<AppData>(KEY)
@@ -31,7 +45,7 @@ export async function loadData(): Promise<void> {
         days: saved.days ?? [],
         expenses: saved.expenses ?? [],
         transfers: saved.transfers ?? [],
-        trips: saved.trips.map((t) => ({ ...t, checklist: t.checklist ?? seedChecklist() })),
+        trips: saved.trips.map((t) => migrateStays({ ...t, checklist: t.checklist ?? seedChecklist() })),
       }
       for (const t of state.trips) state = autoLinkGroups(syncDays(assignGroups(state, t.id), t.id), t.id)
       void tagUntagged()
@@ -232,7 +246,7 @@ export function removePlaces(ids: string[]) {
       ...s,
       places: s.places.filter((p) => !gone.has(p.id)),
       days: s.days.map((d) => (d.items.some((i) => gone.has(i.placeId)) ? { ...d, items: d.items.filter((i) => !gone.has(i.placeId)) } : d)),
-      trips: s.trips.map((t) => (t.stops.some((st) => st.stayPlaceId && gone.has(st.stayPlaceId)) ? { ...t, stops: t.stops.map((st) => (st.stayPlaceId && gone.has(st.stayPlaceId) ? { ...st, stayPlaceId: undefined } : st)) } : t)),
+      trips: s.trips.map((t) => ((t.stays ?? []).some((st) => gone.has(st.placeId)) ? { ...t, stays: (t.stays ?? []).filter((st) => !gone.has(st.placeId)) } : t)),
       expenses: s.expenses.map((e) => (e.placeId && gone.has(e.placeId) ? { ...e, placeId: undefined } : e)),
     }),
   )
@@ -420,12 +434,27 @@ export function addToDay(dayId: string, placeId: string): boolean {
   return true
 }
 
-export function updateDayItem(dayId: string, itemId: string, patch: Partial<Pick<DayItem, 'time' | 'note' | 'done' | 'cost'>>) {
+export function updateDayItem(dayId: string, itemId: string, patch: Partial<Pick<DayItem, 'time' | 'note' | 'done' | 'cost' | 'reservation' | 'reservationNote'>>) {
   mapDay(dayId, (d) => ({ ...d, items: d.items.map((i) => (i.id === itemId ? { ...i, ...patch } : i)) }))
 }
 
 export function removeDayItem(dayId: string, itemId: string) {
   mapDay(dayId, (d) => ({ ...d, items: d.items.filter((i) => i.id !== itemId) }))
+}
+
+// Moves a planned place to the end of another day.
+export function moveItemToDay(fromDayId: string, itemId: string, toDayId: string) {
+  if (fromDayId === toDayId) return
+  update((s) => {
+    const item = s.days.find((d) => d.id === fromDayId)?.items.find((i) => i.id === itemId)
+    if (!item) return s
+    return {
+      ...s,
+      days: s.days.map((d) =>
+        d.id === fromDayId ? { ...d, items: d.items.filter((i) => i.id !== itemId) } : d.id === toDayId ? { ...d, items: [...d.items, item] } : d,
+      ),
+    }
+  })
 }
 
 export function moveDayItem(dayId: string, activeId: string, overId: string) {
@@ -548,7 +577,7 @@ function clearOrphans(s: AppData): AppData {
 // Replaces everything on this device with a backup file's contents.
 export function replaceAllData(data: AppData) {
   update(() => {
-    let next = clearOrphans({ ...data, trips: data.trips.map((t) => ({ ...t, checklist: t.checklist ?? seedChecklist() })) })
+    let next = clearOrphans({ ...data, trips: data.trips.map((t) => migrateStays({ ...t, checklist: t.checklist ?? seedChecklist() })) })
     for (const t of next.trips) next = syncDays(assignGroups(next, t.id), t.id)
     return next
   })
@@ -567,11 +596,9 @@ export function importTripData(d: TripData): string {
   const trip: Trip = {
     ...d.trip,
     id: tripId,
-    stops: d.trip.stops.map((s) => ({
-      ...s,
-      id: fresh('stop:' + s.id),
-      stayPlaceId: s.stayPlaceId ? fresh('place:' + s.stayPlaceId) : undefined,
-    })),
+    stops: d.trip.stops.map((s) => ({ ...s, id: fresh('stop:' + s.id) })),
+    stays: (d.trip.stays ?? []).filter((st) => d.places.some((p) => p.id === st.placeId)).map((st) => ({ ...st, id: newId(), placeId: fresh('place:' + st.placeId) })),
+    notes: (d.trip.notes ?? []).map((n) => ({ ...n, id: newId() })),
     checklist: d.trip.checklist.map((c) => ({ ...c, id: newId() })),
   }
   const placeIds = new Set(d.places.map((p) => p.id))
@@ -692,8 +719,34 @@ export function restoreOriginalNames(tripId: string) {
 
 // ---- Where you're staying ----
 
-export function setStay(tripId: string, stopId: string, placeId: string | undefined) {
-  mapStops(tripId, (stops) => stops.map((s) => (s.id === stopId ? { ...s, stayPlaceId: placeId } : s)))
+function mapTrip(tripId: string, fn: (t: Trip) => Trip) {
+  update((s) => ({ ...s, trips: s.trips.map((t) => (t.id === tripId ? fn(t) : t)) }))
+}
+
+export function addStay(tripId: string, stay: Omit<Stay, 'id'>) {
+  mapTrip(tripId, (t) => ({ ...t, stays: [...(t.stays ?? []), { ...stay, id: newId() }] }))
+}
+
+export function updateStay(tripId: string, id: string, patch: Partial<Omit<Stay, 'id'>>) {
+  mapTrip(tripId, (t) => ({ ...t, stays: (t.stays ?? []).map((s) => (s.id === id ? { ...s, ...patch } : s)) }))
+}
+
+export function deleteStay(tripId: string, id: string) {
+  mapTrip(tripId, (t) => ({ ...t, stays: (t.stays ?? []).filter((s) => s.id !== id) }))
+}
+
+// ---- Handy notes ----
+
+export function addNote(tripId: string, note: Omit<Note, 'id'>) {
+  mapTrip(tripId, (t) => ({ ...t, notes: [...(t.notes ?? []), { ...note, id: newId() }] }))
+}
+
+export function updateNote(tripId: string, id: string, patch: Partial<Omit<Note, 'id'>>) {
+  mapTrip(tripId, (t) => ({ ...t, notes: (t.notes ?? []).map((n) => (n.id === id ? { ...n, ...patch } : n)) }))
+}
+
+export function deleteNote(tripId: string, id: string) {
+  mapTrip(tripId, (t) => ({ ...t, notes: (t.notes ?? []).filter((n) => n.id !== id) }))
 }
 
 // A place you add yourself (for example a hotel found by search). It is sorted into a

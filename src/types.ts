@@ -6,7 +6,6 @@ export type Stop = {
   name: string
   arrival: string // yyyy-mm-dd
   departure: string // yyyy-mm-dd
-  stayPlaceId?: string // where you're sleeping in this stop (a place tagged Accommodation)
   coverUrl?: string // a photo of the city, found automatically
   coverCheckedAt?: string // when we last looked for one
 }
@@ -30,6 +29,20 @@ export type Transfer = {
   cost?: number
 }
 
+// A booked place to sleep: a hotel, hostel or apartment for a run of nights.
+export type Stay = {
+  id: string
+  placeId: string // the place on the map (tagged Accommodation)
+  checkIn: string // yyyy-mm-dd
+  checkOut: string // yyyy-mm-dd, the morning you leave (the last night is the night before)
+  cost?: number // total for the whole stay, in the trip's currency
+  reference?: string // booking reference
+  note?: string
+}
+
+// A handy note: a hotel address to show a taxi driver, Wi-Fi code, emergency numbers…
+export type Note = { id: string; title: string; text: string }
+
 export type ChecklistItem = {
   id: string
   section: 'pre' | 'packing' // "before you go" or "packing"
@@ -43,6 +56,8 @@ export type Trip = {
   startDate: string
   endDate: string
   stops: Stop[]
+  stays?: Stay[]
+  notes?: Note[]
   checklist: ChecklistItem[]
   budget?: number // total trip budget, in `currency`
   currency?: string // the local currency you spend in, e.g. "KRW"
@@ -73,6 +88,8 @@ export type DayItem = {
   note: string // e.g. opening hours
   done: boolean
   cost?: number // planned cost, optional
+  reservation?: 'todo' | 'booked' // do you still need to book it, or is it booked?
+  reservationNote?: string // confirmation number, time, name it's under…
 }
 
 // A day of the trip. Days are created automatically for every date of the trip.

@@ -2,15 +2,20 @@ import { ArrowDown, ArrowRight, ArrowUp, BedDouble, ChevronDown, Pencil, Plus, R
 import { useMemo, useState } from 'react'
 import { shortDate, toISO } from '../lib/days'
 import { stopDays } from '../lib/itinerary'
+import { nightsOf, staysForStop } from '../lib/stays'
 import { fmtMoney } from '../lib/money'
 import { go } from '../lib/route'
 import { addStop, deleteStop, deleteTrip, moveStop, updateStop, useAppData } from '../lib/store'
 import type { Stop, Transfer, Trip } from '../types'
 import { BackupCard } from './BackupCard'
+import { setTheme, useTheme } from '../lib/theme'
 import { isAutoLookupOn, setAutoLookup } from '../lib/autolookup'
 import { getFlightService, setFlightService } from '../lib/flights'
 import { Checklist } from './Checklist'
 import { StaySheet } from './StaySheet'
+import { StaysPanel } from './StaysPanel'
+import { NotesPanel } from './NotesPanel'
+import { BackupNudge } from './BackupNudge'
 import { SuggestSheet } from './SuggestSheet'
 import { KIND_INFO, TransferSheet } from './TransferSheet'
 import { PlaceThumb } from './TagIcon'
@@ -23,12 +28,14 @@ const BANDS = [
   'linear-gradient(135deg, #efd6e2, #dcaec4)',
 ]
 
-function StopCard({ trip, stop, index }: { trip: Trip; stop: Stop; index: number }) {
+function StopCard({ trip, stop, index, onStays }: { trip: Trip; stop: Stop; index: number; onStays: () => void }) {
   const { groups, places, days } = useAppData()
   const [editing, setEditing] = useState(false)
   const [suggesting, setSuggesting] = useState(false)
   const [staying, setStaying] = useState(false)
-  const stay = places.find((p) => p.id === stop.stayPlaceId)
+  const stopStays = staysForStop(trip, stop)
+  const stayNames = stopStays.map((s) => places.find((p) => p.id === s.placeId)?.name ?? '').filter(Boolean)
+  const nightCount = stopStays.reduce((n, s) => n + nightsOf(s), 0)
   const areaIds = groups.filter((g) => g.stopId === stop.id).map((g) => g.id)
   const placeCount = places.filter((p) => p.groupId && areaIds.includes(p.groupId)).length
   const dates = stopDays(trip, stop).map((d) => d.date)
@@ -72,9 +79,9 @@ function StopCard({ trip, stop, index }: { trip: Trip; stop: Stop; index: number
         <div style={{ width: dates.length ? (planned / dates.length) * 100 + '%' : '0%' }} />
       </div>
       <p className="muted">{planned} of {dates.length} days planned</p>
-      <button className="stay-row" onClick={() => setStaying(true)}>
+      <button className="stay-row" onClick={() => (stopStays.length > 0 ? onStays() : setStaying(true))}>
         <BedDouble size={16} aria-hidden />
-        <span>{stay ? stay.name : 'Add where you’re staying'}</span>
+        <span>{stayNames.length > 0 ? `${stayNames.join(', ')}${nightCount ? ` · ${nightCount} night${nightCount === 1 ? '' : 's'}` : ''}` : 'Add where you’re staying'}</span>
         <Pencil size={14} aria-hidden />
       </button>
       <div className="row buttons">
@@ -93,7 +100,7 @@ function StopCard({ trip, stop, index }: { trip: Trip; stop: Stop; index: number
         </div>
       </details>
       {suggesting && <SuggestSheet trip={trip} stop={stop} onClose={() => setSuggesting(false)} />}
-      {staying && <StaySheet trip={trip} stop={stop} onClose={() => setStaying(false)} />}
+      {staying && <StaySheet trip={trip} defaults={{ checkIn: stop.arrival, checkOut: stop.departure }} onClose={() => setStaying(false)} />}
     </div>
   )
 }
@@ -136,6 +143,20 @@ function Fold({ id, title, badge, open, onToggle, children }: { id: string; titl
   )
 }
 
+function ThemePicker() {
+  const theme = useTheme()
+  return (
+    <div className="card">
+      <strong>Appearance</strong>
+      <div className="mode-pick wide-pick" role="group" aria-label="Appearance">
+        {([['auto', 'Match my device'], ['light', 'Light'], ['dark', 'Dark']] as const).map(([v, l]) => (
+          <button key={v} className={theme === v ? 'on' : ''} aria-pressed={theme === v} onClick={() => setTheme(v)}>{l}</button>
+        ))}
+      </div>
+    </div>
+  )
+}
+
 function AutoLookupToggle() {
   const [on, setOn] = useState(isAutoLookupOn)
   return (
@@ -171,6 +192,7 @@ export function TripOverview({ trip }: { trip: Trip }) {
     [days, trip.id],
   )
   const withItems = tripDays.filter((d) => d.items.length > 0)
+  const toBook = tripDays.flatMap((day) => day.items.filter((i) => i.reservation === 'todo').map((item) => ({ day, item })))
   const today = toISO(new Date())
   const next = withItems.find((d) => d.date >= today) ?? withItems[0]
   const mine = places.filter((p) => p.tripId === trip.id)
@@ -182,6 +204,7 @@ export function TripOverview({ trip }: { trip: Trip }) {
 
   return (
     <div className="page">
+      <BackupNudge />
       <div className="overview-grid single">
         <section className="card panel">
           <header className="panel-head">
@@ -219,7 +242,7 @@ export function TripOverview({ trip }: { trip: Trip }) {
           ) : (
             <div className="stop-list">
               {trip.stops.map((s, i) => (
-                <StopCard key={s.id} trip={trip} stop={s} index={i} />
+                <StopCard key={s.id} trip={trip} stop={s} index={i} onStays={() => { setOpenFolds((cur) => new Set(cur).add('stays')); setTimeout(() => document.getElementById('stays')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50) }} />
               ))}
             </div>
           )}
@@ -275,6 +298,24 @@ export function TripOverview({ trip }: { trip: Trip }) {
         </div>
       </div>
 
+      {toBook.length > 0 && (
+        <Fold id="tobook" title="Still to book" badge={String(toBook.length)} open={openFolds.has('tobook')} onToggle={() => toggleFold('tobook')}>
+          {toBook.map(({ day, item }) => (
+            <a key={item.id} className="line link-line" href={`#/trip/${trip.id}/days/${day.date}`}>
+              <span style={{ textAlign: 'left' }}>
+                <strong>{placeById.get(item.placeId)?.name ?? '(place removed)'}</strong>
+                <span className="muted" style={{ display: 'block' }}>{shortDate(day.date)}{item.reservationNote ? ` · ${item.reservationNote}` : ''}</span>
+              </span>
+              <ArrowRight size={16} aria-hidden />
+            </a>
+          ))}
+        </Fold>
+      )}
+
+      <Fold id="stays" title="Where you’re staying" badge={String((trip.stays ?? []).length)} open={openFolds.has('stays')} onToggle={() => toggleFold('stays')}>
+        <StaysPanel trip={trip} />
+      </Fold>
+
       <Fold id="transport" title="Flights and transport" badge={String(tripTransfers.length)} open={openFolds.has('transport')} onToggle={() => toggleFold('transport')}>
         {tripTransfers.length === 0 && <p className="muted">Add flights, trains and other journeys, especially between cities.</p>}
         {tripTransfers.map((t) => {
@@ -295,6 +336,10 @@ export function TripOverview({ trip }: { trip: Trip }) {
       </Fold>
       {journey && <TransferSheet trip={trip} date={trip.startDate} transfer={journey.transfer} onClose={() => setJourney(null)} />}
 
+      <Fold id="notes" title="Handy notes" badge={String((trip.notes ?? []).length)} open={openFolds.has('notes')} onToggle={() => toggleFold('notes')}>
+        <NotesPanel trip={trip} />
+      </Fold>
+
       <Fold id="checklists" title="Checklists" badge={`${done} of ${trip.checklist.length} done`} open={openFolds.has('checklists')} onToggle={() => toggleFold('checklists')}>
         <Checklist trip={trip} />
       </Fold>
@@ -302,6 +347,7 @@ export function TripOverview({ trip }: { trip: Trip }) {
       <Fold id="more" title="Share, back up and settings" open={openFolds.has('more')} onToggle={() => toggleFold('more')}>
         <BackupCard trip={trip} />
         <h3>Settings</h3>
+        <ThemePicker />
         <AutoLookupToggle />
         <FlightServiceSetting />
         <div className="card row buttons">

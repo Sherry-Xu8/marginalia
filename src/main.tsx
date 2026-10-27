@@ -6,6 +6,9 @@ import '@fontsource-variable/newsreader/opsz.css'
 import './index.css'
 import App from './App.tsx'
 import { loadData } from './lib/store'
+import { applyTheme } from './lib/theme'
+
+applyTheme()
 
 registerSW({ immediate: true }) // lets the app work offline
 

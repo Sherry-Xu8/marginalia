@@ -1,15 +1,18 @@
-import { ArrowLeft, CalendarDays, Compass, FileJson, MapPin, Wallet } from 'lucide-react'
+import { ArrowLeft, CalendarDays, Compass, FileJson, MapPin, Moon, Sun, SunMoon, Wallet } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { BudgetTab } from './components/BudgetTab'
 import { DaysTab } from './components/DaysTab'
 import { LogoMark, Wordmark } from './components/Logo'
 import { PlacesTab } from './components/PlacesTab'
+import { SharedView } from './components/SharedView'
 import { TripHero } from './components/TripHero'
 import { TripOverview } from './components/TripOverview'
 import { TripsHome } from './components/TripsHome'
 import { runAutoLookup, useLookupProgress } from './lib/autolookup'
 import { buildFullBackup, fileNameFor, shareOrDownload } from './lib/backup'
 import { nameAutoGroups } from './lib/naming'
+import { markBackedUp } from './lib/backupState'
+import { setTheme, useTheme, type Theme } from './lib/theme'
 import { go, useRoute, type TabId } from './lib/route'
 import { getState, setActiveTrip, useAppData } from './lib/store'
 import './App.css'
@@ -20,6 +23,19 @@ const NAV: { id: TabId; label: string; Icon: typeof Compass }[] = [
   { id: 'days', label: 'Days', Icon: CalendarDays },
   { id: 'budget', label: 'Budget', Icon: Wallet },
 ]
+
+const NEXT_THEME: Record<Theme, Theme> = { auto: 'light', light: 'dark', dark: 'auto' }
+const THEME_LABEL: Record<Theme, string> = { auto: 'Match my device', light: 'Light', dark: 'Dark' }
+
+function ThemeButton() {
+  const theme = useTheme()
+  const Icon = theme === 'auto' ? SunMoon : theme === 'light' ? Sun : Moon
+  return (
+    <button className="link-btn theme-btn" onClick={() => setTheme(NEXT_THEME[theme])} aria-label={`Appearance: ${THEME_LABEL[theme]}. Tap to change.`} title={`Appearance: ${THEME_LABEL[theme]}`}>
+      <Icon size={20} />
+    </button>
+  )
+}
 
 function TopBar() {
   return (
@@ -32,12 +48,15 @@ function TopBar() {
         </span>
       </a>
       <span className="tagline">A little room for the road</span>
-      <button
-        className="link-btn"
-        onClick={() => void shareOrDownload(buildFullBackup(getState()), fileNameFor('backup'))}
-      >
-        <FileJson size={18} /> Backup
-      </button>
+      <div className="top-actions">
+        <ThemeButton />
+        <button
+          className="link-btn backup-btn"
+          onClick={() => void shareOrDownload(buildFullBackup(getState()), fileNameFor('backup')).then((r) => r !== 'cancelled' && markBackedUp())}
+        >
+          <FileJson size={18} /> Backup
+        </button>
+      </div>
     </header>
   )
 }
@@ -72,6 +91,15 @@ export default function App() {
   useEffect(() => {
     window.scrollTo(0, 0)
   }, [route.page, tabKey])
+
+  if (route.page === 'shared') {
+    return (
+      <div className="app">
+        <TopBar />
+        <main><SharedView payload={route.payload} /></main>
+      </div>
+    )
+  }
 
   if (route.page === 'home' || !trip) {
     return (
