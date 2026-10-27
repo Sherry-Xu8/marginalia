@@ -1,7 +1,10 @@
 import L from 'leaflet'
 
-// Which map picture to draw. "English" uses Esri's street map, which labels places in English
-// (plus the local script); "local" is OpenStreetMap, which labels in the local language only.
+// Which map picture to draw.
+//  "english": Esri's street map, which labels places in English (plus the local script).
+//            Esri has no detailed map data for South Korea (a Korean legal restriction), so
+//            when you zoom in there the map switches to OpenStreetMap, which is in Korean.
+//  "local":   OpenStreetMap everywhere, labelled in each place's own language.
 export type MapLabels = 'english' | 'local'
 const KEY = 'map-labels'
 
@@ -21,15 +24,43 @@ export function setMapLabels(v: MapLabels) {
   }
 }
 
-export function baseLayer(labels: MapLabels): L.TileLayer {
-  if (labels === 'local') {
-    return L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      maxZoom: 19,
-      attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
-    })
-  }
-  return L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}', {
+const osmLayer = () =>
+  L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    maxZoom: 19,
+    attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+  })
+
+const esriLayer = () =>
+  L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}', {
     maxZoom: 19,
     attribution: 'Tiles © Esri — Esri, HERE, Garmin, © OpenStreetMap contributors',
   })
+
+// Where Esri's English map runs out of detail, and from which zoom level.
+const ESRI_GAPS = [{ box: L.latLngBounds([33, 124.5], [38.8, 131.9]), fromZoom: 13 }] // South Korea
+
+// Puts the right base map on `map` and keeps it right as you pan and zoom.
+// Call the returned function to remove it. The map must already have a view set.
+export function attachBaseLayer(map: L.Map, labels: MapLabels): () => void {
+  let current: L.TileLayer | null = null
+  let kind = ''
+  const wanted = () => {
+    if (labels === 'local') return 'osm'
+    const gap = ESRI_GAPS.some((g) => map.getZoom() >= g.fromZoom && g.box.contains(map.getCenter()))
+    return gap ? 'osm' : 'esri'
+  }
+  const apply = () => {
+    const w = wanted()
+    if (w === kind) return
+    current?.remove()
+    current = (w === 'osm' ? osmLayer() : esriLayer()).addTo(map)
+    current.bringToBack()
+    kind = w
+  }
+  map.on('zoomend moveend', apply)
+  apply()
+  return () => {
+    map.off('zoomend moveend', apply)
+    current?.remove()
+  }
 }

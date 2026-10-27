@@ -1,7 +1,7 @@
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 import { useEffect, useRef } from 'react'
-import { baseLayer, getMapLabels } from '../lib/tiles'
+import { attachBaseLayer, getMapLabels } from '../lib/tiles'
 import type { Place } from '../types'
 
 // A small map of one day: numbered pins joined by a line in visiting order.
@@ -13,11 +13,12 @@ export function DayMap({ places }: { places: Place[] }) {
   useEffect(() => {
     if (!el.current) return
     const m = L.map(el.current, { zoomControl: true, scrollWheelZoom: false }).setView([20, 0], 2)
-    baseLayer(getMapLabels()).addTo(m)
+    const detach = attachBaseLayer(m, getMapLabels())
     layer.current = L.layerGroup().addTo(m)
     map.current = m
     setTimeout(() => m.invalidateSize(), 0)
     return () => {
+      detach()
       m.remove()
       map.current = null
     }
