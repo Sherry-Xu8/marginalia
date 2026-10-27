@@ -1,4 +1,4 @@
-import { ArrowDown, ArrowRight, ArrowUp, BedDouble, ChevronDown, Pencil, Plus, Route, Sparkles } from 'lucide-react'
+import { ArrowDown, ArrowRight, ArrowUp, BedDouble, ChevronDown, MoreHorizontal, Pencil, Plus, Route, Sparkles, Trash2 } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { shortDate, toISO } from '../lib/days'
 import { stopDays } from '../lib/itinerary'
@@ -33,6 +33,7 @@ function StopCard({ trip, stop, index, onStays }: { trip: Trip; stop: Stop; inde
   const [editing, setEditing] = useState(false)
   const [suggesting, setSuggesting] = useState(false)
   const [staying, setStaying] = useState(false)
+  const [menu, setMenu] = useState(false)
   const stopStays = staysForStop(trip, stop)
   const stayNames = stopStays.map((s) => places.find((p) => p.id === s.placeId)?.name ?? '').filter(Boolean)
   const nightCount = stopStays.reduce((n, s) => n + nightsOf(s), 0)
@@ -72,7 +73,23 @@ function StopCard({ trip, stop, index, onStays }: { trip: Trip; stop: Stop; inde
           <span className="band-initial" aria-hidden>{stop.name.charAt(0).toUpperCase()}</span>
         )}
       </div>
-      <h2>{stop.name}</h2>
+      <div className="tcard-title">
+        <h2>{stop.name}</h2>
+        <div className="tcard-menu">
+          <button className="menu-btn" aria-label={`Options for ${stop.name}`} aria-expanded={menu} onClick={() => setMenu(!menu)}>
+            <MoreHorizontal size={18} />
+          </button>
+          {menu && <div className="menu-scrim" onClick={() => setMenu(false)} />}
+          {menu && (
+            <div className="menu-pop" role="menu">
+              <button role="menuitem" onClick={() => { setMenu(false); setEditing(true) }}><Pencil size={16} /> Edit</button>
+              <button role="menuitem" disabled={index === 0} onClick={() => { setMenu(false); moveStop(trip.id, stop.id, -1) }}><ArrowUp size={16} /> Move earlier</button>
+              <button role="menuitem" disabled={last} onClick={() => { setMenu(false); moveStop(trip.id, stop.id, 1) }}><ArrowDown size={16} /> Move later</button>
+              <button role="menuitem" className="danger" onClick={() => { setMenu(false); if (confirm(`Remove the stop “${stop.name}”?`)) deleteStop(trip.id, stop.id) }}><Trash2 size={16} /> Remove</button>
+            </div>
+          )}
+        </div>
+      </div>
       <p className="muted">{fmt(stop.arrival)} → {fmt(stop.departure)}</p>
       <p className="muted">{placeCount} place{placeCount === 1 ? '' : 's'} saved</p>
       <div className="bar" aria-hidden>
@@ -90,15 +107,6 @@ function StopCard({ trip, stop, index, onStays }: { trip: Trip; stop: Stop; inde
         </button>
         <a className="btn" href={`#/trip/${trip.id}/days/${dates[0] ?? ''}`}>Open days</a>
       </div>
-      <details className="manage-more">
-        <summary>Manage stop</summary>
-        <div className="row buttons">
-          <button aria-label="Move earlier" disabled={index === 0} onClick={() => moveStop(trip.id, stop.id, -1)}><ArrowUp size={16} /></button>
-          <button aria-label="Move later" disabled={last} onClick={() => moveStop(trip.id, stop.id, 1)}><ArrowDown size={16} /></button>
-          <button onClick={() => setEditing(true)}>Edit</button>
-          <button className="danger" onClick={() => confirm(`Remove the stop “${stop.name}”?`) && deleteStop(trip.id, stop.id)}>Remove</button>
-        </div>
-      </details>
       {suggesting && <SuggestSheet trip={trip} stop={stop} onClose={() => setSuggesting(false)} />}
       {staying && <StaySheet trip={trip} defaults={{ checkIn: stop.arrival, checkOut: stop.departure }} onClose={() => setStaying(false)} />}
     </div>

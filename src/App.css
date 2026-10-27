@@ -906,3 +906,10 @@ i.spent.over { background: #c2582f; }
 .tcard-link:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
 .tcard-body { padding-bottom: 16px; }
 .tcard-body .trip-stats { padding-bottom: 0; }
+.stop-card .tcard-title h2 { margin: 0 0 2px; }
+.menu-pop button:disabled { opacity: 0.4; cursor: default; }
+.menu-pop { z-index: 30; }
+.stop-card .menu-pop { min-width: 170px; }
+.add-row { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 12px; }
+.add-row button { flex: 1; min-width: 140px; }
+.journey-note { margin: 8px 0 0; }

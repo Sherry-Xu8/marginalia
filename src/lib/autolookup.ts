@@ -1,6 +1,6 @@
 import { useSyncExternalStore } from 'react'
 import { POOR_IMAGE, cityImage, lookupMany } from './lookup'
-import { applyLookups, getState, setStopCover, setTripCover } from './store'
+import { COVER_LOOKUP_VERSION, applyLookups, getState, setStopCover, setTripCover } from './store'
 import type { Place } from '../types'
 
 // Fetches photos, descriptions and opening hours for your places in the background, a few at a
@@ -57,7 +57,7 @@ async function findCovers() {
     // A trip with no stops (just "Lisbon") gets a photo from its own name.
     if (trip.stops.length === 0) {
       const checked = trip.coverCheckedAt ? Date.now() - new Date(trip.coverCheckedAt).getTime() : Infinity
-      if (!(trip.coverUrl && !POOR_IMAGE.test(trip.coverUrl)) && !(!trip.coverUrl && checked < 7 * DAY)) {
+      if (!(trip.coverUrl && !POOR_IMAGE.test(trip.coverUrl)) && !(!trip.coverUrl && checked < 7 * DAY && trip.coverV === COVER_LOOKUP_VERSION)) {
         const url = await cityImage(trip.name)
         if (url !== undefined) setTripCover(trip.id, url ?? undefined)
       }
@@ -65,7 +65,7 @@ async function findCovers() {
     for (const stop of trip.stops) {
       const checked = stop.coverCheckedAt ? Date.now() - new Date(stop.coverCheckedAt).getTime() : Infinity
       // A cover that is only a flag or emblem is replaced with a real photo.
-      if ((stop.coverUrl && !POOR_IMAGE.test(stop.coverUrl)) || (!stop.coverUrl && checked < 7 * DAY)) continue
+      if ((stop.coverUrl && !POOR_IMAGE.test(stop.coverUrl)) || (!stop.coverUrl && checked < 7 * DAY && stop.coverV === COVER_LOOKUP_VERSION)) continue
       const url = await cityImage(stop.name)
       if (url !== undefined) setStopCover(trip.id, stop.id, url ?? undefined)
     }

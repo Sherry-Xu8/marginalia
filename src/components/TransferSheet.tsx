@@ -148,6 +148,7 @@ export function TransferSheet({
           <label>Departs<input type="time" value={depart} onChange={(e) => setDepart(e.target.value)} /></label>
           <label>Arrives<input type="time" value={arrive} onChange={(e) => setArrive(e.target.value)} /></label>
         </div>
+        <p className="muted">Add the times and “Suggest my days” will plan around them: no sightseeing while you’re travelling, and only the meals that fit before or after.</p>
         <div className="row">
           <label>Booking reference<input value={reference} onChange={(e) => setReference(e.target.value)} /></label>
           <label>Cost<input inputMode="decimal" value={cost} onChange={(e) => setCost(e.target.value)} /></label>

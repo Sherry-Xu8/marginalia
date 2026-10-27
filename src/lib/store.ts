@@ -19,6 +19,9 @@ let state: AppData = empty
 const listeners = new Set<() => void>()
 let saveTimer: ReturnType<typeof setTimeout> | undefined
 
+// Bump this when the photo lookup gets better: places that found nothing before are tried again once.
+export const COVER_LOOKUP_VERSION = 2
+
 // Older saves kept one hotel per stop (stayPlaceId on the stop). Those become stays covering the stop's nights.
 export function migrateStays(t: Trip): Trip {
   const legacy = t.stops.filter((s) => (s as { stayPlaceId?: string }).stayPlaceId)
@@ -823,12 +826,12 @@ export function applyLookups(
 // Saves a city photo for a stop (or records that none was found, so we don't keep asking).
 export function setStopCover(tripId: string, stopId: string, coverUrl: string | undefined) {
   mapStops(tripId, (stops) =>
-    stops.map((st) => (st.id === stopId ? { ...st, coverUrl: coverUrl ?? (st.coverUrl && /flag_of|coat_of_arms|emblem|locator|location_map|map_of|seal_of|logo/i.test(st.coverUrl) ? undefined : st.coverUrl), coverCheckedAt: new Date().toISOString() } : st)),
+    stops.map((st) => (st.id === stopId ? { ...st, coverUrl: coverUrl ?? (st.coverUrl && /flag_of|coat_of_arms|emblem|locator|location_map|map_of|seal_of|logo/i.test(st.coverUrl) ? undefined : st.coverUrl), coverCheckedAt: new Date().toISOString(), coverV: COVER_LOOKUP_VERSION } : st)),
   )
 }
 
 export function setTripCover(tripId: string, coverUrl: string | undefined) {
-  mapTrip(tripId, (t) => ({ ...t, coverUrl: coverUrl ?? t.coverUrl, coverCheckedAt: new Date().toISOString() }))
+  mapTrip(tripId, (t) => ({ ...t, coverUrl: coverUrl ?? t.coverUrl, coverCheckedAt: new Date().toISOString(), coverV: COVER_LOOKUP_VERSION }))
 }
 
 // How you travel one journey of a day (from one place to the next).

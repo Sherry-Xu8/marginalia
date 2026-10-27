@@ -1,4 +1,5 @@
-import type { Place, Stop, Trip } from '../types'
+import type { Place, Stop, Transfer, Trip } from '../types'
+import { arrivesLate } from './journeys'
 import { eachDate } from './days'
 import { centroid, distanceKm } from './geo'
 
@@ -20,9 +21,28 @@ export const DEFAULT_PREFS: Prefs = { meals: 3, cafe: false }
 // Sights (things to see and do) in a full day. Meals and a coffee stop are added on top of these.
 export const PACE_COUNT: Record<Pace, number> = { relaxed: 2, standard: 3, packed: 5 }
 
-export type Quota = { sights: number; meals: number; cafes: number }
-export function quotaFor(pace: Pace, mode: DayMode, prefs: Prefs): Quota {
+export type MealName = 'Breakfast' | 'Lunch' | 'Dinner'
+export type Quota = { sights: number; meals: number; cafes: number; mealNames?: MealName[] }
+
+// The part of a day that's free, in minutes after midnight (a journey may take the rest).
+export type FreeWindow = { start: number; end: number }
+
+export function quotaFor(pace: Pace, mode: DayMode, prefs: Prefs, free?: FreeWindow): Quota {
   if (mode === 'off') return { sights: 0, meals: 0, cafes: 0 }
+  if (free) {
+    // A journey takes part of the day: scale the sights to the time left, and keep only the meals that fall in it.
+    const len = free.end - free.start
+    const wanted: MealName[] = prefs.meals === 3 ? ['Breakfast', 'Lunch', 'Dinner'] : prefs.meals === 2 ? ['Lunch', 'Dinner'] : []
+    const fits = (m: MealName) =>
+      m === 'Breakfast' ? free.start <= 570 && free.end >= 540 : m === 'Lunch' ? free.start <= 810 && free.end >= 750 : free.end >= 1050 && free.start <= 1200
+    const mealNames = wanted.filter(fits)
+    return {
+      sights: len < 90 ? 0 : Math.max(1, Math.round((PACE_COUNT[pace] * len) / 720)),
+      meals: mealNames.length,
+      cafes: prefs.cafe && len >= 240 ? 1 : 0,
+      mealNames,
+    }
+  }
   const full = mode === 'full'
   return {
     sights: full ? PACE_COUNT[pace] : Math.ceil(PACE_COUNT[pace] / 2),
@@ -35,11 +55,15 @@ const capOf = (q: Quota): number => q.sights + q.meals + q.cafes
 // The dates a stop plans for. A date you leave one stop and arrive at the next belongs to the
 // arriving stop (you travel in the morning and explore the new place in the afternoon).
 // Arrival and departure days default to half days.
-export function stopDays(trip: Trip, stop: Stop): { date: string; mode: DayMode }[] {
+export function stopDays(trip: Trip, stop: Stop, transfers: Transfer[] = []): { date: string; mode: DayMode }[] {
   const i = trip.stops.findIndex((s) => s.id === stop.id)
   const next = trip.stops[i + 1]
+  const prev = trip.stops[i - 1]
   let dates = eachDate(stop.arrival, stop.departure)
-  if (next && next.arrival === stop.departure && dates.length > 1) dates = dates.slice(0, -1)
+  // A journey that gets you there in the evening means the day is still spent in the place you're leaving.
+  const lateOn = (date: string) => arrivesLate(transfers.filter((t) => t.tripId === trip.id), date)
+  if (next && next.arrival === stop.departure && dates.length > 1 && !lateOn(stop.departure)) dates = dates.slice(0, -1)
+  if (prev && prev.departure === stop.arrival && dates.length > 1 && lateOn(stop.arrival)) dates = dates.slice(1)
   return dates.map((date, n) => ({
     date,
     mode: n === 0 || date === stop.departure ? 'half' : 'full',
@@ -48,7 +72,7 @@ export function stopDays(trip: Trip, stop: Stop): { date: string; mode: DayMode 
 
 export type SuggestedDay = { dayId: string; date: string; mode: DayMode; placeIds: string[]; anchorId?: string; labels?: Record<string, string> }
 export type Suggestion = { days: SuggestedDay[]; unscheduled: string[] }
-export type Slot = { dayId: string; date: string; mode: DayMode }
+export type Slot = { dayId: string; date: string; mode: DayMode; free?: FreeWindow }
 
 // Each place is a meal, a coffee stop, or a sight (everything else). A day is built from a mix of all three.
 type Kind = 'meal' | 'cafe' | 'sight'
@@ -62,7 +86,7 @@ export function suggestItinerary(opts: { places: Place[]; slots: Slot[]; pace: P
   const accommodations = stay ? [stay] : places.filter((p) => p.tag === 'Accommodation')
   const cands = places.filter((p) => p.tag !== 'Accommodation' && p.tag !== 'Transport')
   const active = slots.filter((s) => s.mode !== 'off')
-  const quotas = active.map((s) => quotaFor(pace, s.mode, prefs))
+  const quotas = active.map((s) => quotaFor(pace, s.mode, prefs, s.free))
   const caps = quotas.map(capOf)
   const totalCap = caps.reduce((a, b) => a + b, 0)
   const emptyDays = (): SuggestedDay[] => slots.map((s) => ({ ...s, placeIds: [] }))
@@ -196,7 +220,7 @@ export function suggestItinerary(opts: { places: Place[]; slots: Slot[]; pace: P
       const c = centroid(chunk.map((i) => cands[i]))
       anchor = accommodations.reduce((a, b) => (distanceKm(b, c) < distanceKm(a, c) ? b : a))
     }
-    const { order, labels } = bestOrder(chunk, anchor, cands, D, n)
+    const { order, labels } = bestOrder(chunk, anchor, cands, D, n, quotas[d].mealNames)
     byDayId.set(slot.dayId, { ...slot, placeIds: order.map((i) => cands[i].id), anchorId: anchor?.id, labels: Object.fromEntries(order.flatMap((i, x) => (labels[x] ? [[cands[i].id, labels[x]]] : []))) })
   })
   return {
@@ -229,10 +253,13 @@ function twoOpt(path: number[], D: Float64Array, n: number) {
 // accommodation if there is one. With no sights (a map of only restaurants) the meals still
 // land at breakfast / lunch / dinner time and the rest spread between them.
 type DaySlot = { kind: 'meal' | 'cafe' | 'free'; t: number; label?: string }
-function dayShape(idx: number[], cands: Place[]): DaySlot[] {
+const MEAL_T: Record<MealName, number> = { Breakfast: 0.05, Lunch: 0.45, Dinner: 0.95 }
+function dayShape(idx: number[], cands: Place[], names: MealName[] = ['Breakfast', 'Lunch', 'Dinner']): DaySlot[] {
   const count = (kd: Kind) => idx.filter((i) => kindOf(cands[i]) === kd).length
   const nMeal = count('meal')
-  const meals: [number, string][] = nMeal >= 3 ? [[0.05, 'Breakfast'], [0.45, 'Lunch'], [0.95, 'Dinner']] : nMeal === 2 ? [[0.45, 'Lunch'], [0.95, 'Dinner']] : nMeal === 1 ? [[0.45, 'Lunch']] : []
+  // Which meals this day has: all of them if there are enough restaurants, else the later ones (a lone meal is lunch if it can be).
+  const chosen: MealName[] = nMeal >= names.length ? names : nMeal === 1 ? [names.includes('Lunch') ? 'Lunch' : names[0]] : names.slice(names.length - nMeal)
+  const meals: [number, string][] = (nMeal === 0 ? [] : chosen).map((n) => [MEAL_T[n], n])
   const slots: DaySlot[] = meals.map(([t, label]) => ({ kind: 'meal', t, label }))
   if (count('cafe') >= 1) slots.push({ kind: 'cafe', t: 0.7, label: 'Coffee' })
   const free = idx.length - slots.length
@@ -240,9 +267,9 @@ function dayShape(idx: number[], cands: Place[]): DaySlot[] {
   return slots.sort((a, b) => a.t - b.t)
 }
 
-function bestOrder(idx: number[], anchor: Place | undefined, cands: Place[], D: Float64Array, n: number): { order: number[]; labels: (string | undefined)[] } {
+function bestOrder(idx: number[], anchor: Place | undefined, cands: Place[], D: Float64Array, n: number, names?: MealName[]): { order: number[]; labels: (string | undefined)[] } {
   if (idx.length <= 1 || idx.length > 10) return { order: idx, labels: idx.map(() => undefined) }
-  const shape = dayShape(idx, cands)
+  const shape = dayShape(idx, cands, names)
   const fits = (slot: DaySlot, p: number) => slot.kind === 'free' || (slot.kind === 'meal' ? kindOf(cands[p]) === 'meal' : kindOf(cands[p]) === 'cafe')
   let best: number[] = idx
   let bestCost = Infinity

@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import { shortDate } from '../lib/days'
 import { stayForStop } from '../lib/stays'
+import { clock, describeTransfer, freeWindow } from '../lib/journeys'
 import {
   DEFAULT_PREFS,
   PACE_COUNT,
@@ -68,7 +69,7 @@ function AreaPicker({ trip, stop }: { trip: Trip; stop: Stop }) {
 }
 
 export function SuggestSheet({ trip, stop, onClose }: { trip: Trip; stop: Stop; onClose: () => void }) {
-  const { days, places, groups } = useAppData()
+  const { days, places, groups, transfers } = useAppData()
   const [pace, setPace] = useState<Pace>('standard')
   const [prefs, setPrefsState] = useState<Prefs>(loadPrefs)
   const setPrefs = (p: Prefs) => {
@@ -79,11 +80,26 @@ export function SuggestSheet({ trip, stop, onClose }: { trip: Trip; stop: Stop; 
       // not remembered — fine
     }
   }
-  const dates = useMemo(() => stopDays(trip, stop), [trip, stop])
+  const dates = useMemo(() => stopDays(trip, stop, transfers), [trip, stop, transfers])
   const tripDays = days.filter((d) => d.tripId === trip.id)
   const dayFor = (date: string) => tripDays.find((d) => d.date === date)
+  const tripTransfers = useMemo(() => transfers.filter((t) => t.tripId === trip.id), [transfers, trip.id])
+  // A day with a journey on it: how much of it is left for plans, and what that journey is.
+  const si = trip.stops.findIndex((s) => s.id === stop.id)
+  const windowOf = (date: string) => {
+    const side =
+      date === stop.arrival && trip.stops[si - 1]?.departure === date ? ('arriving' as const) : date === stop.departure && trip.stops[si + 1]?.arrival === date ? ('departing' as const) : undefined
+    const w = freeWindow(tripTransfers, date, side)
+    return w.busy.length > 0 ? w : undefined
+  }
   const [modes, setModes] = useState<Record<string, DayMode>>(() =>
-    Object.fromEntries(dates.map((d) => [d.date, d.mode])),
+    Object.fromEntries(
+      dates.map((d) => {
+        const w = windowOf(d.date)
+        const len = w ? w.end - w.start : undefined
+        return [d.date, len === undefined ? d.mode : len >= 480 ? 'full' : len >= 150 ? 'half' : 'off']
+      }),
+    ),
   )
   const [replace, setReplace] = useState<Record<string, boolean>>({})
   const [variant, setVariant] = useState(0)
@@ -107,7 +123,10 @@ export function SuggestSheet({ trip, stop, onClose }: { trip: Trip; stop: Stop; 
     )
     const result = suggestItinerary({
       places: stopPlaces.filter((p) => !taken.has(p.id)),
-      slots: usable.map((u) => ({ dayId: dayFor(u.date)!.id, date: u.date, mode: modes[u.date] ?? u.mode })),
+      slots: usable.map((u) => {
+        const w = windowOf(u.date)
+        return { dayId: dayFor(u.date)!.id, date: u.date, mode: modes[u.date] ?? u.mode, free: w ? { start: w.start, end: w.end } : undefined }
+      }),
       pace,
       prefs,
       variant: v,
@@ -166,6 +185,9 @@ export function SuggestSheet({ trip, stop, onClose }: { trip: Trip; stop: Stop; 
               </summary>
               <AreaPicker trip={trip} stop={stop} />
             </details>
+            {tripTransfers.length === 0 && !stayForStop(trip, stop) && (
+              <p className="note">Tip: add your hotels and journeys first. The days are then planned around when you arrive and leave.</p>
+            )}
             <h3>How busy should the days be?</h3>
             <div className="tag-grid three">
               {PACES.map((p) => (
@@ -217,6 +239,16 @@ export function SuggestSheet({ trip, stop, onClose }: { trip: Trip; stop: Stop; 
                       ))}
                     </select>
                   </div>
+                  {windowOf(d.date) && (
+                    <p className="note journey-note">
+                      {windowOf(d.date)!.busy.map((b) => describeTransfer(b.transfer)).join(' · ')}
+                      {' — '}
+                      {(() => {
+                        const w = windowOf(d.date)!
+                        return w.end - w.start < 90 ? 'no time left for plans' : `free ${clock(w.start)}–${clock(w.end)}`
+                      })()}
+                    </p>
+                  )}
                   {planned > 0 && (
                     <label className="inline">
                       <input

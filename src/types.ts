@@ -8,6 +8,7 @@ export type Stop = {
   departure: string // yyyy-mm-dd
   coverUrl?: string // a photo of the city, found automatically
   coverCheckedAt?: string // when we last looked for one
+  coverV?: number // which version of the lookup checked (so improvements can retry earlier misses)
 }
 
 export const TRANSFER_KINDS = ['flight', 'train', 'bus', 'ferry', 'car', 'other'] as const
@@ -57,6 +58,7 @@ export type Trip = {
   endDate: string
   coverUrl?: string // a photo of the place, used when the trip has no stops (e.g. a trip called "Lisbon")
   coverCheckedAt?: string
+  coverV?: number
   stops: Stop[]
   stays?: Stay[]
   notes?: Note[]

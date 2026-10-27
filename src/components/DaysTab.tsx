@@ -10,7 +10,7 @@ import {
 import { SortableContext, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 import { BedDouble, CalendarCheck, ChevronDown, ChevronUp, GripVertical, MoveRight, Pencil, Plus, Sparkles, TriangleAlert } from 'lucide-react'
-import { useEffect, useMemo, useState } from 'react'
+import { Fragment, useEffect, useMemo, useState } from 'react'
 import {
   LONG_TRAVEL_MINUTES,
   MODES,
@@ -27,6 +27,7 @@ import {
 } from '../lib/commute'
 import { fromISO, shortDate, stopLabel, stopsOn, toISO } from '../lib/days'
 import { hoursWarning } from '../lib/hours'
+import { journeyPositions } from '../lib/journeys'
 import { dayStays } from '../lib/stays'
 import { fmtMoney } from '../lib/money'
 import { addExpense, addToDay, moveDayItem, moveItemToDay, removeDayItem, setLegMode, sortDayByTime, updateDayItem, useAppData } from '../lib/store'
@@ -511,6 +512,9 @@ export function DaysTab({ initialDate }: { initialDate?: string }) {
   const route = [startStay, ...dayPlaces, endStay].filter((p): p is Place => !!p)
   const weatherPoint =
     route[0] ?? places.find((p) => p.tripId === trip.id && p.groupId && groups.some((g) => g.id === p.groupId && g.stopId === arriving?.id))
+  const jpos = journeyPositions(day.items, dayTransfers)
+  const journeysAt = (i: number) => dayTransfers.filter((t) => jpos.get(t.id) === i)
+  const journeyCard = (t: Transfer) => <TransferCard key={t.id} t={t} onEdit={() => setTransferSheet({ transfer: t })} />
   const sheetItem = openItem ? day.items.find((i) => i.id === openItem) : undefined
 
   function onDragEnd(e: DragEndEvent) {
@@ -575,13 +579,6 @@ export function DaysTab({ initialDate }: { initialDate?: string }) {
             )}
           </div>
 
-          {dayTransfers.map((t) => (
-            <TransferCard key={t.id} t={t} onEdit={() => setTransferSheet({ transfer: t })} />
-          ))}
-          <button className="wide subtle" onClick={() => setTransferSheet({})}>
-            <Plus size={16} /> Add a flight, train or other journey
-          </button>
-
           {startStay && <StayCard label="Start from" place={startStay} onClick={() => setFocusId(startStay.id)} />}
           {!stays.end && arriving && arriving.departure > day.date && (
             <button className="wide subtle" onClick={() => setStayFor({ checkIn: day.date, checkOut: arriving.departure })}>
@@ -591,18 +588,22 @@ export function DaysTab({ initialDate }: { initialDate?: string }) {
           {startStay && dayPlaces[0] && <LegRow day={day} from={startStay} to={dayPlaces[0]} />}
 
           {day.items.length === 0 ? (
+            <>
+            {dayTransfers.map(journeyCard)}
             <div className="empty">
               <span className="empty-icon"><CalendarCheck size={30} /></span>
               <h3 className="display">A day with room in it.</h3>
               <p className="muted">Nothing planned yet. Add places from your list, or use “Suggest my days” to get a first draft.</p>
             </div>
+            </>
           ) : (
             <>
               <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
                 <SortableContext items={day.items.map((i) => i.id)} strategy={verticalListSortingStrategy}>
                   {day.items.map((item, i) => (
+                    <Fragment key={item.id}>
+                    {journeysAt(i).map(journeyCard)}
                     <ItemRow
-                      key={item.id}
                       index={i}
                       day={day}
                       allDays={tripDays}
@@ -619,7 +620,9 @@ export function DaysTab({ initialDate }: { initialDate?: string }) {
                       }}
                       onOpen={() => setOpenItem(item.id)}
                     />
+                    </Fragment>
                   ))}
+                  {journeysAt(day.items.length).map(journeyCard)}
                 </SortableContext>
               </DndContext>
               {endStay && <StayCard label="Back to" place={endStay} onClick={() => setFocusId(endStay.id)} />}
@@ -627,9 +630,14 @@ export function DaysTab({ initialDate }: { initialDate?: string }) {
               {timed > 1 && <button className="wide" onClick={() => sortDayByTime(day.id)}>Sort by time</button>}
             </>
           )}
-          <button className="primary wide" onClick={() => setPicking(true)}>
-            <Plus size={18} /> Add places
-          </button>
+          <div className="row buttons add-row">
+            <button className="primary" onClick={() => setPicking(true)}>
+              <Plus size={18} /> Add places
+            </button>
+            <button onClick={() => setTransferSheet({})}>
+              <Plus size={18} /> Add journey
+            </button>
+          </div>
         </div>
       </div>
 
