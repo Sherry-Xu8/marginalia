@@ -118,6 +118,7 @@ function cleanPlace(v: unknown): Place | null {
   const tag = TAGS.find((t) => t === o.tag)
   return {
     id, tripId, name, lat, lon,
+    originalName: str(o.originalName, 300) ?? undefined,
     description: str(o.description, 5000) ?? '',
     layer: str(o.layer, 300) ?? '',
     dedupeKey: str(o.dedupeKey, 500) ?? `${name.toLowerCase()}|${lat.toFixed(5)}|${lon.toFixed(5)}`,

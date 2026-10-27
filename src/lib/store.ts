@@ -6,6 +6,7 @@ import { distanceKm } from './geo'
 import { GROUP_RADIUS_KM, clusterPlaces, nextAreaName } from './grouping'
 import type { TripData } from './backup'
 import type { ParseResult } from './kml'
+import { englishPart } from './names'
 import { suggestTags } from './tagging'
 
 // One small store holds everything and saves it to the browser (IndexedDB)
@@ -551,4 +552,64 @@ export function importTripData(d: TripData): string {
   )
   void tagUntagged()
   return trip.name
+}
+
+// ---- Renaming places ----
+// Only the display name changes. The original is kept so you can undo, and re-importing the
+// same file still recognises the place (the duplicate check uses the original name).
+
+export function renamePlace(id: string, name: string) {
+  const clean = name.trim().slice(0, 300)
+  if (!clean) return
+  update((s) => ({
+    ...s,
+    places: s.places.map((p) =>
+      p.id === id
+        ? {
+            ...p,
+            name: clean,
+            originalName: p.originalName ?? p.name,
+            // back to the original text = nothing renamed any more
+            ...(clean === p.originalName ? { originalName: undefined } : {}),
+          }
+        : p,
+    ),
+  }))
+}
+
+export function resetPlaceName(id: string) {
+  update((s) => ({
+    ...s,
+    places: s.places.map((p) => (p.id === id && p.originalName ? { ...p, name: p.originalName, originalName: undefined } : p)),
+  }))
+}
+
+// How many names in this trip have an English version that's different from what's shown.
+export function englishNameCandidates(tripId: string): { id: string; to: string }[] {
+  return state.places.flatMap((p) => {
+    if (p.tripId !== tripId) return []
+    const to = englishPart(p.name)
+    return to && to !== p.name ? [{ id: p.id, to }] : []
+  })
+}
+
+export function applyEnglishNames(tripId: string): number {
+  const list = englishNameCandidates(tripId)
+  const to = new Map(list.map((x) => [x.id, x.to]))
+  update((s) => ({
+    ...s,
+    places: s.places.map((p) =>
+      to.has(p.id) ? { ...p, name: to.get(p.id)!, originalName: p.originalName ?? p.name } : p,
+    ),
+  }))
+  return list.length
+}
+
+export function restoreOriginalNames(tripId: string) {
+  update((s) => ({
+    ...s,
+    places: s.places.map((p) =>
+      p.tripId === tripId && p.originalName ? { ...p, name: p.originalName, originalName: undefined } : p,
+    ),
+  }))
 }

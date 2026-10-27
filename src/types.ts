@@ -73,6 +73,7 @@ export type Place = {
   id: string
   tripId: string
   name: string
+  originalName?: string // set once you rename a place, so you can undo
   description: string
   lat: number
   lon: number

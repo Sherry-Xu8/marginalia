@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { ImportError, readMapFile } from '../lib/kml'
 import {
   clearPlaces,
@@ -6,7 +6,12 @@ import {
   mergeGroups,
   movePlaces,
   renameGroup,
+  renamePlace,
+  resetPlaceName,
+  restoreOriginalNames,
   retryNaming,
+  englishNameCandidates,
+  applyEnglishNames,
   setGroupStop,
   setPlaceTag,
   useAppData,
@@ -15,6 +20,34 @@ import { TAGS, TAG_STYLE } from '../lib/tagging'
 import type { Group, ImportSummary, Place, Stop, Tag } from '../types'
 import { FilterChips, tagOf } from './FilterChips'
 import { QuickTag } from './QuickTag'
+
+function NameField({ place }: { place: Place }) {
+  const [text, setText] = useState(place.name)
+  useEffect(() => setText(place.name), [place.name])
+  return (
+    <>
+      <label>
+        Name
+        <input
+          value={text}
+          onChange={(e) => setText(e.target.value)}
+          onKeyDown={(e) => e.key === 'Enter' && e.currentTarget.blur()}
+          onBlur={(e) => {
+            const v = e.currentTarget.value.trim()
+            if (v && v !== place.name) renamePlace(place.id, v)
+            else setText(place.name)
+          }}
+        />
+      </label>
+      {place.originalName && (
+        <p className="muted">
+          Originally “{place.originalName}”{' '}
+          <button className="linklike" onClick={() => resetPlaceName(place.id)}>Undo</button>
+        </p>
+      )}
+    </>
+  )
+}
 
 function PlaceRow({
   place,
@@ -46,6 +79,7 @@ function PlaceRow({
   return (
     <details className="place">
       <summary>{title}</summary>
+      <NameField place={place} />
       {place.description && <p className="desc">{place.description}</p>}
       <p className="muted">{place.lat.toFixed(4)}, {place.lon.toFixed(4)} · layer: {place.layer}</p>
       <label>
@@ -152,6 +186,7 @@ export function PlacesTab({ tagFilter, setTagFilter }: { tagFilter: string[]; se
   const mine = useMemo(() => places.filter((p) => p.tripId === activeTripId), [places, activeTripId])
   const myGroups = useMemo(() => groups.filter((g) => g.tripId === activeTripId), [groups, activeTripId])
   const untagged = useMemo(() => mine.filter((p) => !p.tag), [mine])
+  const englishCount = useMemo(() => (activeTripId ? englishNameCandidates(activeTripId).length : 0), [mine, activeTripId])
 
   const shown = useMemo(() => {
     const q = query.trim().toLowerCase()
@@ -245,6 +280,25 @@ export function PlacesTab({ tagFilter, setTagFilter }: { tagFilter: string[]; se
             <button className="primary wide" onClick={() => setQuickTag(true)}>
               Tag {untagged.length} untagged place{untagged.length === 1 ? '' : 's'}
             </button>
+          )}
+          {(englishCount > 0 || mine.some((p) => p.originalName)) && (
+            <div className="card">
+              {englishCount > 0 && (
+                <>
+                  <p>
+                    {englishCount} place name{englishCount === 1 ? ' has' : 's have'} Korean, Chinese or Japanese text
+                    with an English version alongside.
+                  </p>
+                  <button className="primary wide" onClick={() => { applyEnglishNames(trip.id) }}>
+                    Use the English names
+                  </button>
+                </>
+              )}
+              {mine.some((p) => p.originalName) && (
+                <button className="wide" onClick={() => restoreOriginalNames(trip.id)}>Restore all original names</button>
+              )}
+              <p className="muted">You can also tap any place to rename it yourself.</p>
+            </div>
           )}
           <FilterChips places={mine} value={tagFilter} onChange={setTagFilter} />
           <input
