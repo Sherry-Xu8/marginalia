@@ -8,7 +8,7 @@ import {
   type Pace,
   type Suggestion,
 } from '../lib/itinerary'
-import { applySuggestion, useAppData } from '../lib/store'
+import { applySuggestion, setGroupStop, useAppData } from '../lib/store'
 import type { Place, Stop, Trip } from '../types'
 import { tagOf } from './FilterChips'
 import { TagIcon } from './TagIcon'
@@ -19,6 +19,36 @@ const PACES: { id: Pace; label: string }[] = [
   { id: 'packed', label: 'Packed' },
 ]
 const MODE_LABEL: Record<DayMode, string> = { full: 'Full day', half: 'Half day', off: 'Day off' }
+
+// Choose which location groups ("areas") belong to this stop, right here.
+function AreaPicker({ trip, stop }: { trip: Trip; stop: Stop }) {
+  const { groups, places } = useAppData()
+  const mine = groups.filter((g) => g.tripId === trip.id)
+  if (mine.length === 0) {
+    return <p className="muted">There are no places yet. Import a map file on the Places tab first.</p>
+  }
+  return (
+    <>
+      {mine.map((g) => {
+        const other = trip.stops.find((s) => s.id === g.stopId && s.id !== stop.id)
+        const count = places.filter((p) => p.groupId === g.id).length
+        return (
+          <label key={g.id} className="check area-row">
+            <input
+              type="checkbox"
+              checked={g.stopId === stop.id}
+              onChange={(e) => setGroupStop(g.id, e.target.checked ? stop.id : undefined)}
+            />
+            <span>
+              {g.name} <small className="muted">· {count} place{count === 1 ? '' : 's'}</small>
+              {other && <small className="muted"> · currently in {other.name}</small>}
+            </span>
+          </label>
+        )
+      })}
+    </>
+  )
+}
 
 export function SuggestSheet({ trip, stop, onClose }: { trip: Trip; stop: Stop; onClose: () => void }) {
   const { days, places, groups } = useAppData()
@@ -92,13 +122,22 @@ export function SuggestSheet({ trip, stop, onClose }: { trip: Trip; stop: Stop; 
       <div className="sheet-body">
         {stopPlaces.length === 0 ? (
           <div className="card">
-            <p>
-              No places are assigned to <strong>{stop.name}</strong> yet. On the <strong>Places</strong> tab, open a
-              location group and choose this stop in its “Trip stop” menu, then come back.
+            <h3>Which areas are in {stop.name}?</h3>
+            <p className="muted">
+              Your places are sorted into areas by location. Tick the ones you’ll visit in {stop.name}, and the
+              suggestions will use only those.
             </p>
+            <AreaPicker trip={trip} stop={stop} />
           </div>
         ) : !plan ? (
           <>
+            <details className="card">
+              <summary>
+                Using {stopPlaces.length} place{stopPlaces.length === 1 ? '' : 's'} from{' '}
+                {groups.filter((g) => g.stopId === stop.id).map((g) => g.name).join(', ')} — change
+              </summary>
+              <AreaPicker trip={trip} stop={stop} />
+            </details>
             <h3>How busy should the days be?</h3>
             <div className="tag-grid three">
               {PACES.map((p) => (

@@ -30,7 +30,7 @@ export async function loadData(): Promise<void> {
         expenses: saved.expenses ?? [],
         trips: saved.trips.map((t) => ({ ...t, checklist: t.checklist ?? seedChecklist() })),
       }
-      for (const t of state.trips) state = syncDays(assignGroups(state, t.id), t.id)
+      for (const t of state.trips) state = autoLinkGroups(syncDays(assignGroups(state, t.id), t.id), t.id)
       void tagUntagged()
     }
   } catch {
@@ -96,10 +96,35 @@ export function setActiveTrip(id: string) {
 }
 
 function mapStops(tripId: string, fn: (stops: Stop[]) => Stop[]) {
-  update((s) => ({
+  update((s) =>
+    autoLinkGroups(
+      {
+        ...s,
+        trips: s.trips.map((t) => (t.id === tripId ? { ...t, stops: fn(t.stops) } : t)),
+      },
+      tripId,
+    ),
+  )
+}
+
+// Links a location group to a trip stop when their names obviously match ("Seoul" and "Seoul"),
+// so you don't have to do it by hand. Groups you've already linked yourself are left alone.
+const norm = (n: string) => n.toLowerCase().replace(/-(si|gun|gu)$/, '').replace(/[^\p{L}\p{N}]/gu, '')
+function autoLinkGroups(s: AppData, tripId: string): AppData {
+  const trip = s.trips.find((t) => t.id === tripId)
+  if (!trip) return s
+  return {
     ...s,
-    trips: s.trips.map((t) => (t.id === tripId ? { ...t, stops: fn(t.stops) } : t)),
-  }))
+    groups: s.groups.map((g) => {
+      const gn = norm(g.name)
+      if (g.tripId !== tripId || g.stopId || !gn) return g
+      const hits = trip.stops.filter((st) => {
+        const sn = norm(st.name)
+        return sn && (gn.includes(sn) || sn.includes(gn))
+      })
+      return hits.length === 1 ? { ...g, stopId: hits[0].id } : g
+    }),
+  }
 }
 
 export function addStop(tripId: string, stop: Omit<Stop, 'id'>) {
@@ -233,12 +258,15 @@ export function applyLookedUpName(id: string, name: string | null) {
     if (!group || group.nameSource !== 'auto') return s
     const taken = s.groups.some((g) => g.tripId === group.tripId && g.id !== id && g.name === name)
     const finalName = name ? (taken ? `${name} (2)` : name) : group.name
-    return {
-      ...s,
-      groups: s.groups.map((g) =>
-        g.id === id ? { ...g, name: finalName, nameSource: name ? 'geocoded' : 'fallback' } : g,
-      ),
-    }
+    return autoLinkGroups(
+      {
+        ...s,
+        groups: s.groups.map((g) =>
+          g.id === id ? { ...g, name: finalName, nameSource: name ? 'geocoded' : 'fallback' } : g,
+        ),
+      },
+      group.tripId,
+    )
   })
 }
 
