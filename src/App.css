@@ -558,3 +558,10 @@ main > section > h2 { font-family: var(--serif); font-weight: 420; }
   .hero-card { grid-template-columns: 1fr; }
   .hero-count { justify-self: start; margin-right: 0; flex-direction: row; align-items: baseline; text-align: left; gap: 12px; }
 }
+
+/* logo */
+.brand { gap: 12px; }
+.logo-mark { flex: none; border-radius: 15px; }
+.wordmark { font-family: var(--serif); font-weight: 420; font-size: 1.75rem; letter-spacing: -0.02em; line-height: 1; font-optical-sizing: auto; }
+.idot { position: relative; display: inline-block; }
+.idot::after { content: ''; position: absolute; left: 50%; top: 0.1em; width: 0.13em; height: 0.13em; border-radius: 50%; background: #c2582f; transform: translateX(-50%); }

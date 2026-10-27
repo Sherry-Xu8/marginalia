@@ -2,6 +2,7 @@ import { ArrowLeft, CalendarDays, Compass, FileJson, MapPin, Map as MapIcon, Wal
 import { useEffect, useState } from 'react'
 import { BudgetTab } from './components/BudgetTab'
 import { DaysTab } from './components/DaysTab'
+import { LogoMark, Wordmark } from './components/Logo'
 import { MapTab } from './components/MapTab'
 import { PlacesTab } from './components/PlacesTab'
 import { TripHero } from './components/TripHero'
@@ -26,8 +27,8 @@ function TopBar() {
   return (
     <header className="topbar">
       <a className="brand" href="#/">
-        <span className="logo"><Compass size={22} strokeWidth={1.8} /></span>
-        Marginalia
+        <LogoMark size={46} />
+        <Wordmark />
       </a>
       <span className="tagline">A little room for the road</span>
       <button
