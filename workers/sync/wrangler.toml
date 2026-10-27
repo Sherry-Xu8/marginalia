@@ -1,0 +1,8 @@
+# Only needed if you use the command line (wrangler). The Cloudflare website works without this file.
+name = "marginalia-sync"
+main = "worker.js"
+compatibility_date = "2025-01-01"
+
+# [[kv_namespaces]]
+# binding = "SYNC"
+# id = "paste the KV namespace id here"

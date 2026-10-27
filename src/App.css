@@ -939,3 +939,27 @@ button.danger-solid:hover:not(:disabled) { background: color-mix(in srgb, var(--
 .pills button.on b { color: var(--accent-text); }
 .pills button.on small { color: rgba(255, 255, 255, 0.8); }
 @media (max-width: 759px) { .pills button { min-width: 78px; padding: 9px 12px; } }
+.settings-page h3 { margin: 26px 0 10px; }
+.settings-page .card { margin: 0; }
+.gear-btn { min-width: 44px; justify-content: center; display: inline-flex; align-items: center; }
+@media (max-width: 759px) { .topbar .top-actions .link-btn.gear-btn { display: inline-flex; } }
+
+/* Must-do stars */
+.star-btn { color: var(--muted); }
+.star-btn.on { color: #c9993a; }
+.star-pill { display: inline-flex; align-items: center; gap: 6px; }
+.star-pill.on { background: #f5e8c8; color: #7a5814; }
+.head-actions { display: inline-flex; gap: 8px; align-items: center; }
+
+/* Today */
+.today-card { margin-bottom: 18px; }
+.today-card h2 { font-size: 1.8rem; margin-top: 2px; }
+.today-next { display: flex; flex-direction: column; gap: 4px; margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--line); }
+.today-next strong { font-size: 1.3rem; font-family: var(--serif); font-weight: 480; }
+.today-next .chips { margin-top: 8px; }
+.today-journey { display: flex; gap: 12px; align-items: flex-start; margin-top: 14px; padding: 12px 14px; background: var(--soft); border-radius: 16px; }
+.today-journey svg { margin-top: 2px; color: var(--accent-dark); flex: none; }
+.today-spend { display: flex; align-items: center; gap: 10px; margin-top: 14px; padding: 12px 14px; border: 1px solid var(--line); border-radius: 16px; text-decoration: none; }
+.today-spend > span { flex: 1; }
+.sync-code { font-family: ui-monospace, Menlo, monospace; font-size: 1.4rem; letter-spacing: 0.08em; text-align: center; background: var(--soft); border-radius: 14px; padding: 14px; margin: 12px 0 6px; user-select: all; }
+.sync-card .buttons { margin-top: 10px; }

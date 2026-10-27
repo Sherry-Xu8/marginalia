@@ -7,12 +7,14 @@ import './index.css'
 import App from './App.tsx'
 import { loadData } from './lib/store'
 import { applyTheme } from './lib/theme'
+import { startAutoSync } from './lib/sync'
 
 applyTheme()
 
 registerSW({ immediate: true }) // lets the app work offline
 
 loadData().then(() => {
+  startAutoSync()
   createRoot(document.getElementById('root')!).render(
     <StrictMode>
       <App />

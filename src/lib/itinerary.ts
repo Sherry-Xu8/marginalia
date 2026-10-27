@@ -71,7 +71,7 @@ export function stopDays(trip: Trip, stop: Stop, transfers: Transfer[] = []): { 
 }
 
 export type SuggestedDay = { dayId: string; date: string; mode: DayMode; placeIds: string[]; anchorId?: string; labels?: Record<string, string> }
-export type Suggestion = { days: SuggestedDay[]; unscheduled: string[] }
+export type Suggestion = { days: SuggestedDay[]; unscheduled: string[]; reasons?: Record<string, string> }
 export type Slot = { dayId: string; date: string; mode: DayMode; free?: FreeWindow }
 
 // Each place is a meal, a coffee stop, or a sight (everything else). A day is built from a mix of all three.
@@ -79,8 +79,17 @@ type Kind = 'meal' | 'cafe' | 'sight'
 const kindOf = (p: Place): Kind => (p.tag === 'Food' ? 'meal' : p.tag === 'Cafes' ? 'cafe' : 'sight')
 const isFood = (p: Place) => kindOf(p) !== 'sight'
 
-export function suggestItinerary(opts: { places: Place[]; slots: Slot[]; pace: Pace; prefs?: Prefs; variant?: number; stay?: Place }): Suggestion {
-  const { places, slots, pace, prefs = DEFAULT_PREFS, variant = 0, stay } = opts
+// closedOn says whether a place is shut on a date (so it isn't planned for that day).
+export function suggestItinerary(opts: {
+  places: Place[]
+  slots: Slot[]
+  pace: Pace
+  prefs?: Prefs
+  variant?: number
+  stay?: Place
+  closedOn?: (place: Place, date: string) => string | null
+}): Suggestion {
+  const { places, slots, pace, prefs = DEFAULT_PREFS, variant = 0, stay, closedOn } = opts
   // The accommodation you chose for the stop is the start and end of every day; otherwise any
   // accommodation among the places is used.
   const accommodations = stay ? [stay] : places.filter((p) => p.tag === 'Accommodation')
@@ -130,7 +139,9 @@ export function suggestItinerary(opts: { places: Place[]; slots: Slot[]; pace: P
     const foodCount = cands.filter((p, i) => kept[i] && isFood(p)).length
     const foodSoft = quotas.reduce((a, q) => a + q.meals + q.cafes, 0)
     const foodAllowed = Math.max(foodSoft, totalCap - (n - foodCount))
-    if (foodCount > foodAllowed) dropMostRemote((i) => isFood(cands[i]), foodCount - foodAllowed)
+    // Must-dos are the last things to be set aside.
+    if (foodCount > foodAllowed) dropMostRemote((i) => isFood(cands[i]) && !cands[i].must, foodCount - foodAllowed)
+    if (keptCount() > totalCap) dropMostRemote((i) => !cands[i].must, keptCount() - totalCap)
     if (keptCount() > totalCap) dropMostRemote(() => true, keptCount() - totalCap)
   }
 
@@ -211,6 +222,35 @@ export function suggestItinerary(opts: { places: Place[]; slots: Slot[]; pace: P
     i = j
   }
 
+  // ---- 4b. keep places off the days they're closed ----
+  const reasons: Record<string, string> = {}
+  if (closedOn) {
+    for (let d = 0; d < k; d++) {
+      for (const idx of [...chunks[d]]) {
+        const why = closedOn(cands[idx], active[d].date)
+        if (!why) continue
+        // swap with a place of the same kind on another day, if each is open on the other's day
+        let swapped = false
+        for (let e = 0; e < k && !swapped; e++) {
+          if (e === d) continue
+          for (const other of chunks[e]) {
+            if (kindOf(cands[other]) !== kindOf(cands[idx])) continue
+            if (closedOn(cands[other], active[d].date) || closedOn(cands[idx], active[e].date)) continue
+            chunks[d][chunks[d].indexOf(idx)] = other
+            chunks[e][chunks[e].indexOf(other)] = idx
+            swapped = true
+            break
+          }
+        }
+        if (!swapped) {
+          chunks[d].splice(chunks[d].indexOf(idx), 1)
+          dropped.push(idx)
+          reasons[cands[idx].id] = why
+        }
+      }
+    }
+  }
+
   // ---- 5. order each day ----
   const byDayId = new Map<string, SuggestedDay>()
   active.forEach((slot, d) => {
@@ -226,6 +266,7 @@ export function suggestItinerary(opts: { places: Place[]; slots: Slot[]; pace: P
   return {
     days: slots.map((s) => byDayId.get(s.dayId) ?? { ...s, placeIds: [] }),
     unscheduled: dropped.map((i) => cands[i].id),
+    reasons,
   }
 }
 

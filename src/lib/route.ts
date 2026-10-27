@@ -8,10 +8,11 @@ import { useSyncExternalStore } from 'react'
 export const TABS = ['overview', 'places', 'map', 'days', 'budget'] as const
 export type TabId = (typeof TABS)[number]
 
-export type Route = { page: 'home' } | { page: 'trip'; tripId: string; tab: TabId; date?: string } | { page: 'shared'; payload: string }
+export type Route = { page: 'home' } | { page: 'settings' } | { page: 'trip'; tripId: string; tab: TabId; date?: string } | { page: 'shared'; payload: string }
 
 export function parseHash(hash: string): Route {
   const [, kind, tripId, tab, date] = hash.replace(/^#/, '').split('/')
+  if (kind === 'settings') return { page: 'settings' }
   if (kind === 'shared' && tripId && /^[\w-]+$/.test(tripId)) return { page: 'shared', payload: tripId }
   if (kind === 'trip' && tripId) {
     const t = TABS.find((x) => x === tab) ?? 'overview'
@@ -21,7 +22,7 @@ export function parseHash(hash: string): Route {
 }
 
 export const hrefFor = (r: Route): string =>
-  r.page === 'home' ? '#/' : r.page === 'shared' ? `#/shared/${r.payload}` : `#/trip/${r.tripId}/${r.tab}${r.date ? '/' + r.date : ''}`
+  r.page === 'home' ? '#/' : r.page === 'settings' ? '#/settings' : r.page === 'shared' ? `#/shared/${r.payload}` : `#/trip/${r.tripId}/${r.tab}${r.date ? '/' + r.date : ''}`
 
 export const go = (r: Route) => {
   location.hash = hrefFor(r)

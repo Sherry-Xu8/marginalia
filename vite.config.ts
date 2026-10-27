@@ -33,7 +33,7 @@ export default defineConfig({
             handler: 'CacheFirst',
             options: {
               cacheName: 'osm-tiles',
-              expiration: { maxEntries: 600, maxAgeSeconds: 60 * 60 * 24 * 30 },
+              expiration: { maxEntries: 6000, maxAgeSeconds: 60 * 60 * 24 * 120 },
               cacheableResponse: { statuses: [0, 200] },
             },
           },
@@ -42,7 +42,7 @@ export default defineConfig({
             handler: 'CacheFirst',
             options: {
               cacheName: 'esri-tiles',
-              expiration: { maxEntries: 600, maxAgeSeconds: 60 * 60 * 24 * 30 },
+              expiration: { maxEntries: 6000, maxAgeSeconds: 60 * 60 * 24 * 120 },
               cacheableResponse: { statuses: [0, 200] },
             },
           },

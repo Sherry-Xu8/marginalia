@@ -1,7 +1,10 @@
+import { Star } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { shortDate } from '../lib/days'
 import { stayForStop } from '../lib/stays'
 import { clock, describeTransfer, freeWindow } from '../lib/journeys'
+import { hoursOn } from '../lib/hours'
+import { fromISO } from '../lib/days'
 import {
   DEFAULT_PREFS,
   PACE_COUNT,
@@ -130,6 +133,8 @@ export function SuggestSheet({ trip, stop, onClose }: { trip: Trip; stop: Stop; 
       pace,
       prefs,
       variant: v,
+      closedOn: (p, date) =>
+        hoursOn(p.details?.hours, date).status === 'closed' ? `Closed on ${fromISO(date).toLocaleDateString(undefined, { weekday: 'long' })}s` : null,
       stay: places.find((p) => p.id === stayForStop(trip, stop)?.placeId),
     })
     setVariant(v)
@@ -139,6 +144,7 @@ export function SuggestSheet({ trip, stop, onClose }: { trip: Trip; stop: Stop; 
   const removeFromDay = (dayId: string, placeId: string) =>
     setPlan((p) =>
       p && {
+        ...p,
         days: p.days.map((d) => (d.dayId === dayId ? { ...d, placeIds: d.placeIds.filter((x) => x !== placeId) } : d)),
         unscheduled: [...p.unscheduled, placeId],
       },
@@ -146,6 +152,7 @@ export function SuggestSheet({ trip, stop, onClose }: { trip: Trip; stop: Stop; 
   const addToPlanDay = (dayId: string, placeId: string) =>
     setPlan((p) =>
       p && {
+        ...p,
         days: p.days.map((d) => (d.dayId === dayId ? { ...d, placeIds: [...d.placeIds, placeId] } : d)),
         unscheduled: p.unscheduled.filter((x) => x !== placeId),
       },
@@ -154,7 +161,7 @@ export function SuggestSheet({ trip, stop, onClose }: { trip: Trip; stop: Stop; 
   const row = (p: Place | undefined) =>
     p ? (
       <>
-        <TagIcon tag={tagOf(p)} size={26} /> {p.name}
+        <TagIcon tag={tagOf(p)} size={26} /> {p.name}{p.must && <Star size={14} fill="currentColor" aria-label="Must-do" style={{ marginLeft: 6, color: '#c9993a' }} />}
       </>
     ) : (
       '(removed)'
@@ -298,7 +305,10 @@ export function SuggestSheet({ trip, stop, onClose }: { trip: Trip; stop: Stop; 
               <p className="muted">Places that didn’t fit. Add one to a day if you like.</p>
               {plan.unscheduled.slice(0, 60).map((id) => (
                 <div key={id} className="check">
-                  <span style={{ flex: 1 }}>{row(placeById.get(id))}</span>
+                  <span style={{ flex: 1 }}>
+                    {row(placeById.get(id))}
+                    {plan.reasons?.[id] && <small className="muted"> · {plan.reasons[id]}</small>}
+                  </span>
                   <select
                     aria-label="Add to day"
                     value=""

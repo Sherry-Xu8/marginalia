@@ -8,14 +8,12 @@ import { go } from '../lib/route'
 import { addStop, deleteStop, deleteTrip, moveStop, updateStop, useAppData } from '../lib/store'
 import type { Stop, Transfer, Trip } from '../types'
 import { BackupCard } from './BackupCard'
-import { setTheme, useTheme } from '../lib/theme'
-import { isAutoLookupOn, setAutoLookup } from '../lib/autolookup'
-import { getFlightService, setFlightService } from '../lib/flights'
 import { Checklist } from './Checklist'
 import { StaySheet } from './StaySheet'
 import { StaysPanel } from './StaysPanel'
 import { NotesPanel } from './NotesPanel'
 import { BackupNudge } from './BackupNudge'
+import { TodayCard } from './TodayCard'
 import { SuggestSheet } from './SuggestSheet'
 import { KIND_INFO, TransferSheet } from './TransferSheet'
 import { PlaceThumb } from './TagIcon'
@@ -115,28 +113,6 @@ function StopCard({ trip, stop, index, onStays }: { trip: Trip; stop: Stop; inde
 }
 
 // Optional: the address of your own flight-lookup service, for live times when you add a flight.
-function FlightServiceSetting() {
-  const [value, setValue] = useState(getFlightService)
-  const [msg, setMsg] = useState('')
-  return (
-    <div className="card">
-      <strong>Flight times service (optional)</strong>
-      <p className="muted">
-        Paste the address of your flight-lookup service to fill in times when you add a flight. Leave it empty to switch it off.
-        Saved on this device only.
-      </p>
-      <div className="row">
-        <input value={value} placeholder="https://marginalia-flights.your-name.workers.dev" onChange={(e) => { setValue(e.target.value); setMsg('') }} aria-label="Flight service address" />
-        <button
-          onClick={() => setMsg(setFlightService(value) ? (value.trim() ? 'Saved.' : 'Switched off.') : 'That needs to be a secure address starting with https://')}
-        >
-          Save
-        </button>
-      </div>
-      {msg && <p className="muted" role="status">{msg}</p>}
-    </div>
-  )
-}
 
 // A tidy row that opens to show more, so the page stays short.
 function Fold({ id, title, badge, open, onToggle, children }: { id: string; title: string; badge?: string; open: boolean; onToggle: () => void; children: React.ReactNode }) {
@@ -152,34 +128,7 @@ function Fold({ id, title, badge, open, onToggle, children }: { id: string; titl
   )
 }
 
-function ThemePicker() {
-  const theme = useTheme()
-  return (
-    <div className="card">
-      <strong>Appearance</strong>
-      <div className="mode-pick wide-pick" role="group" aria-label="Appearance">
-        {([['auto', 'Match my device'], ['light', 'Light'], ['dark', 'Dark']] as const).map(([v, l]) => (
-          <button key={v} className={theme === v ? 'on' : ''} aria-pressed={theme === v} onClick={() => setTheme(v)}>{l}</button>
-        ))}
-      </div>
-    </div>
-  )
-}
 
-function AutoLookupToggle() {
-  const [on, setOn] = useState(isAutoLookupOn)
-  return (
-    <label className="card inline">
-      <input type="checkbox" checked={on} onChange={(e) => { setOn(e.target.checked); setAutoLookup(e.target.checked) }} />
-      <span>
-        Look up photos and details for my places automatically
-        <small className="muted" style={{ display: 'block' }}>
-          Sends each place’s name and location to OpenStreetMap and Wikipedia. Turn off to keep everything on this device.
-        </small>
-      </span>
-    </label>
-  )
-}
 
 export function TripOverview({ trip }: { trip: Trip }) {
   const { days, places, expenses } = useAppData()
@@ -214,6 +163,7 @@ export function TripOverview({ trip }: { trip: Trip }) {
   return (
     <div className="page">
       <BackupNudge />
+      <TodayCard trip={trip} />
       <div className="overview-grid single">
         <section className="card panel">
           <header className="panel-head">
@@ -356,12 +306,8 @@ export function TripOverview({ trip }: { trip: Trip }) {
         <Checklist trip={trip} />
       </Fold>
 
-      <Fold id="more" title="Share, back up and settings" open={openFolds.has('more')} onToggle={() => toggleFold('more')}>
+      <Fold id="more" title="Share and manage this trip" open={openFolds.has('more')} onToggle={() => toggleFold('more')}>
         <BackupCard trip={trip} />
-        <h3>Settings</h3>
-        <ThemePicker />
-        <AutoLookupToggle />
-        <FlightServiceSetting />
         <div className="card row buttons">
           <button
             className="danger"

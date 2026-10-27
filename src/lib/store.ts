@@ -71,6 +71,12 @@ function update(fn: (s: AppData) => AppData) {
   }, 200)
 }
 
+// Lets other code (like sync) hear about every change.
+export function onChange(cb: () => void): () => void {
+  listeners.add(cb)
+  return () => listeners.delete(cb)
+}
+
 export function useAppData(): AppData {
   return useSyncExternalStore(
     (cb) => {
@@ -772,6 +778,10 @@ export function addCustomPlace(p: { tripId: string; name: string; lat: number; l
 }
 
 // ---- Place details and photos ----
+
+export function setPlaceMust(id: string, must: boolean) {
+  update((s) => ({ ...s, places: s.places.map((p) => (p.id === id ? { ...p, must: must || undefined } : p)) }))
+}
 
 export function setPlaceDetails(id: string, details: PlaceDetails | undefined) {
   update((s) => ({ ...s, places: s.places.map((p) => (p.id === id ? { ...p, details } : p)) }))

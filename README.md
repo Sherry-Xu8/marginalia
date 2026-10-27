@@ -39,3 +39,12 @@ Import it on the **Places** tab.
 - [x] Stage 5 — commute times
 - [x] Stage 6 — free hosting (instructions and GitHub Pages workflow; you press the buttons)
 - [x] Offline support, budget and expense tracker, sharing and backup via JSON file
+
+
+## Settings, offline maps and sync
+
+- **Settings** (the gear icon in the top bar): appearance, sync, backup and restore, offline maps, photo lookup and the flight service.
+- **Offline maps:** Settings → Offline maps saves the map around each stop on this device.
+- **Sync (optional):** keeps your devices in step through a small Cloudflare Worker of your own. See `workers/sync/README.md`.
+- **Must-do stars** on places: Suggest my days schedules starred places first and never sets them aside.
+- **Closed days:** Suggest my days avoids putting a place on a day its opening hours say it is closed.

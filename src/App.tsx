@@ -1,10 +1,11 @@
-import { ArrowLeft, CalendarDays, Compass, FileJson, MapPin, Moon, Sun, SunMoon, Wallet } from 'lucide-react'
+import { ArrowLeft, CalendarDays, Compass, FileJson, MapPin, Moon, Settings, Sun, SunMoon, Wallet } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { BudgetTab } from './components/BudgetTab'
 import { DaysTab } from './components/DaysTab'
 import { LogoMark, Wordmark } from './components/Logo'
 import { PlacesTab } from './components/PlacesTab'
 import { ConfirmHost } from './components/ConfirmHost'
+import { SettingsPage } from './components/SettingsPage'
 import { SharedView } from './components/SharedView'
 import { TripHero } from './components/TripHero'
 import { TripOverview } from './components/TripOverview'
@@ -51,6 +52,7 @@ function TopBar() {
       <span className="tagline">A little room for the road</span>
       <div className="top-actions">
         <ThemeButton />
+        <a className="link-btn gear-btn" href="#/settings" aria-label="Settings" title="Settings"><Settings size={20} /></a>
         <button
           className="link-btn backup-btn"
           onClick={() => void shareOrDownload(buildFullBackup(getState()), fileNameFor('backup')).then((r) => r !== 'cancelled' && markBackedUp())}
@@ -92,6 +94,15 @@ function AppView() {
   useEffect(() => {
     window.scrollTo(0, 0)
   }, [route.page, tabKey])
+
+  if (route.page === 'settings') {
+    return (
+      <div className="app">
+        <TopBar />
+        <main><SettingsPage /></main>
+      </div>
+    )
+  }
 
   if (route.page === 'shared') {
     return (

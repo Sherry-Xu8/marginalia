@@ -1,9 +1,10 @@
-import { ExternalLink, ImagePlus, Phone, Search, Trash2, X } from 'lucide-react'
+import { ExternalLink, ImagePlus, Phone, Search, Star, Trash2, X } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { lookupPlace } from '../lib/lookup'
 import { fileToDataUrl } from '../lib/photo'
 import { fmtMoney } from '../lib/money'
 import {
+  setPlaceMust,
   addExpense,
   addPlacePhoto,
   applyLookups,
@@ -204,7 +205,12 @@ export function PlaceSheet({
     <div className="sheet" role="dialog" aria-label={`Details for ${place.name}`}>
       <div className="sheet-head">
         <strong className="serif">Place details</strong>
-        <button onClick={onClose}><X size={16} /> Close</button>
+        <span className="head-actions">
+          <button className={'star-pill' + (place.must ? ' on' : '')} aria-pressed={!!place.must} onClick={() => setPlaceMust(place.id, !place.must)}>
+            <Star size={16} fill={place.must ? 'currentColor' : 'none'} /> Must-do
+          </button>
+          <button onClick={onClose}><X size={16} /> Close</button>
+        </span>
       </div>
       <div className="sheet-body place-sheet">
         <div className="photo-hero">

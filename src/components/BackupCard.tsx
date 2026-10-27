@@ -73,10 +73,12 @@ export function BackupCard({ trip }: { trip?: Trip }) {
 
   return (
     <>
-      <h3>Share and back up</h3>
+      {trip && <h3>Share this trip</h3>}
       <div className="card">
         <p className="muted">
-          Everything is saved only on this device. A file lets you share a trip or move your plan to another device.
+          {trip
+            ? 'Send this trip to someone as a file or a read-only link.'
+            : 'Everything is saved only on this device. A backup file lets you keep a copy or move your plans to another device.'}
         </p>
         {trip && (
           <>
@@ -115,11 +117,15 @@ export function BackupCard({ trip }: { trip?: Trip }) {
             {linkMsg && <p role="status">{linkMsg}</p>}
           </div>
         )}
-        <button className="wide" onClick={() => send(buildFullBackup(getState()), fileNameFor('backup'), 'Backup')}>
-          Back up everything
-        </button>
-        <input ref={fileInput} type="file" accept=".json,application/json" hidden onChange={(e) => onFile(e.target.files?.[0])} />
-        <button className="wide" onClick={() => fileInput.current?.click()}>Import a file…</button>
+        {!trip && (
+          <>
+            <button className="primary wide" onClick={() => send(buildFullBackup(getState()), fileNameFor('backup'), 'Backup')}>
+              Back up everything
+            </button>
+            <input ref={fileInput} type="file" accept=".json,application/json" hidden onChange={(e) => onFile(e.target.files?.[0])} />
+            <button className="wide" onClick={() => fileInput.current?.click()}>Import a file…</button>
+          </>
+        )}
         {message && <p role="status">{message}</p>}
         {error && <p className="error" role="alert">{error}</p>}
       </div>

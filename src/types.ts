@@ -147,6 +147,7 @@ export type Place = {
   sourceMap?: string // the name of the map file it was imported from
   dedupeKey: string // used so re-importing never creates duplicates
   groupId?: string
+  must?: boolean // a place you really want to do: Suggest my days schedules these first and never sets them aside
   tag?: Tag // no tag = "Untagged"
   tagSource?: 'rule' | 'user' // user choices are never overwritten by automatic tagging
 }

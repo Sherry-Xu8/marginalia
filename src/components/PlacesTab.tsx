@@ -1,4 +1,4 @@
-import { ChevronDown, Info, MapPin, MoreHorizontal, Plus } from 'lucide-react'
+import { ChevronDown, Info, MapPin, MoreHorizontal, Plus, Star } from 'lucide-react'
 import { useEffect, useMemo, useState, useSyncExternalStore } from 'react'
 import {
   applyEnglishNames,
@@ -10,6 +10,7 @@ import {
   restoreOriginalNames,
   retryNaming,
   setGroupStop,
+  setPlaceMust,
   useAppData,
 } from '../lib/store'
 import { TAG_STYLE } from '../lib/tagging'
@@ -78,6 +79,15 @@ function PlaceCard({
     <div className={'place-card' + (focused ? ' focused' : '')} id={`pc-${place.id}`}>
       <button className="place-main" onClick={onFocus} aria-label={`Show ${place.name} on the map`}>
         {body}
+      </button>
+      <button
+        className={'icon-btn star-btn' + (place.must ? ' on' : '')}
+        aria-label={place.must ? `Remove ${place.name} from must-dos` : `Mark ${place.name} as a must-do`}
+        aria-pressed={!!place.must}
+        title={place.must ? 'Must-do' : 'Mark as a must-do'}
+        onClick={() => setPlaceMust(place.id, !place.must)}
+      >
+        <Star size={19} fill={place.must ? 'currentColor' : 'none'} />
       </button>
       <button className="icon-btn" aria-label={`Details for ${place.name}`} onClick={onDetails}>
         <Info size={19} />

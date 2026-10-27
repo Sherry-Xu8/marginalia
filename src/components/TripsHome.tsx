@@ -177,7 +177,7 @@ export function TripsHome() {
           Export or restore a backup <ArrowRight size={16} />
         </a>
       </div>
-      <div id="backup"><BackupCard /></div>
+      <div id="backup"><h3>Back up and restore</h3><BackupCard /></div>
     </div>
   )
 }
