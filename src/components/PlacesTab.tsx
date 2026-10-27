@@ -1,4 +1,4 @@
-import { ChevronDown, Info, MapPin, MoreHorizontal } from 'lucide-react'
+import { ChevronDown, Info, MapPin, MoreHorizontal, Plus } from 'lucide-react'
 import { useEffect, useMemo, useState, useSyncExternalStore } from 'react'
 import {
   applyEnglishNames,
@@ -14,6 +14,7 @@ import {
 } from '../lib/store'
 import { TAG_STYLE } from '../lib/tagging'
 import type { Group, ImportSummary, Place, Stop } from '../types'
+import { AddPlaceSheet } from './AddPlaceSheet'
 import { FilterChips, tagOf } from './FilterChips'
 import { MapImport } from './MapImport'
 import { PlaceSheet } from './PlaceSheet'
@@ -175,6 +176,7 @@ export function PlacesTab({
   const [selectMode, setSelectMode] = useState(false)
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [detailsId, setDetailsId] = useState<string | null>(null)
+  const [adding, setAdding] = useState(false)
   const [focusId, setFocusId] = useState<string | undefined>()
   const [pane, setPane] = useState<'list' | 'map'>(initialPane)
   // Areas you've folded away, so you can see another one without scrolling past it.
@@ -273,7 +275,10 @@ export function PlacesTab({
           <p className="eyebrow">Places worth a pin</p>
           <h1 className="display">Your map &amp; saved places</h1>
         </div>
-        <MapImport tripId={trip.id} compact onResult={(summary, error) => setImportResult({ summary, error })} />
+        <div className="head-actions">
+          <button className="soft-btn import-top" onClick={() => setAdding(true)}><Plus size={18} /> Add a place</button>
+          <MapImport tripId={trip.id} compact onResult={(summary, error) => setImportResult({ summary, error })} />
+        </div>
       </header>
 
       {importResult && (
@@ -420,6 +425,7 @@ export function PlacesTab({
         </>
       )}
       {detailsId && <PlaceSheet placeId={detailsId} onClose={() => setDetailsId(null)} />}
+      {adding && <AddPlaceSheet trip={trip} onClose={() => setAdding(false)} onAdded={(id) => pick(id)} />}
     </div>
   )
 }
