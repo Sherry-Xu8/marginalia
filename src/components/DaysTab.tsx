@@ -16,6 +16,7 @@ import {
   MODES,
   appleMapsUrl,
   estimate,
+  defaultModeFor,
   fmtKm,
   fmtMinutes,
   getCommute,
@@ -26,7 +27,7 @@ import {
 } from '../lib/commute'
 import { fromISO, shortDate, stopLabel, stopsOn, toISO } from '../lib/days'
 import { fmtMoney } from '../lib/money'
-import { addExpense, addToDay, moveDayItem, removeDayItem, sortDayByTime, updateDayItem, useAppData } from '../lib/store'
+import { addExpense, addToDay, moveDayItem, removeDayItem, setLegMode, sortDayByTime, updateDayItem, useAppData } from '../lib/store'
 import { EXPENSE_CATEGORIES, type Day, type DayItem, type ExpenseCategory, type Place, type Stop, type Transfer, type Trip } from '../types'
 import { DayMap } from './DayMap'
 import { FilterChips, tagOf } from './FilterChips'
@@ -49,18 +50,38 @@ function ModeLine({ from, to, mode }: { from: Place; to: Place; mode: Mode }) {
   )
 }
 
-function LegRow({ from, to, mode }: { from: Place; to: Place; mode: Mode }) {
+// How you'll make one journey: your choice for this leg, or a walk for short hops and public transport otherwise.
+const legModeOf = (day: Day, from: Place, to: Place): Mode => day.legModes?.[`${from.id}>${to.id}`] ?? defaultModeFor(from, to)
+
+function LegRow({ day, from, to }: { day: Day; from: Place; to: Place }) {
   const [open, setOpen] = useState(false)
+  const mode = legModeOf(day, from, to)
   const c = useCommute(from, to, mode)
   const info = MODES.find((m) => m.id === mode)!
   if (!c) return null
   return (
     <div className="leg">
-      <button className="leg-sum" onClick={() => setOpen(!open)} aria-expanded={open}>
-        <info.Icon size={15} aria-hidden /> {fmtMinutes(c.minutes)} · {fmtKm(c.km)}
-        {c.approx && <small> approx.</small>}
-        {open ? <ChevronUp size={14} aria-hidden /> : <ChevronDown size={14} aria-hidden />}
-      </button>
+      <div className="leg-bar">
+        <div className="mode-pick" role="group" aria-label="How you'll get there">
+          {MODES.map((m) => (
+            <button
+              key={m.id}
+              className={mode === m.id ? 'on' : ''}
+              aria-pressed={mode === m.id}
+              aria-label={m.label}
+              title={m.label}
+              onClick={() => setLegMode(day.id, from.id, to.id, m.id)}
+            >
+              <m.Icon size={16} />
+            </button>
+          ))}
+        </div>
+        <button className="leg-sum" onClick={() => setOpen(!open)} aria-expanded={open}>
+          {fmtMinutes(c.minutes)} · {fmtKm(c.km)}
+          {c.approx && <small> approx.</small>}
+          {open ? <ChevronUp size={14} aria-hidden /> : <ChevronDown size={14} aria-hidden />}
+        </button>
+      </div>
       {open && (
         <div className="leg-more">
           {MODES.map((m) => (
@@ -74,37 +95,39 @@ function LegRow({ from, to, mode }: { from: Place; to: Place; mode: Mode }) {
               Open in Apple Maps
             </a>
           </div>
-          <p className="muted">Links use the “{info.label}” setting for the day.</p>
+          <p className="muted">The links use the “{info.label}” you picked for this journey.</p>
         </div>
       )}
     </div>
   )
 }
 
-function DayTravel({ points, mode }: { points: Place[]; mode: Mode }) {
-  const key = points.map((p) => p.id).join(',') + mode
+// The day's travel time: each journey counted by its own mode.
+function DayTravel({ day, points }: { day: Day; points: Place[] }) {
+  const legs = points.slice(1).map((p, i) => ({ from: points[i], to: p, mode: legModeOf(day, points[i], p) }))
+  const key = legs.map((l) => `${l.from.id}>${l.to.id}:${l.mode}`).join(',')
   const [total, setTotal] = useState<{ key: string; sum: number; approx: boolean } | null>(null)
   useEffect(() => {
     let live = true
-    Promise.all(points.slice(1).map((p, i) => getCommute(points[i], p, mode))).then((legs: Commute[]) => {
-      if (live) setTotal({ key, sum: legs.reduce((a, c) => a + c.minutes, 0), approx: legs.some((c) => c.approx) })
+    Promise.all(legs.map((l) => getCommute(l.from, l.to, l.mode))).then((results: Commute[]) => {
+      if (live) setTotal({ key, sum: results.reduce((a, c) => a + c.minutes, 0), approx: results.some((c) => c.approx) })
     })
     return () => {
       live = false
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [key])
-  if (points.length < 2) return null
-  const quick = points.slice(1).map((p, i) => estimate(points[i], p, mode))
-  const sum = total?.key === key ? total.sum : quick.reduce((a, c) => a + c.minutes, 0)
+  if (legs.length === 0) return null
+  const quick = legs.reduce((a, l) => a + estimate(l.from, l.to, l.mode).minutes, 0)
+  const sum = total?.key === key ? total.sum : quick
   const approx = total?.key === key ? total.approx : true
-  const info = MODES.find((m) => m.id === mode)!
   return (
     <div className={'travel' + (sum > LONG_TRAVEL_MINUTES ? ' warn' : '')}>
       <strong>
-        <info.Icon size={16} aria-hidden /> Travel today, including to and from where you’re staying: {fmtMinutes(sum)}
+        Travel today, including to and from where you’re staying: {fmtMinutes(sum)}
         {approx && <small> approx.</small>}
       </strong>
+      <span className="muted">Each journey uses the way you picked for it.</span>
       {sum > LONG_TRAVEL_MINUTES && <span>That’s over 2½ hours of travel — consider moving something to another day.</span>}
     </div>
   )
@@ -193,9 +216,9 @@ function QuickExpense({ place, day, currency, onDone }: { place: Place; day: Day
 }
 
 function ItemRow({
-  index, day, item, place, next, mode, currency, focused, expanded, onToggle, onOpen,
+  index, day, item, place, next, currency, focused, expanded, onToggle, onOpen,
 }: {
-  index: number; day: Day; item: DayItem; place: Place | undefined; next: Place | undefined; mode: Mode
+  index: number; day: Day; item: DayItem; place: Place | undefined; next: Place | undefined
   currency: string; focused: boolean; expanded: boolean; onToggle: () => void; onOpen: () => void
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: item.id })
@@ -277,7 +300,7 @@ function ItemRow({
           </div>
         )}
       </div>
-      {place && next && <LegRow from={place} to={next} mode={mode} />}
+      {place && next && <LegRow day={day} from={place} to={next} />}
     </div>
   )
 }
@@ -350,22 +373,6 @@ export function DaysTab({ initialDate }: { initialDate?: string }) {
   const [openItem, setOpenItem] = useState<string | null>(null)
   const [expandedId, setExpandedId] = useState<string | null>(null)
   const [transferSheet, setTransferSheet] = useState<{ transfer?: Transfer } | null>(null)
-  const [mode, setModeState] = useState<Mode>(() => {
-    try {
-      const saved = localStorage.getItem('travel-mode')
-      return saved === 'walk' || saved === 'taxi' ? saved : 'transit'
-    } catch {
-      return 'transit'
-    }
-  })
-  const setMode = (m: Mode) => {
-    setModeState(m)
-    try {
-      localStorage.setItem('travel-mode', m)
-    } catch {
-      // not saved — fine
-    }
-  }
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
@@ -515,7 +522,7 @@ export function DaysTab({ initialDate }: { initialDate?: string }) {
               <BedDouble size={16} /> Add where you’re staying in {arriving.name}
             </button>
           )}
-          {startStay && dayPlaces[0] && <LegRow from={startStay} to={dayPlaces[0]} mode={mode} />}
+          {startStay && dayPlaces[0] && <LegRow day={day} from={startStay} to={dayPlaces[0]} />}
 
           {day.items.length === 0 ? (
             <div className="card">
@@ -533,7 +540,6 @@ export function DaysTab({ initialDate }: { initialDate?: string }) {
                       item={item}
                       place={placeById.get(item.placeId)}
                       next={placeById.get(day.items[i + 1]?.placeId ?? '') ?? (i === day.items.length - 1 ? endStay : undefined)}
-                      mode={mode}
                       currency={trip.currency ?? 'USD'}
                       focused={item.placeId === focusId}
                       expanded={expandedId === item.id}
@@ -548,14 +554,7 @@ export function DaysTab({ initialDate }: { initialDate?: string }) {
                 </SortableContext>
               </DndContext>
               {endStay && <StayCard label="Back to" place={endStay} onClick={() => setFocusId(endStay.id)} />}
-              <div className="segmented" role="group" aria-label="Travel mode">
-                {MODES.map((m) => (
-                  <button key={m.id} className={mode === m.id ? 'on' : ''} onClick={() => setMode(m.id)}>
-                    <m.Icon size={16} aria-hidden /> {m.label}
-                  </button>
-                ))}
-              </div>
-              <DayTravel points={route} mode={mode} />
+              <DayTravel day={day} points={route} />
               {timed > 1 && <button className="wide" onClick={() => sortDayByTime(day.id)}>Sort by time</button>}
             </>
           )}

@@ -1,6 +1,6 @@
 import { get, set } from 'idb-keyval'
 import { useSyncExternalStore } from 'react'
-import type { AppData, ChecklistItem, Day, DayItem, Expense, Group, ImportSummary, Place, PlaceDetails, Stop, Tag, Transfer, Trip } from '../types'
+import type { AppData, ChecklistItem, Day, DayItem, Expense, Group, ImportSummary, Place, PlaceDetails, Stop, Tag, Transfer, TravelMode, Trip } from '../types'
 import { eachDate } from './days'
 import { distanceKm } from './geo'
 import { GROUP_RADIUS_KM, clusterPlaces, nextAreaName } from './grouping'
@@ -537,6 +537,14 @@ export function importTripData(d: TripData): string {
     id: newId(),
     tripId,
     items: day.items.filter((i) => placeIds.has(i.placeId)).map((i) => ({ ...i, id: newId(), placeId: fresh('place:' + i.placeId) })),
+    legModes: day.legModes
+      ? Object.fromEntries(
+          Object.entries(day.legModes).flatMap(([k, v]): [string, TravelMode][] => {
+            const [a, b] = k.split('>')
+            return placeIds.has(a) && placeIds.has(b) ? [[`${fresh('place:' + a)}>${fresh('place:' + b)}`, v]] : []
+          }),
+        )
+      : undefined,
   }))
   const expenses = d.expenses.map((e) => ({
     ...e,
@@ -709,4 +717,9 @@ export function setStopCover(tripId: string, stopId: string, coverUrl: string | 
   mapStops(tripId, (stops) =>
     stops.map((st) => (st.id === stopId ? { ...st, coverUrl: coverUrl ?? (st.coverUrl && /flag_of|coat_of_arms|emblem|locator|location_map|map_of|seal_of|logo/i.test(st.coverUrl) ? undefined : st.coverUrl), coverCheckedAt: new Date().toISOString() } : st)),
   )
+}
+
+// How you travel one journey of a day (from one place to the next).
+export function setLegMode(dayId: string, fromId: string, toId: string, mode: TravelMode) {
+  mapDay(dayId, (d) => ({ ...d, legModes: { ...(d.legModes ?? {}), [`${fromId}>${toId}`]: mode } }))
 }

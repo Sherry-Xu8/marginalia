@@ -190,7 +190,12 @@ function cleanDay(v: unknown): Day | null {
     const time = typeof io.time === 'string' && /^\d{2}:\d{2}$/.test(io.time) ? io.time : undefined
     return [{ id: iid, placeId, time, note: str(io.note, 2000) ?? '', done: io.done === true, cost: num(io.cost) ?? undefined }]
   })
-  return { id, tripId, date: d, items }
+  const legModes = Object.fromEntries(
+    Object.entries(obj(o.legModes) ?? {})
+      .slice(0, 300)
+      .filter(([k, v]) => /^[\w-]{1,100}>[\w-]{1,100}$/.test(k) && (v === 'walk' || v === 'transit' || v === 'taxi')),
+  )
+  return { id, tripId, date: d, items, legModes: Object.keys(legModes).length > 0 ? (legModes as Day['legModes']) : undefined }
 }
 
 function cleanExpense(v: unknown): Expense | null {

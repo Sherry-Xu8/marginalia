@@ -646,3 +646,11 @@ main > section > h2 { font-family: var(--serif); font-weight: 420; }
 .item-panel .chips { margin: 0; gap: 8px; }
 .item-panel .chips button { min-height: 42px; padding: 0 14px; font-size: 0.9rem; }
 .quick-panel { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--line); }
+
+/* each journey has its own way of getting there */
+.leg-bar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.mode-pick { display: inline-flex; background: var(--soft); border-radius: 14px; padding: 3px; }
+.mode-pick button { min-height: 36px; min-width: 38px; padding: 0; border-radius: 11px; background: transparent; color: var(--muted); }
+.mode-pick button.on { background: var(--accent); color: var(--accent-text); }
+.mode-pick button:hover:not(.on):not(:disabled) { background: var(--accent-soft); }
+.leg { padding-left: 28px; }

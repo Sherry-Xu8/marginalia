@@ -73,11 +73,14 @@ export type DayItem = {
 }
 
 // A day of the trip. Days are created automatically for every date of the trip.
+export type TravelMode = 'walk' | 'transit' | 'taxi'
+
 export type Day = {
   id: string
   tripId: string
   date: string // yyyy-mm-dd
   items: DayItem[] // in the order you'll visit them
+  legModes?: Record<string, TravelMode> // how you travel each journey, keyed "fromPlaceId>toPlaceId"
 }
 
 export const TAGS = [

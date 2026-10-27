@@ -172,3 +172,9 @@ export function fmtKm(km: number): string {
 }
 
 export const LONG_TRAVEL_MINUTES = 150
+
+// Until you choose, short hops are a walk and longer ones public transport.
+export const WALK_BELOW_KM = 1.2
+export function defaultModeFor(from: Point, to: Point): Mode {
+  return distanceKm(from, to) <= WALK_BELOW_KM ? 'walk' : 'transit'
+}
