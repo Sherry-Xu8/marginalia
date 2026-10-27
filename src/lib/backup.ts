@@ -201,7 +201,11 @@ function cleanExpense(v: unknown): Expense | null {
   const title = str(o?.title, 300)
   const amount = num(o?.amount)
   if (!o || !id || !tripId || !d || !title || amount === null) return null
-  return { id, tripId, date: d, title, amount, category: EXPENSE_CATEGORIES.find((c) => c === o.category) ?? 'Other' }
+  return {
+    id, tripId, date: d, title, amount,
+    category: EXPENSE_CATEGORIES.find((c) => c === o.category) ?? 'Other',
+    placeId: str(o.placeId, 100) ?? undefined,
+  }
 }
 
 function cleanTransfer(v: unknown): Transfer | null {

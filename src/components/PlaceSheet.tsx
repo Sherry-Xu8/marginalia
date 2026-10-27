@@ -4,8 +4,10 @@ import { lookupPlace } from '../lib/lookup'
 import { fileToDataUrl } from '../lib/photo'
 import { fmtMoney } from '../lib/money'
 import {
+  addExpense,
   addPlacePhoto,
   applyLookups,
+  deleteExpense,
   removeDayItem,
   removePlacePhoto,
   renamePlace,
@@ -16,10 +18,89 @@ import {
   useAppData,
 } from '../lib/store'
 import { TAGS, TAG_STYLE } from '../lib/tagging'
-import type { Day, DayItem, Place, PlaceDetails, Tag } from '../types'
+import { EXPENSE_CATEGORIES, type Day, type DayItem, type ExpenseCategory, type Place, type PlaceDetails, type Tag } from '../types'
 import { TagIcon, tagName } from './TagIcon'
 
 const enc = encodeURIComponent
+
+// A sensible starting category for an expense, from the place's own category.
+function categoryFor(tag: string | undefined): ExpenseCategory {
+  switch (tag) {
+    case 'Food & drink': return 'Food & drink'
+    case 'Accommodation': return 'Accommodation'
+    case 'Shopping': return 'Shopping'
+    case 'Transport': return 'Transport'
+    case 'Sightseeing':
+    case 'Nature & outdoors':
+    case 'Nightlife': return 'Activities'
+    default: return 'Other'
+  }
+}
+
+// Log what you spend at this place, on this day. It shows up in the Budget tab too.
+function VisitExpenses({ place, day, currency }: { place: Place; day: Day; currency: string }) {
+  const { expenses } = useAppData()
+  const mine = expenses.filter((e) => e.placeId === place.id && e.date === day.date)
+  const [amount, setAmount] = useState('')
+  const [note, setNote] = useState('')
+  const [category, setCategory] = useState<ExpenseCategory>(categoryFor(place.tag))
+  const [error, setError] = useState('')
+  const total = mine.reduce((s, e) => s + e.amount, 0)
+
+  function add() {
+    const n = parseFloat(amount)
+    if (!Number.isFinite(n) || n <= 0) return setError('Enter an amount greater than zero.')
+    addExpense({
+      tripId: place.tripId,
+      date: day.date,
+      title: note.trim() ? `${place.name}: ${note.trim()}` : place.name,
+      amount: n,
+      category,
+      placeId: place.id,
+    })
+    setAmount('')
+    setNote('')
+    setError('')
+  }
+
+  return (
+    <>
+      <h3>Expenses{total > 0 && <span className="muted"> · {fmtMoney(total, currency)} spent here</span>}</h3>
+      <div className="card form">
+        {mine.map((e) => (
+          <div key={e.id} className="check">
+            <span style={{ flex: 1 }}>
+              {e.title.startsWith(place.name + ': ') ? e.title.slice(place.name.length + 2) : 'Spent'}
+              <small className="muted"> · {e.category}</small>
+            </span>
+            <strong>{fmtMoney(e.amount, currency)}</strong>
+            <button aria-label="Delete expense" onClick={() => deleteExpense(e.id)}><X size={16} /></button>
+          </div>
+        ))}
+        <div className="row">
+          <label>
+            Amount ({currency})
+            <input inputMode="decimal" value={amount} onChange={(e) => { setAmount(e.target.value); setError('') }} onKeyDown={(e) => e.key === 'Enter' && add()} />
+          </label>
+          <label>
+            Category
+            <select value={category} onChange={(e) => setCategory(e.target.value as ExpenseCategory)}>
+              {EXPENSE_CATEGORIES.map((c) => (
+                <option key={c}>{c}</option>
+              ))}
+            </select>
+          </label>
+        </div>
+        <label>
+          What was it for? (optional)
+          <input value={note} placeholder="e.g. Bibimbap and a drink" onChange={(e) => setNote(e.target.value)} />
+        </label>
+        {error && <p className="error">{error}</p>}
+        <button className="primary wide" onClick={add}>Add expense</button>
+      </div>
+    </>
+  )
+}
 
 // Rename a place. The original name is kept so you can undo.
 function NameField({ place }: { place: Place }) {
@@ -204,6 +285,7 @@ export function PlaceSheet({
 
         {visit && live && (
           <>
+            <VisitExpenses place={place} day={visit.day} currency={trip?.currency ?? 'USD'} />
             <h3>This visit</h3>
             <div className="card form">
               <label>

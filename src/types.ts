@@ -59,6 +59,7 @@ export type Expense = {
   title: string
   amount: number
   category: ExpenseCategory
+  placeId?: string // set when you logged it from a place on your itinerary
 }
 
 // One planned visit in a day.

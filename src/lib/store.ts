@@ -538,7 +538,12 @@ export function importTripData(d: TripData): string {
     tripId,
     items: day.items.filter((i) => placeIds.has(i.placeId)).map((i) => ({ ...i, id: newId(), placeId: fresh('place:' + i.placeId) })),
   }))
-  const expenses = d.expenses.map((e) => ({ ...e, id: newId(), tripId }))
+  const expenses = d.expenses.map((e) => ({
+    ...e,
+    id: newId(),
+    tripId,
+    placeId: e.placeId && placeIds.has(e.placeId) ? fresh('place:' + e.placeId) : undefined,
+  }))
   const transfers = d.transfers.map((t) => ({ ...t, id: newId(), tripId }))
   update((s) =>
     syncDays(
