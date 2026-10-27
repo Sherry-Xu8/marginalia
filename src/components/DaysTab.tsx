@@ -10,13 +10,100 @@ import {
 import { SortableContext, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 import { useEffect, useMemo, useState } from 'react'
+import {
+  LONG_TRAVEL_MINUTES,
+  MODES,
+  appleMapsUrl,
+  estimate,
+  fmtKm,
+  fmtMinutes,
+  getCommute,
+  googleMapsUrl,
+  useCommute,
+  type Commute,
+  type Mode,
+} from '../lib/commute'
 import { fromISO, shortDate, stopLabel, stopsOn, toISO } from '../lib/days'
 import { addToDay, moveDayItem, removeDayItem, sortDayByTime, updateDayItem, useAppData } from '../lib/store'
 import { TAG_STYLE } from '../lib/tagging'
 import type { Day, DayItem, Place, Trip } from '../types'
 import { FilterChips, tagOf } from './FilterChips'
 
-function ItemRow({ day, item, place }: { day: Day; item: DayItem; place: Place | undefined }) {
+// ---- Travel between places ----
+
+function ModeLine({ from, to, mode }: { from: Place; to: Place; mode: Mode }) {
+  const c = useCommute(from, to, mode)
+  const info = MODES.find((m) => m.id === mode)!
+  return (
+    <p className="mode-line">
+      {info.emoji} {info.label}: {c && `${fmtMinutes(c.minutes)} · ${fmtKm(c.km)}`}
+      {c?.approx && <small className="muted"> approx.</small>}
+    </p>
+  )
+}
+
+function LegRow({ from, to, mode }: { from: Place; to: Place; mode: Mode }) {
+  const [open, setOpen] = useState(false)
+  const c = useCommute(from, to, mode)
+  const info = MODES.find((m) => m.id === mode)!
+  if (!c) return null
+  return (
+    <div className="leg">
+      <button className="leg-sum" onClick={() => setOpen(!open)} aria-expanded={open}>
+        ↓ {info.emoji} {fmtMinutes(c.minutes)} · {fmtKm(c.km)}
+        {c.approx && <small> approx.</small>}
+        <span aria-hidden>{open ? '▴' : '▾'}</span>
+      </button>
+      {open && (
+        <div className="leg-more">
+          {MODES.map((m) => (
+            <ModeLine key={m.id} from={from} to={to} mode={m.id} />
+          ))}
+          <div className="row buttons">
+            <a className="btn" href={googleMapsUrl(from, to, mode)} target="_blank" rel="noopener noreferrer">
+              Open in Google Maps
+            </a>
+            <a className="btn" href={appleMapsUrl(from, to, mode)} target="_blank" rel="noopener noreferrer">
+              Open in Apple Maps
+            </a>
+          </div>
+          <p className="muted">Links use the “{info.label}” setting for the day.</p>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function DayTravel({ places, mode }: { places: Place[]; mode: Mode }) {
+  const key = places.map((p) => p.id).join(',') + mode
+  const [total, setTotal] = useState<{ key: string; sum: number; approx: boolean } | null>(null)
+  useEffect(() => {
+    let live = true
+    Promise.all(places.slice(1).map((p, i) => getCommute(places[i], p, mode))).then((legs: Commute[]) => {
+      if (live) setTotal({ key, sum: legs.reduce((a, c) => a + c.minutes, 0), approx: legs.some((c) => c.approx) })
+    })
+    return () => {
+      live = false
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [key])
+  if (places.length < 2) return null
+  const quick = places.slice(1).map((p, i) => estimate(places[i], p, mode))
+  const sum = total?.key === key ? total.sum : quick.reduce((a, c) => a + c.minutes, 0)
+  const approx = total?.key === key ? total.approx : true
+  const info = MODES.find((m) => m.id === mode)!
+  return (
+    <div className={'travel' + (sum > LONG_TRAVEL_MINUTES ? ' warn' : '')}>
+      <strong>
+        {info.emoji} Travel between places: {fmtMinutes(sum)}
+        {approx && <small> approx.</small>}
+      </strong>
+      {sum > LONG_TRAVEL_MINUTES && <span>⚠️ That’s over 2½ hours of travel — consider moving something to another day.</span>}
+    </div>
+  )
+}
+
+function ItemRow({ day, item, place, next, mode }: { day: Day; item: DayItem; place: Place | undefined; next: Place | undefined; mode: Mode }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: item.id })
   const [open, setOpen] = useState(false)
   const style = { transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.6 : 1 }
@@ -55,6 +142,7 @@ function ItemRow({ day, item, place }: { day: Day; item: DayItem; place: Place |
           <button className="danger" onClick={() => removeDayItem(day.id, item.id)}>Remove from this day</button>
         </div>
       )}
+      {place && next && <LegRow from={place} to={next} mode={mode} />}
     </div>
   )
 }
@@ -116,6 +204,22 @@ export function DaysTab() {
   )
   const [selected, setSelected] = useState('')
   const [picking, setPicking] = useState(false)
+  const [mode, setModeState] = useState<Mode>(() => {
+    try {
+      const saved = localStorage.getItem('travel-mode')
+      return saved === 'walk' || saved === 'taxi' ? saved : 'transit'
+    } catch {
+      return 'transit'
+    }
+  })
+  const setMode = (m: Mode) => {
+    setModeState(m)
+    try {
+      localStorage.setItem('travel-mode', m)
+    } catch {
+      // not saved — fine
+    }
+  }
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
@@ -179,11 +283,26 @@ export function DaysTab() {
           <p className="muted">{done} of {day.items.length} done · drag ⠿ to reorder · tap a place for time and notes</p>
           <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
             <SortableContext items={day.items.map((i) => i.id)} strategy={verticalListSortingStrategy}>
-              {day.items.map((item) => (
-                <ItemRow key={item.id} day={day} item={item} place={placeById.get(item.placeId)} />
+              {day.items.map((item, i) => (
+                <ItemRow
+                  key={item.id}
+                  day={day}
+                  item={item}
+                  place={placeById.get(item.placeId)}
+                  next={placeById.get(day.items[i + 1]?.placeId ?? '')}
+                  mode={mode}
+                />
               ))}
             </SortableContext>
           </DndContext>
+          <div className="segmented" role="group" aria-label="Travel mode">
+            {MODES.map((m) => (
+              <button key={m.id} className={mode === m.id ? 'on' : ''} onClick={() => setMode(m.id)}>
+                {m.emoji} {m.label}
+              </button>
+            ))}
+          </div>
+          <DayTravel places={day.items.map((i) => placeById.get(i.placeId)).filter((p): p is Place => !!p)} mode={mode} />
           {timed > 1 && <button className="wide" onClick={() => sortDayByTime(day.id)}>Sort by time</button>}
         </>
       )}

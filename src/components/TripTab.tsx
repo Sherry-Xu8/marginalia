@@ -13,6 +13,7 @@ import {
 import { daysUntil } from '../lib/days'
 import type { Stop, Trip } from '../types'
 import { Checklist } from './Checklist'
+import { SuggestSheet } from './SuggestSheet'
 
 function fmt(date: string): string {
   if (!date) return '—'
@@ -74,6 +75,7 @@ function StopCard({ trip, stop, index }: { trip: Trip; stop: Stop; index: number
   const { groups } = useAppData()
   const areas = groups.filter((g) => g.stopId === stop.id).map((g) => g.name)
   const [editing, setEditing] = useState(false)
+  const [suggesting, setSuggesting] = useState(false)
   if (editing) {
     return (
       <NameDatesForm
@@ -98,6 +100,8 @@ function StopCard({ trip, stop, index }: { trip: Trip; stop: Stop; index: number
         <span className="muted">{fmt(stop.arrival)} → {fmt(stop.departure)}</span>
         {areas.length > 0 && <span className="muted">Places from: {areas.join(', ')}</span>}
       </div>
+      <button className="primary wide" onClick={() => setSuggesting(true)}>Suggest my days</button>
+      {suggesting && <SuggestSheet trip={trip} stop={stop} onClose={() => setSuggesting(false)} />}
       <div className="row buttons">
         <button aria-label="Move up" disabled={index === 0} onClick={() => moveStop(trip.id, stop.id, -1)}>↑</button>
         <button aria-label="Move down" disabled={last} onClick={() => moveStop(trip.id, stop.id, 1)}>↓</button>

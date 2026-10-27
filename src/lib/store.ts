@@ -414,3 +414,19 @@ export function toggleCheckItem(tripId: string, itemId: string) {
 export function removeCheckItem(tripId: string, itemId: string) {
   mapChecklist(tripId, (items) => items.filter((i) => i.id !== itemId))
 }
+
+// Saves an accepted suggestion: each listed day gets exactly these places, in this order.
+export function applySuggestion(plan: { dayId: string; placeIds: string[] }[]) {
+  const byDay = new Map(plan.map((p) => [p.dayId, p.placeIds]))
+  update((s) => ({
+    ...s,
+    days: s.days.map((d) =>
+      byDay.has(d.id)
+        ? {
+            ...d,
+            items: byDay.get(d.id)!.map((placeId) => ({ id: newId(), placeId, note: '', done: false })),
+          }
+        : d,
+    ),
+  }))
+}

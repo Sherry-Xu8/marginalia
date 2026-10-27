@@ -140,3 +140,22 @@ details.place select { margin-top: 4px; }
 
 .popup { min-width: 180px; }
 .popup select, .popup button { width: 100%; margin-top: 8px; min-height: 44px; }
+
+/* Stage 4 */
+.tag-grid.three { grid-template-columns: repeat(3, 1fr); }
+.tag-grid.three .chip { flex-direction: column; justify-content: center; min-height: 64px; border-radius: 12px; }
+label.inline { display: flex; align-items: center; gap: 12px; margin: 8px 0 0; color: var(--text); font-size: 0.95rem; }
+label.inline input { width: 24px; min-height: 24px; flex: none; }
+
+/* Stage 5: travel */
+.item { grid-template-rows: auto; }
+.leg { grid-column: 1 / -1; border-top: 1px dashed var(--line); padding: 0 8px; }
+.leg-sum { width: 100%; border: 0; background: none; text-align: left; display: flex; gap: 6px; align-items: center; color: var(--muted); font-size: 0.92rem; }
+.leg-sum span { margin-left: auto; }
+.leg-more { padding-bottom: 10px; }
+.mode-line { margin: 6px 0; }
+a.btn { display: inline-flex; align-items: center; min-height: 48px; padding: 0 16px; border: 1px solid var(--line); border-radius: 12px; color: var(--text); background: var(--card); text-decoration: none; }
+.travel { margin: 10px 0; padding: 12px; border-radius: 12px; background: var(--card); border: 1px solid var(--line); display: flex; flex-direction: column; gap: 4px; }
+.travel.warn { border-color: var(--danger); }
+.travel.warn span { color: var(--danger); }
+.segmented button { font-size: 0.85rem; padding: 0 6px; }
