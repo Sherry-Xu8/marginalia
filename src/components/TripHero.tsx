@@ -1,5 +1,5 @@
 import { Pencil } from 'lucide-react'
-import { useState } from 'react'
+import { Fragment, useState } from 'react'
 import { daysUntil } from '../lib/days'
 import { updateTrip } from '../lib/store'
 import type { Trip } from '../types'
@@ -39,7 +39,15 @@ export function TripHero({ trip }: { trip: Trip }) {
       <div className="hero-deco" aria-hidden />
       <div className="hero-text">
         <p className="eyebrow">{kicker}</p>
-        <h1 className="display">{trip.name}</h1>
+        <h1 className="display">
+          {/* a slash is a good place to wrap: "Singapore/" then "Malaysia" */}
+          {trip.name.split('/').map((part, i, all) => (
+            <Fragment key={i}>
+              {part}
+              {i < all.length - 1 && <>/<wbr /></>}
+            </Fragment>
+          ))}
+        </h1>
         <p className="lede small">{long(trip.startDate)} — {longYear(trip.endDate)}</p>
       </div>
       <div className="hero-count">
