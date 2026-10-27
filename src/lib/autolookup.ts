@@ -1,6 +1,6 @@
 import { useSyncExternalStore } from 'react'
 import { POOR_IMAGE, cityImage, lookupMany } from './lookup'
-import { applyLookups, getState, setStopCover } from './store'
+import { applyLookups, getState, setStopCover, setTripCover } from './store'
 import type { Place } from '../types'
 
 // Fetches photos, descriptions and opening hours for your places in the background, a few at a
@@ -54,6 +54,14 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
 // A photo of each city for the stop cards.
 async function findCovers() {
   for (const trip of getState().trips) {
+    // A trip with no stops (just "Lisbon") gets a photo from its own name.
+    if (trip.stops.length === 0) {
+      const checked = trip.coverCheckedAt ? Date.now() - new Date(trip.coverCheckedAt).getTime() : Infinity
+      if (!(trip.coverUrl && !POOR_IMAGE.test(trip.coverUrl)) && !(!trip.coverUrl && checked < 7 * DAY)) {
+        const url = await cityImage(trip.name)
+        if (url !== undefined) setTripCover(trip.id, url ?? undefined)
+      }
+    }
     for (const stop of trip.stops) {
       const checked = stop.coverCheckedAt ? Date.now() - new Date(stop.coverCheckedAt).getTime() : Infinity
       // A cover that is only a flag or emblem is replaced with a real photo.

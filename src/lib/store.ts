@@ -827,6 +827,10 @@ export function setStopCover(tripId: string, stopId: string, coverUrl: string | 
   )
 }
 
+export function setTripCover(tripId: string, coverUrl: string | undefined) {
+  mapTrip(tripId, (t) => ({ ...t, coverUrl: coverUrl ?? t.coverUrl, coverCheckedAt: new Date().toISOString() }))
+}
+
 // How you travel one journey of a day (from one place to the next).
 export function setLegMode(dayId: string, fromId: string, toId: string, mode: TravelMode) {
   mapDay(dayId, (d) => ({ ...d, legModes: { ...(d.legModes ?? {}), [`${fromId}>${toId}`]: mode } }))

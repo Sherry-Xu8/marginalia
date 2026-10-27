@@ -134,6 +134,7 @@ function cleanTrip(v: unknown): Trip | null {
   })
   return {
     id, name, startDate, endDate, stops, stays, notes, checklist,
+    coverUrl: url(o.coverUrl),
     budget: num(o.budget) ?? undefined,
     currency: str(o.currency, 4) ?? undefined,
     foodPerDay: num(o.foodPerDay) !== null && num(o.foodPerDay)! >= 0 ? num(o.foodPerDay)! : undefined,

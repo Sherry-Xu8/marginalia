@@ -55,6 +55,8 @@ export type Trip = {
   name: string
   startDate: string
   endDate: string
+  coverUrl?: string // a photo of the place, used when the trip has no stops (e.g. a trip called "Lisbon")
+  coverCheckedAt?: string
   stops: Stop[]
   stays?: Stay[]
   notes?: Note[]

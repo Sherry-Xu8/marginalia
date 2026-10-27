@@ -79,7 +79,7 @@ export default function App() {
     const again = () => void runAutoLookup()
     window.addEventListener('online', again)
     return () => window.removeEventListener('online', again)
-  }, [places.length, trips.reduce((n, t) => n + t.stops.length, 0)])
+  }, [places.length, trips.length, trips.reduce((n, t) => n + t.stops.length, 0)])
 
   // The rest of the app reads "the active trip"; keep it in step with the address.
   useEffect(() => {

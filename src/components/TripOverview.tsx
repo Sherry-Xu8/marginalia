@@ -237,7 +237,10 @@ export function TripOverview({ trip }: { trip: Trip }) {
               <span className="empty-icon"><Route size={30} /></span>
               <h3 className="display">A journey takes shape one stop at a time.</h3>
               <p className="muted">Add the cities you have in mind. You can adjust their order and dates whenever plans shift.</p>
-              <button className="soft-btn" onClick={() => setAddingStop(true)}><Plus size={18} /> Add your first stop</button>
+              <button className="soft-btn" onClick={() => addStop(trip.id, { name: trip.name, arrival: trip.startDate, departure: trip.endDate })}>
+                <Plus size={18} /> Use “{trip.name}” as the only stop
+              </button>
+              <button className="soft-btn" onClick={() => setAddingStop(true)}><Plus size={18} /> Add a different stop</button>
             </div>
           ) : (
             <div className="stop-list">

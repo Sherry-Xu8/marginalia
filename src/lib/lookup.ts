@@ -206,7 +206,8 @@ export const POOR_IMAGE = /flag_of|coat_of_arms|emblem|locator|location_map|map_
 // name, then each part. If the main picture is just a flag, the "Tourism in …" article is tried.
 // Returns undefined if Wikipedia couldn't be reached (try again later), null if there's no photo.
 export async function cityImage(name: string): Promise<string | null | undefined> {
-  const candidates = [name, ...name.split(/[/,&]| and /i)].map((n) => n.trim()).filter((n, i, all) => n && all.indexOf(n) === i)
+  const titled = (n: string) => n.trim().replace(/\b\p{L}/gu, (c) => c.toUpperCase()) // Wikipedia titles are case-sensitive: "china" → "China"
+  const candidates = [name, ...name.split(/[/,&]| and /i)].map(titled).filter((n, i, all) => n && all.indexOf(n) === i)
   let answered = false
   const thumb = async (title: string): Promise<string | null> => {
     const w = await getJson<{ type?: string; thumbnail?: { source?: string } }>(

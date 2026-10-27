@@ -24,6 +24,7 @@ function tripPhotos(trip: Trip, places: Place[]): string[] {
     if (u && !out.includes(u)) out.push(u)
   }
   for (const s of trip.stops) add(s.coverUrl)
+  add(trip.coverUrl)
   const mine = places.filter((p) => p.tripId === trip.id)
   for (const p of mine) add(p.photos?.[0])
   for (const p of mine) add(p.details?.imageUrl)
@@ -119,7 +120,7 @@ function TripCard({ trip }: { trip: Trip }) {
         </p>
         <div className="trip-stats">
           <div><strong>{days}</strong><span>days</span></div>
-          <div><strong>{trip.stops.length}</strong><span>stops</span></div>
+          {trip.stops.length > 0 && <div><strong>{trip.stops.length}</strong><span>stops</span></div>}
           <div><strong>{placeCount}</strong><span>saved places</span></div>
         </div>
       </div>
