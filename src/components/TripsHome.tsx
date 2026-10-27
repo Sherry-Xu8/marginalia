@@ -84,6 +84,7 @@ function TripCard({ trip }: { trip: Trip }) {
 
   return (
     <article className="card tcard">
+      <a className="tcard-link" href={`#/trip/${trip.id}/overview`} aria-label={`Open ${trip.name}`} />
       <div className="tcard-photos">
         <Collage trip={trip} photos={photos} status={when(trip.startDate, trip.endDate)} />
       </div>
@@ -121,9 +122,6 @@ function TripCard({ trip }: { trip: Trip }) {
           <div><strong>{trip.stops.length}</strong><span>stops</span></div>
           <div><strong>{placeCount}</strong><span>saved places</span></div>
         </div>
-        <a className="open-btn" href={`#/trip/${trip.id}/overview`}>
-          Open trip <ArrowRight size={18} />
-        </a>
       </div>
     </article>
   )
