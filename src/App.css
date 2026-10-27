@@ -614,3 +614,4 @@ main > section > h2 { font-family: var(--serif); font-weight: 420; }
 .remove-all { color: var(--danger); margin: 12px 0 40px; }
 .places-page .page-head { flex-wrap: wrap; align-items: flex-end; }
 .segmented button, .import-top { white-space: nowrap; }
+.layer-select { width: auto; min-width: 150px; min-height: 52px; border-radius: 18px; }

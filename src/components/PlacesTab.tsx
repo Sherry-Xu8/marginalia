@@ -161,7 +161,7 @@ export function PlacesTab({
   const trip = trips.find((t) => t.id === activeTripId)
   const narrow = useNarrow()
   const [query, setQuery] = useState('')
-  const [view, setView] = useState<'location' | 'layer'>('location')
+  const [layerFilter, setLayerFilter] = useState('all') // only offered when the map has several named layers
   const [quickTag, setQuickTag] = useState(false)
   const [selectMode, setSelectMode] = useState(false)
   const [selected, setSelected] = useState<Set<string>>(new Set())
@@ -180,15 +180,13 @@ export function PlacesTab({
     return mine.filter(
       (p) =>
         (tagFilter.length === 0 || tagFilter.includes(tagOf(p))) &&
+        (layerFilter === 'all' || p.layer === layerFilter) &&
         (!q || (p.name + ' ' + p.description + ' ' + p.layer).toLowerCase().includes(q)),
     )
-  }, [mine, query, tagFilter])
+  }, [mine, query, tagFilter, layerFilter])
 
-  const byLayer = useMemo(() => {
-    const m = new Map<string, Place[]>()
-    for (const p of shown) m.set(p.layer, [...(m.get(p.layer) ?? []), p])
-    return m
-  }, [shown])
+  // Layers from Google My Maps: only worth showing if the map actually has more than one.
+  const layerNames = useMemo(() => [...new Set(mine.map((p) => p.layer))].filter(Boolean), [mine])
 
   // Keep the picked place in view in the list.
   useEffect(() => {
@@ -280,10 +278,14 @@ export function PlacesTab({
         <>
           <div className="places-toolbar">
             <input type="search" placeholder="Search saved places" value={query} onChange={(e) => setQuery(e.target.value)} aria-label="Search places" />
-            <div className="segmented" role="group" aria-label="Group places by">
-              <button className={view === 'location' ? 'on' : ''} onClick={() => setView('location')}>By area</button>
-              <button className={view === 'layer' ? 'on' : ''} onClick={() => { setView('layer'); stopSelecting() }}>By layer</button>
-            </div>
+            {layerNames.length > 1 && (
+              <select aria-label="Filter by map layer" value={layerFilter} onChange={(e) => setLayerFilter(e.target.value)} className="layer-select">
+                <option value="all">All layers</option>
+                {layerNames.map((l) => (
+                  <option key={l} value={l}>{l}</option>
+                ))}
+              </select>
+            )}
           </div>
           <FilterChips places={mine} value={tagFilter} onChange={setTagFilter} />
 
@@ -310,14 +312,11 @@ export function PlacesTab({
                 {shown.length} of {mine.length} places
                 {waitingForNames && ' · looking up area names…'}
               </p>
-              {view === 'location' && (
-                <button className="soft-btn move-btn" onClick={() => (selectMode ? stopSelecting() : setSelectMode(true))}>
-                  {selectMode ? 'Cancel moving' : 'Move or split places'}
-                </button>
-              )}
+              <button className="soft-btn move-btn" onClick={() => (selectMode ? stopSelecting() : setSelectMode(true))}>
+                {selectMode ? 'Cancel moving' : 'Move or split places'}
+              </button>
 
-              {view === 'location' &&
-                myGroups.map((g) => {
+              {myGroups.map((g) => {
                   const inGroup = shown.filter((p) => p.groupId === g.id)
                   if (inGroup.length === 0 && (tagFilter.length > 0 || query)) return null
                   return (
@@ -332,18 +331,7 @@ export function PlacesTab({
                       {inGroup.map(card)}
                     </GroupSection>
                   )
-                })}
-
-              {view === 'layer' &&
-                [...byLayer].map(([layer, items]) => (
-                  <section key={layer} className="group">
-                    <header className="group-head">
-                      <h2 className="display">{layer}</h2>
-                      <span className="tag-pill">{items.length} places</span>
-                    </header>
-                    <div className="place-grid">{items.map(card)}</div>
-                  </section>
-                ))}
+              })}
 
               <button
                 className="link-btn remove-all"

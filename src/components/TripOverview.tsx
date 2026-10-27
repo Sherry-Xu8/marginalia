@@ -114,7 +114,7 @@ function AutoLookupToggle() {
 }
 
 export function TripOverview({ trip }: { trip: Trip }) {
-  const { days, places, expenses } = useAppData()
+  const { days, places, expenses, groups } = useAppData()
   const [addingStop, setAddingStop] = useState(false)
   const [journey, setJourney] = useState<{ transfer?: Transfer } | null>(null)
   const tripTransfers = useAppData()
@@ -132,11 +132,16 @@ export function TripOverview({ trip }: { trip: Trip }) {
   const placeById = new Map(mine.map((p) => [p.id, p]))
   const dayNumber = next ? tripDays.indexOf(next) + 1 : 0
 
-  const layers = useMemo(() => {
-    const m = new Map<string, number>()
-    for (const p of mine) m.set(p.layer, (m.get(p.layer) ?? 0) + 1)
-    return [...m].sort((a, b) => b[1] - a[1])
-  }, [mine])
+  // Your places grouped by city/area, biggest first.
+  const areas = useMemo(
+    () =>
+      groups
+        .filter((g) => g.tripId === trip.id)
+        .map((g) => ({ g, n: mine.filter((p) => p.groupId === g.id).length }))
+        .filter((x) => x.n > 0)
+        .sort((a, b) => b.n - a.n),
+    [groups, mine, trip.id],
+  )
 
   const spent = expenses.filter((e) => e.tripId === trip.id).reduce((s, e) => s + e.amount, 0)
   const done = trip.checklist.filter((c) => c.done).length
@@ -189,16 +194,16 @@ export function TripOverview({ trip }: { trip: Trip }) {
         <aside className="stack">
           <section className="card panel">
             <header className="panel-head">
-              <h2 className="display">Places by layer</h2>
+              <h2 className="display">Places by area</h2>
               <a className="link" href={`#/trip/${trip.id}/map`}>View map <ArrowRight size={16} /></a>
             </header>
-            {layers.length === 0 ? (
-              <p className="note">Import a map to bring your saved places and layers into this trip.</p>
+            {areas.length === 0 ? (
+              <p className="note">Import a map and your places will be grouped by city here.</p>
             ) : (
               <div className="layer-list">
-                {layers.map(([name, n]) => (
-                  <a key={name} href={`#/trip/${trip.id}/places`} className="layer-row">
-                    <span>{name}</span>
+                {areas.map(({ g, n }) => (
+                  <a key={g.id} href={`#/trip/${trip.id}/places`} className="layer-row">
+                    <span>{g.name}</span>
                     <strong>{n}</strong>
                   </a>
                 ))}

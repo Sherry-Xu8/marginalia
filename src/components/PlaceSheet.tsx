@@ -155,7 +155,7 @@ export function PlaceSheet({
         {status && <p className="muted" role="status">{status}</p>}
 
         <h2 className="place-title">{place.name}</h2>
-        <p className="muted">{tag}{area ? ` · ${area}` : ''}{d.cuisine ? ` · ${d.cuisine}` : ''}</p>
+        <p className="muted">{tag}{area ? ` · ${area}` : ''}{d.cuisine ? ` · ${d.cuisine}` : ''}{place.layer && !/^untitled layer$/i.test(place.layer) && place.layer !== 'Added by you' ? ` · Layer: ${place.layer}` : ''}</p>
         {place.description && <p className="desc">{place.description}</p>}
         {d.summary && <p>{d.summary}</p>}
         {d.hours && <p><strong>Opening hours</strong><br />{d.hours}</p>}
