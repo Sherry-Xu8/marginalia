@@ -710,3 +710,28 @@ h3 { font-size: 1.05rem; margin: 22px 0 8px; }
 .fx { display: block; color: var(--muted); font-weight: 500; font-size: 0.75rem; margin-top: 1px; }
 .amt { text-align: right; display: flex; flex-direction: column; align-items: flex-end; }
 .fx-toggle { align-self: flex-end; min-height: 42px; margin-bottom: 12px; white-space: nowrap; }
+
+/* simpler overview */
+.overview-grid.single { grid-template-columns: minmax(0, 1fr); }
+@media (min-width: 900px) {
+  .overview-grid.single .stop-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 16px; align-items: start; }
+}
+.summary { padding: 14px 18px; }
+.summary strong { font-size: 1.3rem; }
+.stack .summary { margin: 0; }
+.fold { background: var(--card); border: 1px solid var(--line); border-radius: 24px; margin: 14px 0; overflow: hidden; }
+.fold-head { width: 100%; display: flex; align-items: center; gap: 10px; background: transparent; border: 0; border-radius: 0; padding: 0 20px; min-height: 60px; text-align: left; color: var(--text); font-weight: 600; }
+.fold-head:hover:not(:disabled) { background: var(--soft); }
+.fold-title { flex: 1; font-size: 1.05rem; }
+.fold-head .chev { color: var(--muted); transition: transform 0.18s; }
+.fold.open .fold-head .chev { transform: rotate(180deg); }
+.fold-body { padding: 4px 20px 20px; }
+.fold-body > h3:first-child { display: none; }
+.fold-body .card { box-shadow: none; }
+@media (max-width: 759px) {
+  .grid.two > .stack { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+  .grid.two > .stack .summary { padding: 12px 12px; border-radius: 20px; }
+  .grid.two > .stack .summary strong { font-size: 1.05rem; line-height: 1.2; word-break: break-word; }
+  .grid.two > .stack .summary small { display: block; }
+  .grid.two > .stack .summary .eyebrow { font-size: 0.62rem; letter-spacing: 0.1em; }
+}

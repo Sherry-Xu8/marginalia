@@ -1,4 +1,4 @@
-import { ArrowDown, ArrowRight, ArrowUp, BedDouble, MapPin, Pencil, Plus, Route, Sparkles } from 'lucide-react'
+import { ArrowDown, ArrowRight, ArrowUp, BedDouble, ChevronDown, Pencil, Plus, Route, Sparkles } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { shortDate, toISO } from '../lib/days'
 import { stopDays } from '../lib/itinerary'
@@ -10,7 +10,6 @@ import { BackupCard } from './BackupCard'
 import { isAutoLookupOn, setAutoLookup } from '../lib/autolookup'
 import { getFlightService, setFlightService } from '../lib/flights'
 import { Checklist } from './Checklist'
-import { MapImport } from './MapImport'
 import { StaySheet } from './StaySheet'
 import { SuggestSheet } from './SuggestSheet'
 import { KIND_INFO, TransferSheet } from './TransferSheet'
@@ -123,6 +122,20 @@ function FlightServiceSetting() {
   )
 }
 
+// A tidy row that opens to show more, so the page stays short.
+function Fold({ id, title, badge, open, onToggle, children }: { id: string; title: string; badge?: string; open: boolean; onToggle: () => void; children: React.ReactNode }) {
+  return (
+    <section className={'fold' + (open ? ' open' : '')} id={id}>
+      <button className="fold-head" aria-expanded={open} onClick={onToggle}>
+        <span className="fold-title">{title}</span>
+        {badge && <span className="tag-pill">{badge}</span>}
+        <ChevronDown size={20} className="chev" aria-hidden />
+      </button>
+      {open && <div className="fold-body">{children}</div>}
+    </section>
+  )
+}
+
 function AutoLookupToggle() {
   const [on, setOn] = useState(isAutoLookupOn)
   return (
@@ -139,8 +152,15 @@ function AutoLookupToggle() {
 }
 
 export function TripOverview({ trip }: { trip: Trip }) {
-  const { days, places, expenses, groups } = useAppData()
+  const { days, places, expenses } = useAppData()
   const [addingStop, setAddingStop] = useState(false)
+  const [openFolds, setOpenFolds] = useState<Set<string>>(new Set())
+  const toggleFold = (id: string) =>
+    setOpenFolds((cur) => {
+      const next = new Set(cur)
+      if (!next.delete(id)) next.add(id)
+      return next
+    })
   const [journey, setJourney] = useState<{ transfer?: Transfer } | null>(null)
   const tripTransfers = useAppData()
     .transfers.filter((t) => t.tripId === trip.id)
@@ -157,23 +177,12 @@ export function TripOverview({ trip }: { trip: Trip }) {
   const placeById = new Map(mine.map((p) => [p.id, p]))
   const dayNumber = next ? tripDays.indexOf(next) + 1 : 0
 
-  // Your places grouped by city/area, biggest first.
-  const areas = useMemo(
-    () =>
-      groups
-        .filter((g) => g.tripId === trip.id)
-        .map((g) => ({ g, n: mine.filter((p) => p.groupId === g.id).length }))
-        .filter((x) => x.n > 0)
-        .sort((a, b) => b.n - a.n),
-    [groups, mine, trip.id],
-  )
-
   const spent = expenses.filter((e) => e.tripId === trip.id).reduce((s, e) => s + e.amount, 0)
   const done = trip.checklist.filter((c) => c.done).length
 
   return (
     <div className="page">
-      <div className="overview-grid">
+      <div className="overview-grid single">
         <section className="card panel">
           <header className="panel-head">
             <div>
@@ -216,32 +225,6 @@ export function TripOverview({ trip }: { trip: Trip }) {
           )}
         </section>
 
-        <aside className="stack">
-          <section className="card panel">
-            <header className="panel-head">
-              <h2 className="display">Places by area</h2>
-              <a className="link" href={`#/trip/${trip.id}/map`}>View map <ArrowRight size={16} /></a>
-            </header>
-            {areas.length === 0 ? (
-              <p className="note">Import a map and your places will be grouped by city here.</p>
-            ) : (
-              <div className="layer-list">
-                {areas.map(({ g, n }) => (
-                  <a key={g.id} href={`#/trip/${trip.id}/places`} className="layer-row">
-                    <span>{g.name}</span>
-                    <strong>{n}</strong>
-                  </a>
-                ))}
-              </div>
-            )}
-            <hr />
-            <header className="panel-head">
-              <h2 className="display">Map import</h2>
-              <MapPin size={20} aria-hidden />
-            </header>
-            <MapImport tripId={trip.id} />
-          </section>
-        </aside>
       </div>
 
       <div className="grid two">
@@ -277,7 +260,11 @@ export function TripOverview({ trip }: { trip: Trip }) {
               {trip.budget !== undefined && <small className="muted"> of {fmtMoney(trip.budget, trip.currency)}</small>}
             </strong>
           </a>
-          <a className="card summary" href="#checklists" onClick={(e) => { e.preventDefault(); document.getElementById('checklists')?.scrollIntoView({ behavior: 'smooth' }) }}>
+          <a className="card summary" href="#checklists" onClick={(e) => {
+            e.preventDefault()
+            setOpenFolds((cur) => new Set(cur).add('checklists'))
+            setTimeout(() => document.getElementById('checklists')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50)
+          }}>
             <span className="eyebrow">Checklists</span>
             <strong className="display">{done}<small className="muted"> of {trip.checklist.length} done</small></strong>
           </a>
@@ -288,8 +275,7 @@ export function TripOverview({ trip }: { trip: Trip }) {
         </div>
       </div>
 
-      <h3 className="section-title">Flights and transport</h3>
-      <div className="card">
+      <Fold id="transport" title="Flights and transport" badge={String(tripTransfers.length)} open={openFolds.has('transport')} onToggle={() => toggleFold('transport')}>
         {tripTransfers.length === 0 && <p className="muted">Add flights, trains and other journeys, especially between cities.</p>}
         {tripTransfers.map((t) => {
           const { Icon } = KIND_INFO[t.kind]
@@ -306,28 +292,32 @@ export function TripOverview({ trip }: { trip: Trip }) {
           )
         })}
         <button className="soft-btn" onClick={() => setJourney({})}><Plus size={16} /> Add a journey</button>
-      </div>
+      </Fold>
       {journey && <TransferSheet trip={trip} date={trip.startDate} transfer={journey.transfer} onClose={() => setJourney(null)} />}
 
-      <div id="checklists"><Checklist trip={trip} /></div>
-      <BackupCard trip={trip} />
+      <Fold id="checklists" title="Checklists" badge={`${done} of ${trip.checklist.length} done`} open={openFolds.has('checklists')} onToggle={() => toggleFold('checklists')}>
+        <Checklist trip={trip} />
+      </Fold>
 
-      <h3 className="section-title">Trip settings</h3>
-      <AutoLookupToggle />
-      <FlightServiceSetting />
-      <div className="card row buttons">
-        <button
-          className="danger"
-          onClick={() => {
-            if (confirm(`Delete “${trip.name}” and all its places? This can’t be undone.`)) {
-              deleteTrip(trip.id)
-              go({ page: 'home' })
-            }
-          }}
-        >
-          Delete trip
-        </button>
-      </div>
+      <Fold id="more" title="Share, back up and settings" open={openFolds.has('more')} onToggle={() => toggleFold('more')}>
+        <BackupCard trip={trip} />
+        <h3>Settings</h3>
+        <AutoLookupToggle />
+        <FlightServiceSetting />
+        <div className="card row buttons">
+          <button
+            className="danger"
+            onClick={() => {
+              if (confirm(`Delete “${trip.name}” and all its places? This can’t be undone.`)) {
+                deleteTrip(trip.id)
+                go({ page: 'home' })
+              }
+            }}
+          >
+            Delete trip
+          </button>
+        </div>
+      </Fold>
     </div>
   )
 }
