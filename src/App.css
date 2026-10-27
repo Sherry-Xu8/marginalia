@@ -1,0 +1,77 @@
+.app { min-height: 100dvh; display: flex; flex-direction: column; }
+main { flex: 1; width: 100%; max-width: 640px; margin: 0 auto; padding: 16px 16px 96px; }
+h2 { margin: 8px 0 12px; font-size: 1.5rem; }
+h3 { margin: 20px 0 4px; }
+.muted { color: var(--muted); font-size: 0.9rem; margin: 4px 0; }
+.error { color: var(--danger); font-weight: 600; }
+
+.card {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  padding: 16px;
+  margin: 12px 0;
+}
+
+button, select, input {
+  font: inherit;
+  color: inherit;
+  min-height: 48px; /* big tap targets */
+}
+button {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 0 16px;
+  cursor: pointer;
+}
+button:disabled { opacity: 0.45; cursor: default; }
+button.primary { background: var(--accent); color: var(--accent-text); border-color: var(--accent); font-weight: 600; }
+button.danger { color: var(--danger); }
+button.wide { width: 100%; margin: 8px 0; }
+
+input, select {
+  width: 100%;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 0 12px;
+}
+input[type='search'] { margin: 12px 0 4px; }
+label { display: block; font-size: 0.9rem; color: var(--muted); margin-bottom: 12px; flex: 1; }
+label input { margin-top: 4px; color: var(--text); }
+
+.row { display: flex; gap: 12px; }
+.row.between { justify-content: space-between; align-items: center; gap: 12px; }
+.row.buttons { flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+.form h3 { margin-top: 0; }
+@media (max-width: 420px) { .form .row:not(.buttons) { flex-direction: column; gap: 0; } }
+
+.stop-info { display: flex; flex-direction: column; gap: 2px; }
+
+.summary { margin-top: 12px; padding: 12px; border-radius: 12px; background: var(--bg); }
+.summary ul { margin: 6px 0 0; padding-left: 20px; }
+
+details.layer { margin: 12px 0; }
+details.layer > summary { font-weight: 700; padding: 12px 0; cursor: pointer; }
+details.place { background: var(--card); border: 1px solid var(--line); border-radius: 12px; margin: 6px 0; padding: 0 14px; }
+details.place > summary { padding: 14px 0; cursor: pointer; }
+.desc { white-space: pre-wrap; margin: 0 0 8px; }
+
+.map-section { margin: -16px -16px -96px; }
+.map { height: calc(100dvh - 72px); width: 100%; }
+.map-note { position: absolute; z-index: 500; left: 16px; right: 16px; top: 12px; background: var(--card); padding: 8px 12px; border-radius: 12px; }
+.leaflet-popup-content p { margin: 4px 0; }
+
+.tabbar {
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: 1000;
+  display: flex; background: var(--card); border-top: 1px solid var(--line);
+  padding-bottom: env(safe-area-inset-bottom);
+}
+.tabbar button {
+  flex: 1; border: 0; border-radius: 0; background: none; min-height: 64px;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
+  font-size: 0.8rem; color: var(--muted);
+}
+.tabbar button span { font-size: 1.4rem; }
+.tabbar button.active { color: var(--accent); font-weight: 700; }
