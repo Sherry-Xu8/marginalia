@@ -10,7 +10,7 @@ import {
 import { SortableContext, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 import { BedDouble, ChevronDown, ChevronUp, GripVertical, Info, Pencil, Plus, Sparkles } from 'lucide-react'
-import { useEffect, useMemo, useState } from 'react'
+import { Fragment, useEffect, useMemo, useState } from 'react'
 import {
   LONG_TRAVEL_MINUTES,
   MODES,
@@ -332,20 +332,29 @@ export function DaysTab({ initialDate }: { initialDate?: string }) {
       </div>
 
       <div className="pills" role="tablist" aria-label="Days">
-        {tripDays.map((d) => (
-          <button
-            key={d.id}
-            role="tab"
-            aria-selected={d.id === selected}
-            aria-label={`${fromISO(d.date).toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'long' })}, ${d.items.length} places`}
-            className={d.id === selected ? 'on' : ''}
-            onClick={() => setSelected(d.id)}
-          >
-            <small>{fromISO(d.date).toLocaleDateString(undefined, { weekday: 'short' })}</small>
-            <b>{fromISO(d.date).getDate()}</b>
-            <span className="pill-dot">{d.items.length > 0 ? <i>{d.items.length}</i> : null}</span>
-          </button>
-        ))}
+        {tripDays.map((d, i) => {
+          const monthStart = i === 0 || fromISO(d.date).getMonth() !== fromISO(tripDays[i - 1].date).getMonth()
+          return (
+            <Fragment key={d.id}>
+              {monthStart && (
+                <span className="pill-month" aria-hidden>
+                  {fromISO(d.date).toLocaleDateString(undefined, { month: 'short' })}
+                </span>
+              )}
+              <button
+                role="tab"
+                aria-selected={d.id === selected}
+                aria-label={`${fromISO(d.date).toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'long' })}, ${d.items.length} places`}
+                className={d.id === selected ? 'on' : ''}
+                onClick={() => setSelected(d.id)}
+              >
+                <small>{fromISO(d.date).toLocaleDateString(undefined, { weekday: 'short' })}</small>
+                <b>{fromISO(d.date).getDate()}</b>
+                <span className="pill-dot">{d.items.length > 0 ? <i>{d.items.length}</i> : null}</span>
+              </button>
+            </Fragment>
+          )
+        })}
       </div>
 
       <div className="day-grid">

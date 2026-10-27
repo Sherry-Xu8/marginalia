@@ -541,3 +541,4 @@ details.place, .select-row, .pick { background: var(--card); border: 1px solid v
 main > section > h2 { font-family: var(--serif); font-weight: 420; }
 .countdown-big, .stats div { background: var(--soft); }
 .stats div { border-radius: 18px; }
+.pill-month { flex: none; align-self: stretch; display: flex; align-items: center; padding: 0 2px 0 6px; text-transform: uppercase; letter-spacing: 0.14em; font-size: 0.78rem; font-weight: 700; color: var(--accent-dark); writing-mode: vertical-rl; transform: rotate(180deg); }
