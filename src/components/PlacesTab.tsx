@@ -19,6 +19,7 @@ import {
 import { TAGS, TAG_STYLE } from '../lib/tagging'
 import type { Group, ImportSummary, Place, Stop, Tag } from '../types'
 import { FilterChips, tagOf } from './FilterChips'
+import { PlaceSheet } from './PlaceSheet'
 import { QuickTag } from './QuickTag'
 
 function NameField({ place }: { place: Place }) {
@@ -54,11 +55,13 @@ function PlaceRow({
   selectMode,
   selected,
   onToggle,
+  onDetails,
 }: {
   place: Place
   selectMode: boolean
   selected: boolean
   onToggle: () => void
+  onDetails: () => void
 }) {
   const style = TAG_STYLE[tagOf(place) as keyof typeof TAG_STYLE]
   const title = (
@@ -79,6 +82,7 @@ function PlaceRow({
   return (
     <details className="place">
       <summary>{title}</summary>
+      <button className="wide" onClick={onDetails}>Photos and details</button>
       <NameField place={place} />
       {place.description && <p className="desc">{place.description}</p>}
       <p className="muted">{place.lat.toFixed(4)}, {place.lon.toFixed(4)} · layer: {place.layer}</p>
@@ -107,6 +111,7 @@ function GroupSection({
   selectMode,
   selected,
   toggle,
+  onDetails,
 }: {
   group: Group
   places: Place[]
@@ -116,6 +121,7 @@ function GroupSection({
   selectMode: boolean
   selected: Set<string>
   toggle: (id: string) => void
+  onDetails: (id: string) => void
 }) {
   const stop = stops.find((s) => s.id === group.stopId)
   return (
@@ -164,7 +170,7 @@ function GroupSection({
         </div>
       )}
       {places.map((p) => (
-        <PlaceRow key={p.id} place={p} selectMode={selectMode} selected={selected.has(p.id)} onToggle={() => toggle(p.id)} />
+        <PlaceRow key={p.id} place={p} selectMode={selectMode} selected={selected.has(p.id)} onToggle={() => toggle(p.id)} onDetails={() => onDetails(p.id)} />
       ))}
     </details>
   )
@@ -182,6 +188,7 @@ export function PlacesTab({ tagFilter, setTagFilter }: { tagFilter: string[]; se
   const [quickTag, setQuickTag] = useState(false)
   const [selectMode, setSelectMode] = useState(false)
   const [selected, setSelected] = useState<Set<string>>(new Set())
+  const [detailsId, setDetailsId] = useState<string | null>(null)
 
   const mine = useMemo(() => places.filter((p) => p.tripId === activeTripId), [places, activeTripId])
   const myGroups = useMemo(() => groups.filter((g) => g.tripId === activeTripId), [groups, activeTripId])
@@ -342,6 +349,7 @@ export function PlacesTab({ tagFilter, setTagFilter }: { tagFilter: string[]; se
                     selectMode={selectMode}
                     selected={selected}
                     toggle={toggle}
+                    onDetails={setDetailsId}
                   />
                 )
               })}
@@ -355,7 +363,7 @@ export function PlacesTab({ tagFilter, setTagFilter }: { tagFilter: string[]; se
                   {layer} <span className="muted">({items.length})</span>
                 </summary>
                 {items.map((p) => (
-                  <PlaceRow key={p.id} place={p} selectMode={false} selected={false} onToggle={() => {}} />
+                  <PlaceRow key={p.id} place={p} selectMode={false} selected={false} onToggle={() => {}} onDetails={() => setDetailsId(p.id)} />
                 ))}
               </details>
             ))}
@@ -391,6 +399,7 @@ export function PlacesTab({ tagFilter, setTagFilter }: { tagFilter: string[]; se
           )}
         </>
       )}
+      {detailsId && <PlaceSheet placeId={detailsId} onClose={() => setDetailsId(null)} />}
     </section>
   )
 }

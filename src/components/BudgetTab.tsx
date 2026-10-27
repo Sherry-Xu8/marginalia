@@ -14,7 +14,7 @@ function Bar({ value, max, over }: { value: number; max: number; over?: boolean 
 }
 
 export function BudgetTab() {
-  const { trips, activeTripId, days, expenses } = useAppData()
+  const { trips, activeTripId, days, expenses, transfers } = useAppData()
   const trip = trips.find((t) => t.id === activeTripId)
   const [budgetText, setBudgetText] = useState<string | null>(null)
   const [title, setTitle] = useState('')
@@ -43,7 +43,9 @@ export function BudgetTab() {
 
   const cur = trip.currency ?? 'USD'
   const money = (n: number) => fmtMoney(n, cur)
-  const planned = tripDays.reduce((s, d) => s + d.items.reduce((t, i) => t + (i.cost ?? 0), 0), 0)
+  const planned =
+    tripDays.reduce((s, d) => s + d.items.reduce((t, i) => t + (i.cost ?? 0), 0), 0) +
+    transfers.filter((t) => t.tripId === activeTripId).reduce((s, t) => s + (t.cost ?? 0), 0)
   const spent = mine.reduce((s, e) => s + e.amount, 0)
   const budget = trip.budget
   const byCategory = EXPENSE_CATEGORIES.map((c) => ({

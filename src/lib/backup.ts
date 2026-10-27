@@ -1,5 +1,5 @@
-import type { AppData, ChecklistItem, Day, Expense, Group, Place, Stop, Trip } from '../types'
-import { EXPENSE_CATEGORIES, TAGS } from '../types'
+import type { AppData, ChecklistItem, Day, Expense, Group, Place, PlaceDetails, Stop, Transfer, Trip } from '../types'
+import { EXPENSE_CATEGORIES, TAGS, TRANSFER_KINDS } from '../types'
 
 // Saving to / loading from a JSON file. A file can hold the whole plan (a backup) or one trip
 // (for sharing). Files can come from anyone, so everything is checked and cleaned on the way in.
@@ -11,6 +11,7 @@ export type TripData = {
   places: Place[]
   groups: Group[]
   days: Day[]
+  transfers: Transfer[]
   expenses: Expense[]
 }
 
@@ -35,6 +36,9 @@ export function buildTripShare(state: AppData, tripId: string, includeMoney: boo
     places: state.places.filter((p) => p.tripId === tripId),
     groups: state.groups.filter((g) => g.tripId === tripId),
     days,
+    transfers: state.transfers
+      .filter((t) => t.tripId === tripId)
+      .map((t) => (includeMoney ? t : { ...t, cost: undefined })),
     expenses: includeMoney ? state.expenses.filter((e) => e.tripId === tripId) : [],
   }
   const b: Bundle = { app: 'trip-planner', kind: 'trip', version: 1, exportedAt: new Date().toISOString(), data }
@@ -90,7 +94,9 @@ function cleanTrip(v: unknown): Trip | null {
     const sname = str(so?.name, 200)
     const arrival = date(so?.arrival)
     const departure = date(so?.departure)
-    return so && sid && sname && arrival && departure ? [{ id: sid, name: sname, arrival, departure }] : []
+    return so && sid && sname && arrival && departure
+      ? [{ id: sid, name: sname, arrival, departure, stayPlaceId: str(so.stayPlaceId, 100) ?? undefined }]
+      : []
   })
   const checklist = arr(o.checklist).flatMap((c): ChecklistItem[] => {
     const co = obj(c)
@@ -107,6 +113,32 @@ function cleanTrip(v: unknown): Trip | null {
   }
 }
 
+// Only ordinary web addresses are accepted, so a shared file can't smuggle in a script link.
+const url = (v: unknown): string | undefined => {
+  const t = str(v, 600)
+  return t && /^https?:\/\/[^\s]+$/i.test(t) ? t : undefined
+}
+
+function cleanDetails(v: unknown): PlaceDetails | undefined {
+  const o = obj(v)
+  if (!o) return undefined
+  const d: PlaceDetails = {
+    summary: str(o.summary, 3000) ?? undefined,
+    website: url(o.website),
+    hours: str(o.hours, 600) ?? undefined,
+    phone: str(o.phone, 60) ?? undefined,
+    cuisine: str(o.cuisine, 200) ?? undefined,
+    imageUrl: url(o.imageUrl),
+    source: str(o.source, 100) ?? undefined,
+  }
+  return Object.values(d).some(Boolean) ? d : undefined
+}
+
+function cleanPhotos(v: unknown): string[] | undefined {
+  const list = arr(v).filter((p): p is string => typeof p === 'string' && /^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/=]+$/.test(p) && p.length < 600_000)
+  return list.length > 0 ? list.slice(0, 6) : undefined
+}
+
 function cleanPlace(v: unknown): Place | null {
   const o = obj(v)
   const id = str(o?.id, 100)
@@ -119,6 +151,8 @@ function cleanPlace(v: unknown): Place | null {
   return {
     id, tripId, name, lat, lon,
     originalName: str(o.originalName, 300) ?? undefined,
+    details: cleanDetails(o.details),
+    photos: cleanPhotos(o.photos),
     description: str(o.description, 5000) ?? '',
     layer: str(o.layer, 300) ?? '',
     dedupeKey: str(o.dedupeKey, 500) ?? `${name.toLowerCase()}|${lat.toFixed(5)}|${lon.toFixed(5)}`,
@@ -170,6 +204,27 @@ function cleanExpense(v: unknown): Expense | null {
   return { id, tripId, date: d, title, amount, category: EXPENSE_CATEGORIES.find((c) => c === o.category) ?? 'Other' }
 }
 
+function cleanTransfer(v: unknown): Transfer | null {
+  const o = obj(v)
+  const id = str(o?.id, 100)
+  const tripId = str(o?.tripId, 100)
+  const d = date(o?.date)
+  const title = str(o?.title, 200)
+  const kind = TRANSFER_KINDS.find((k) => k === o?.kind)
+  if (!o || !id || !tripId || !d || !title || !kind) return null
+  const time = (x: unknown) => (typeof x === 'string' && /^\d{2}:\d{2}$/.test(x) ? x : undefined)
+  return {
+    id, tripId, date: d, kind, title,
+    from: str(o.from, 200) ?? '',
+    to: str(o.to, 200) ?? '',
+    departTime: time(o.departTime),
+    arriveTime: time(o.arriveTime),
+    reference: str(o.reference, 100) ?? undefined,
+    note: str(o.note, 1000) ?? undefined,
+    cost: num(o.cost) ?? undefined,
+  }
+}
+
 const collect = <T,>(v: unknown, clean: (x: unknown) => T | null): T[] => arr(v).flatMap((x) => clean(x) ?? [])
 
 export type Parsed =
@@ -199,6 +254,7 @@ export function parseBackup(text: string): Parsed {
         places: collect(data.places, cleanPlace),
         groups: collect(data.groups, cleanGroup),
         days: collect(data.days, cleanDay),
+        transfers: collect(data.transfers, cleanTransfer),
         expenses: collect(data.expenses, cleanExpense),
       },
     }
@@ -214,6 +270,7 @@ export function parseBackup(text: string): Parsed {
         places: collect(data.places, cleanPlace),
         groups: collect(data.groups, cleanGroup),
         days: collect(data.days, cleanDay),
+        transfers: collect(data.transfers, cleanTransfer),
         expenses: collect(data.expenses, cleanExpense),
         activeTripId: trips.some((t) => t.id === active) ? active : (trips[0]?.id ?? null),
       },

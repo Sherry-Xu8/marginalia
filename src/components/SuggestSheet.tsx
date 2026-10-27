@@ -84,6 +84,7 @@ export function SuggestSheet({ trip, stop, onClose }: { trip: Trip; stop: Stop; 
       slots: usable.map((u) => ({ dayId: dayFor(u.date)!.id, date: u.date, mode: modes[u.date] ?? u.mode })),
       pace,
       variant: v,
+      stay: places.find((p) => p.id === stop.stayPlaceId),
     })
     setVariant(v)
     setPlan(result)

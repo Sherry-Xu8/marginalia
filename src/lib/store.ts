@@ -1,6 +1,6 @@
 import { get, set } from 'idb-keyval'
 import { useSyncExternalStore } from 'react'
-import type { AppData, ChecklistItem, Day, DayItem, Expense, Group, ImportSummary, Place, Stop, Tag, Trip } from '../types'
+import type { AppData, ChecklistItem, Day, DayItem, Expense, Group, ImportSummary, Place, PlaceDetails, Stop, Tag, Transfer, Trip } from '../types'
 import { eachDate } from './days'
 import { distanceKm } from './geo'
 import { GROUP_RADIUS_KM, clusterPlaces, nextAreaName } from './grouping'
@@ -13,7 +13,7 @@ import { suggestTags } from './tagging'
 // after each change. Components read it with useAppData().
 
 const KEY = 'trip-planner-data'
-const empty: AppData = { version: 1, trips: [], places: [], groups: [], days: [], expenses: [], activeTripId: null }
+const empty: AppData = { version: 1, trips: [], places: [], groups: [], days: [], transfers: [], expenses: [], activeTripId: null }
 
 let state: AppData = empty
 const listeners = new Set<() => void>()
@@ -29,6 +29,7 @@ export async function loadData(): Promise<void> {
         groups: saved.groups ?? [],
         days: saved.days ?? [],
         expenses: saved.expenses ?? [],
+        transfers: saved.transfers ?? [],
         trips: saved.trips.map((t) => ({ ...t, checklist: t.checklist ?? seedChecklist() })),
       }
       for (const t of state.trips) state = autoLinkGroups(syncDays(assignGroups(state, t.id), t.id), t.id)
@@ -87,6 +88,7 @@ export function deleteTrip(id: string) {
       groups: s.groups.filter((g) => g.tripId !== id),
       days: s.days.filter((d) => d.tripId !== id),
       expenses: s.expenses.filter((e) => e.tripId !== id),
+      transfers: s.transfers.filter((t) => t.tripId !== id),
       activeTripId: s.activeTripId === id ? (trips[0]?.id ?? null) : s.activeTripId,
     }
   })
@@ -510,7 +512,11 @@ export function importTripData(d: TripData): string {
   const trip: Trip = {
     ...d.trip,
     id: tripId,
-    stops: d.trip.stops.map((s) => ({ ...s, id: fresh('stop:' + s.id) })),
+    stops: d.trip.stops.map((s) => ({
+      ...s,
+      id: fresh('stop:' + s.id),
+      stayPlaceId: s.stayPlaceId ? fresh('place:' + s.stayPlaceId) : undefined,
+    })),
     checklist: d.trip.checklist.map((c) => ({ ...c, id: newId() })),
   }
   const placeIds = new Set(d.places.map((p) => p.id))
@@ -533,6 +539,7 @@ export function importTripData(d: TripData): string {
     items: day.items.filter((i) => placeIds.has(i.placeId)).map((i) => ({ ...i, id: newId(), placeId: fresh('place:' + i.placeId) })),
   }))
   const expenses = d.expenses.map((e) => ({ ...e, id: newId(), tripId }))
+  const transfers = d.transfers.map((t) => ({ ...t, id: newId(), tripId }))
   update((s) =>
     syncDays(
       assignGroups(
@@ -543,6 +550,7 @@ export function importTripData(d: TripData): string {
           groups: [...s.groups, ...groups],
           days: [...s.days, ...days],
           expenses: [...s.expenses, ...expenses],
+          transfers: [...s.transfers, ...transfers],
           activeTripId: tripId,
         }),
         tripId,
@@ -612,4 +620,63 @@ export function restoreOriginalNames(tripId: string) {
       p.tripId === tripId && p.originalName ? { ...p, name: p.originalName, originalName: undefined } : p,
     ),
   }))
+}
+
+// ---- Where you're staying ----
+
+export function setStay(tripId: string, stopId: string, placeId: string | undefined) {
+  mapStops(tripId, (stops) => stops.map((s) => (s.id === stopId ? { ...s, stayPlaceId: placeId } : s)))
+}
+
+// A place you add yourself (for example a hotel found by search). It is sorted into a
+// location group like any imported place.
+export function addCustomPlace(p: { tripId: string; name: string; lat: number; lon: number; tag?: Tag }): string {
+  const place: Place = {
+    id: newId(),
+    tripId: p.tripId,
+    name: p.name.trim().slice(0, 300),
+    description: '',
+    lat: p.lat,
+    lon: p.lon,
+    layer: 'Added by you',
+    dedupeKey: dedupeKeyOf(p.name, p.lat, p.lon),
+    tag: p.tag,
+    tagSource: p.tag ? 'user' : undefined,
+  }
+  update((s) => autoLinkGroups(assignGroups({ ...s, places: [...s.places, place] }, p.tripId), p.tripId))
+  return place.id
+}
+
+// ---- Place details and photos ----
+
+export function setPlaceDetails(id: string, details: PlaceDetails | undefined) {
+  update((s) => ({ ...s, places: s.places.map((p) => (p.id === id ? { ...p, details } : p)) }))
+}
+
+export function addPlacePhoto(id: string, dataUrl: string) {
+  update((s) => ({
+    ...s,
+    places: s.places.map((p) => (p.id === id ? { ...p, photos: [...(p.photos ?? []), dataUrl].slice(-6) } : p)),
+  }))
+}
+
+export function removePlacePhoto(id: string, index: number) {
+  update((s) => ({
+    ...s,
+    places: s.places.map((p) => (p.id === id ? { ...p, photos: (p.photos ?? []).filter((_, i) => i !== index) } : p)),
+  }))
+}
+
+// ---- Flights, trains and other transport ----
+
+export function addTransfer(t: Omit<Transfer, 'id'>) {
+  update((s) => ({ ...s, transfers: [...s.transfers, { ...t, id: newId() }] }))
+}
+
+export function updateTransfer(id: string, patch: Partial<Omit<Transfer, 'id' | 'tripId'>>) {
+  update((s) => ({ ...s, transfers: s.transfers.map((t) => (t.id === id ? { ...t, ...patch } : t)) }))
+}
+
+export function deleteTransfer(id: string) {
+  update((s) => ({ ...s, transfers: s.transfers.filter((t) => t.id !== id) }))
 }

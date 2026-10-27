@@ -52,3 +52,39 @@ export async function reverseGeocodeName(lat: number, lon: number): Promise<stri
     clearTimeout(timer)
   }
 }
+
+// ---- Searching for a place by name (used to add a hotel) ----
+// Same rules as above: one request per second, and only when you press Search.
+
+export type FoundPlace = { name: string; address: string; lat: number; lon: number }
+
+export async function searchPlaces(query: string, near?: { lat: number; lon: number }): Promise<FoundPlace[] | null> {
+  const wait = lastRequestAt + MIN_GAP_MS - Date.now()
+  if (wait > 0) await sleep(wait)
+  lastRequestAt = Date.now()
+
+  const ctrl = new AbortController()
+  const timer = setTimeout(() => ctrl.abort(), TIMEOUT_MS)
+  try {
+    let url =
+      'https://nominatim.openstreetmap.org/search?format=jsonv2&limit=6&accept-language=en&q=' + encodeURIComponent(query)
+    // Prefer results near the stop (but don't exclude others).
+    if (near) {
+      const d = 0.6
+      url += `&viewbox=${near.lon - d},${near.lat + d},${near.lon + d},${near.lat - d}`
+    }
+    const res = await fetch(url, { signal: ctrl.signal, headers: { Accept: 'application/json' } })
+    if (!res.ok) return null
+    const rows = (await res.json()) as { name?: string; display_name: string; lat: string; lon: string }[]
+    return rows.map((r) => ({
+      name: r.name || r.display_name.split(',')[0],
+      address: r.display_name,
+      lat: parseFloat(r.lat),
+      lon: parseFloat(r.lon),
+    }))
+  } catch {
+    return null
+  } finally {
+    clearTimeout(timer)
+  }
+}

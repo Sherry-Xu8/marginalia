@@ -6,6 +6,26 @@ export type Stop = {
   name: string
   arrival: string // yyyy-mm-dd
   departure: string // yyyy-mm-dd
+  stayPlaceId?: string // where you're sleeping in this stop (a place tagged Accommodation)
+}
+
+export const TRANSFER_KINDS = ['flight', 'train', 'bus', 'ferry', 'car', 'other'] as const
+export type TransferKind = (typeof TRANSFER_KINDS)[number]
+
+// A flight, train or other journey, usually between cities.
+export type Transfer = {
+  id: string
+  tripId: string
+  date: string // yyyy-mm-dd, the day you set off
+  kind: TransferKind
+  title: string // e.g. "KE 123" or "KTX to Busan"
+  from: string
+  to: string
+  departTime?: string
+  arriveTime?: string
+  reference?: string // booking reference
+  note?: string
+  cost?: number
 }
 
 export type ChecklistItem = {
@@ -69,10 +89,23 @@ export const TAGS = [
 ] as const
 export type Tag = (typeof TAGS)[number]
 
+// Extra information about a place, looked up online or typed in.
+export type PlaceDetails = {
+  summary?: string
+  website?: string
+  hours?: string
+  phone?: string
+  cuisine?: string
+  imageUrl?: string // a photo from Wikipedia/Wikimedia, if one exists
+  source?: string
+}
+
 export type Place = {
   id: string
   tripId: string
   name: string
+  details?: PlaceDetails
+  photos?: string[] // your own photos (small, saved inside the app)
   originalName?: string // set once you rename a place, so you can undo
   description: string
   lat: number
@@ -101,6 +134,7 @@ export type AppData = {
   places: Place[]
   groups: Group[]
   days: Day[]
+  transfers: Transfer[]
   expenses: Expense[]
   activeTripId: string | null
 }

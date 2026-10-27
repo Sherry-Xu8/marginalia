@@ -9,7 +9,7 @@ import {
 } from '@dnd-kit/core'
 import { SortableContext, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
-import { ChevronDown, ChevronUp, GripVertical, Plus, Sparkles } from 'lucide-react'
+import { BedDouble, ChevronDown, ChevronUp, GripVertical, Info, Pencil, Plus, Sparkles } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import {
   LONG_TRAVEL_MINUTES,
@@ -26,12 +26,15 @@ import {
 } from '../lib/commute'
 import { fromISO, shortDate, stopLabel, stopsOn, toISO } from '../lib/days'
 import { fmtMoney } from '../lib/money'
-import { addToDay, moveDayItem, removeDayItem, sortDayByTime, updateDayItem, useAppData } from '../lib/store'
-import type { Day, DayItem, Place, Stop, Trip } from '../types'
+import { addToDay, moveDayItem, sortDayByTime, updateDayItem, useAppData } from '../lib/store'
+import type { Day, DayItem, Place, Stop, Transfer, Trip } from '../types'
 import { DayMap } from './DayMap'
 import { FilterChips, tagOf } from './FilterChips'
+import { PlaceSheet } from './PlaceSheet'
+import { StaySheet } from './StaySheet'
 import { SuggestSheet } from './SuggestSheet'
 import { TagIcon } from './TagIcon'
+import { KIND_INFO, TransferSheet } from './TransferSheet'
 
 // ---- Travel between places ----
 
@@ -78,12 +81,12 @@ function LegRow({ from, to, mode }: { from: Place; to: Place; mode: Mode }) {
   )
 }
 
-function DayTravel({ places, mode }: { places: Place[]; mode: Mode }) {
-  const key = places.map((p) => p.id).join(',') + mode
+function DayTravel({ points, mode }: { points: Place[]; mode: Mode }) {
+  const key = points.map((p) => p.id).join(',') + mode
   const [total, setTotal] = useState<{ key: string; sum: number; approx: boolean } | null>(null)
   useEffect(() => {
     let live = true
-    Promise.all(places.slice(1).map((p, i) => getCommute(places[i], p, mode))).then((legs: Commute[]) => {
+    Promise.all(points.slice(1).map((p, i) => getCommute(points[i], p, mode))).then((legs: Commute[]) => {
       if (live) setTotal({ key, sum: legs.reduce((a, c) => a + c.minutes, 0), approx: legs.some((c) => c.approx) })
     })
     return () => {
@@ -91,15 +94,15 @@ function DayTravel({ places, mode }: { places: Place[]; mode: Mode }) {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [key])
-  if (places.length < 2) return null
-  const quick = places.slice(1).map((p, i) => estimate(places[i], p, mode))
+  if (points.length < 2) return null
+  const quick = points.slice(1).map((p, i) => estimate(points[i], p, mode))
   const sum = total?.key === key ? total.sum : quick.reduce((a, c) => a + c.minutes, 0)
   const approx = total?.key === key ? total.approx : true
   const info = MODES.find((m) => m.id === mode)!
   return (
     <div className={'travel' + (sum > LONG_TRAVEL_MINUTES ? ' warn' : '')}>
       <strong>
-        <info.Icon size={16} aria-hidden /> Travel between places: {fmtMinutes(sum)}
+        <info.Icon size={16} aria-hidden /> Travel today, including to and from where you’re staying: {fmtMinutes(sum)}
         {approx && <small> approx.</small>}
       </strong>
       {sum > LONG_TRAVEL_MINUTES && <span>That’s over 2½ hours of travel — consider moving something to another day.</span>}
@@ -107,30 +110,76 @@ function DayTravel({ places, mode }: { places: Place[]; mode: Mode }) {
   )
 }
 
-// ---- One planned place ----
+// ---- Cards ----
+
+function Thumb({ place, number }: { place: Place | undefined; number?: number }) {
+  const src = place?.photos?.[0] ?? place?.details?.imageUrl
+  return (
+    <span className="thumbwrap">
+      {src ? (
+        <img className="thumb-img" src={src} alt="" loading="lazy" referrerPolicy="no-referrer" />
+      ) : (
+        <TagIcon tag={place ? tagOf(place) : 'Untagged'} size={48} />
+      )}
+      {number !== undefined && <i className="badge">{number}</i>}
+    </span>
+  )
+}
+
+function StayCard({ label, place, onClick }: { label: string; place: Place; onClick: () => void }) {
+  return (
+    <div className="item stay-card">
+      <span className="stay-tile"><BedDouble size={20} aria-hidden /></span>
+      <button className="item-main" onClick={onClick}>
+        <span className="muted">{label}</span>
+        <strong className="serif">{place.name}</strong>
+      </button>
+    </div>
+  )
+}
+
+function TransferCard({ t, onEdit }: { t: Transfer; onEdit: () => void }) {
+  const { Icon, label } = KIND_INFO[t.kind]
+  const times = [t.departTime, t.arriveTime].filter(Boolean).join(' → ')
+  return (
+    <div className="item transfer-card">
+      <span className="stay-tile transfer"><Icon size={20} /></span>
+      <div className="item-main static">
+        <strong className="serif">{t.title}</strong>
+        <span className="muted">
+          {[label, t.from && t.to ? `${t.from} → ${t.to}` : '', times, t.reference ? `Ref ${t.reference}` : ''].filter(Boolean).join(' · ')}
+        </span>
+        {t.note && <span className="muted">{t.note}</span>}
+      </div>
+      <button className="icon-btn" aria-label="Edit journey" onClick={onEdit}><Pencil size={18} /></button>
+    </div>
+  )
+}
 
 function ItemRow({
-  day, item, place, next, mode, currency,
+  index, day, item, place, next, mode, currency, focused, onFocus, onOpen,
 }: {
-  day: Day; item: DayItem; place: Place | undefined; next: Place | undefined; mode: Mode; currency: string
+  index: number; day: Day; item: DayItem; place: Place | undefined; next: Place | undefined; mode: Mode
+  currency: string; focused: boolean; onFocus: () => void; onOpen: () => void
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: item.id })
-  const [open, setOpen] = useState(false)
   const style = { transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.6 : 1 }
-  const tag = place ? (place.tag ?? 'Untagged') : 'Untagged'
-  const sub = [item.time, place ? tag : '', item.cost ? fmtMoney(item.cost, currency) : '', item.note].filter(Boolean).join(' · ')
+  const tag = place ? tagOf(place) : 'Untagged'
+  const sub = [item.time, item.cost ? fmtMoney(item.cost, currency) : '', item.note].filter(Boolean).join(' · ')
 
   return (
     <div ref={setNodeRef} style={style} className="item-wrap">
-      <div className={'item' + (item.done ? ' done' : '')}>
+      <div className={'item place-item' + (item.done ? ' done' : '') + (focused ? ' focused' : '')}>
         <button className="handle" aria-label="Drag to reorder" {...attributes} {...listeners}>
           <GripVertical size={20} />
         </button>
-        <TagIcon tag={tag} />
-        <button className="item-main" onClick={() => setOpen(!open)} aria-expanded={open}>
+        <Thumb place={place} number={index + 1} />
+        <button className="item-main" onClick={onFocus} aria-label={`Show ${place?.name ?? 'place'} on the map`}>
           <strong className="serif">{place?.name ?? '(place removed)'}</strong>
+          <span className="muted">{tag}</span>
           {sub && <span className="muted">{sub}</span>}
         </button>
+        <button className="icon-btn" aria-label="Details, photos and notes" onClick={onOpen}><Info size={19} /></button>
         <input
           type="checkbox"
           className="tick"
@@ -138,30 +187,6 @@ function ItemRow({
           checked={item.done}
           onChange={(e) => updateDayItem(day.id, item.id, { done: e.target.checked })}
         />
-        {open && (
-          <div className="item-edit">
-            <label>
-              Time (optional)
-              <input type="time" value={item.time ?? ''} onChange={(e) => updateDayItem(day.id, item.id, { time: e.target.value || undefined })} />
-            </label>
-            <label>
-              Planned cost (optional)
-              <input
-                inputMode="decimal"
-                value={item.cost ?? ''}
-                onChange={(e) => {
-                  const n = parseFloat(e.target.value)
-                  updateDayItem(day.id, item.id, { cost: Number.isFinite(n) && n >= 0 ? n : undefined })
-                }}
-              />
-            </label>
-            <label>
-              Note (e.g. opening hours)
-              <textarea rows={2} value={item.note} onChange={(e) => updateDayItem(day.id, item.id, { note: e.target.value })} />
-            </label>
-            <button className="danger" onClick={() => removeDayItem(day.id, item.id)}>Remove from this day</button>
-          </div>
-        )}
       </div>
       {place && next && <LegRow from={place} to={next} mode={mode} />}
     </div>
@@ -222,7 +247,7 @@ function PlacePicker({ trip, day, onClose }: { trip: Trip; day: Day; onClose: ()
 // ---- The screen ----
 
 export function DaysTab({ initialDate }: { initialDate?: string }) {
-  const { trips, activeTripId, days, places } = useAppData()
+  const { trips, activeTripId, days, places, transfers } = useAppData()
   const trip = trips.find((t) => t.id === activeTripId)
   const tripDays = useMemo(
     () => days.filter((d) => d.tripId === activeTripId).sort((a, b) => a.date.localeCompare(b.date)),
@@ -231,6 +256,10 @@ export function DaysTab({ initialDate }: { initialDate?: string }) {
   const [selected, setSelected] = useState('')
   const [picking, setPicking] = useState(false)
   const [suggestFor, setSuggestFor] = useState<Stop | null>(null)
+  const [stayFor, setStayFor] = useState<Stop | null>(null)
+  const [focusId, setFocusId] = useState<string | undefined>()
+  const [openItem, setOpenItem] = useState<string | null>(null)
+  const [transferSheet, setTransferSheet] = useState<{ transfer?: Transfer } | null>(null)
   const [mode, setModeState] = useState<Mode>(() => {
     try {
       const saved = localStorage.getItem('travel-mode')
@@ -263,6 +292,8 @@ export function DaysTab({ initialDate }: { initialDate?: string }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tripDays, initialDate])
 
+  useEffect(() => setFocusId(undefined), [selected])
+
   const day = tripDays.find((d) => d.id === selected)
   const placeById = useMemo(() => new Map(places.map((p) => [p.id, p])), [places])
   const dayPlaces = useMemo(
@@ -284,9 +315,18 @@ export function DaysTab({ initialDate }: { initialDate?: string }) {
   const label = stopLabel(trip, day.date)
   const dayStops = stopsOn(trip, day.date)
   const arriving = dayStops[dayStops.length - 1]
+  const leaving = dayStops[0]
+  const startStay = placeById.get(leaving?.stayPlaceId ?? '')
+  const endStay = placeById.get(arriving?.stayPlaceId ?? '')
   const done = day.items.filter((i) => i.done).length
+  const dayTransfers = transfers
+    .filter((t) => t.tripId === trip.id && t.date === day.date)
+    .sort((a, b) => (a.departTime ?? '').localeCompare(b.departTime ?? ''))
+  const planned =
+    day.items.reduce((s, i) => s + (i.cost ?? 0), 0) + dayTransfers.reduce((s, t) => s + (t.cost ?? 0), 0)
   const timed = day.items.filter((i) => i.time).length
-  const planned = day.items.reduce((s, i) => s + (i.cost ?? 0), 0)
+  const route = [startStay, ...dayPlaces, endStay].filter((p): p is Place => !!p)
+  const sheetItem = openItem ? day.items.find((i) => i.id === openItem) : undefined
 
   function onDragEnd(e: DragEndEvent) {
     if (day && e.over && e.active.id !== e.over.id) moveDayItem(day.id, String(e.active.id), String(e.over.id))
@@ -300,28 +340,32 @@ export function DaysTab({ initialDate }: { initialDate?: string }) {
           <p>{shortDate(day.date)} · Day {dayNumber} of {tripDays.length}</p>
         </div>
         <div className="hero-badge">
-          <strong className="serif">{day.items.length}</strong>
+          <strong>{day.items.length}</strong>
           <span>{day.items.length === 1 ? 'place' : 'places'}</span>
         </div>
       </div>
 
       <div className="pills" role="tablist" aria-label="Days">
-        {tripDays.map((d, i) => (
+        {tripDays.map((d) => (
           <button
             key={d.id}
             role="tab"
             aria-selected={d.id === selected}
+            aria-label={`${fromISO(d.date).toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'long' })}, ${d.items.length} places`}
             className={d.id === selected ? 'on' : ''}
             onClick={() => setSelected(d.id)}
           >
             <small>{fromISO(d.date).toLocaleDateString(undefined, { weekday: 'short' })}</small>
             <b>{fromISO(d.date).getDate()}</b>
-            <small>{d.items.length > 0 ? `${d.items.length} ·` : `D${i + 1}`}</small>
+            <span className="pill-dot">{d.items.length > 0 ? <i>{d.items.length}</i> : null}</span>
           </button>
         ))}
       </div>
 
       <div className="day-grid">
+        <aside className="day-side">
+          <DayMap places={dayPlaces} startStay={startStay} endStay={endStay} focusId={focusId} onFocus={setFocusId} />
+        </aside>
         <div>
           <div className="row between day-actions">
             <p className="muted">
@@ -335,6 +379,21 @@ export function DaysTab({ initialDate }: { initialDate?: string }) {
             )}
           </div>
 
+          {dayTransfers.map((t) => (
+            <TransferCard key={t.id} t={t} onEdit={() => setTransferSheet({ transfer: t })} />
+          ))}
+          <button className="wide subtle" onClick={() => setTransferSheet({})}>
+            <Plus size={16} /> Add a flight, train or other journey
+          </button>
+
+          {startStay && <StayCard label="Start from" place={startStay} onClick={() => setFocusId(startStay.id)} />}
+          {!arriving?.stayPlaceId && arriving && (
+            <button className="wide subtle" onClick={() => setStayFor(arriving)}>
+              <BedDouble size={16} /> Add where you’re staying in {arriving.name}
+            </button>
+          )}
+          {startStay && dayPlaces[0] && <LegRow from={startStay} to={dayPlaces[0]} mode={mode} />}
+
           {day.items.length === 0 ? (
             <div className="card">
               <p>Nothing planned yet. Add places from your imported list, or tap a pin on the Map and choose “Add to day”.</p>
@@ -346,16 +405,21 @@ export function DaysTab({ initialDate }: { initialDate?: string }) {
                   {day.items.map((item, i) => (
                     <ItemRow
                       key={item.id}
+                      index={i}
                       day={day}
                       item={item}
                       place={placeById.get(item.placeId)}
-                      next={placeById.get(day.items[i + 1]?.placeId ?? '')}
+                      next={placeById.get(day.items[i + 1]?.placeId ?? '') ?? (i === day.items.length - 1 ? endStay : undefined)}
                       mode={mode}
                       currency={trip.currency ?? 'USD'}
+                      focused={item.placeId === focusId}
+                      onFocus={() => setFocusId(item.placeId)}
+                      onOpen={() => setOpenItem(item.id)}
                     />
                   ))}
                 </SortableContext>
               </DndContext>
+              {endStay && <StayCard label="Back to" place={endStay} onClick={() => setFocusId(endStay.id)} />}
               <div className="segmented" role="group" aria-label="Travel mode">
                 {MODES.map((m) => (
                   <button key={m.id} className={mode === m.id ? 'on' : ''} onClick={() => setMode(m.id)}>
@@ -363,7 +427,7 @@ export function DaysTab({ initialDate }: { initialDate?: string }) {
                   </button>
                 ))}
               </div>
-              <DayTravel places={dayPlaces} mode={mode} />
+              <DayTravel points={route} mode={mode} />
               {timed > 1 && <button className="wide" onClick={() => sortDayByTime(day.id)}>Sort by time</button>}
             </>
           )}
@@ -371,13 +435,17 @@ export function DaysTab({ initialDate }: { initialDate?: string }) {
             <Plus size={18} /> Add places
           </button>
         </div>
-        <aside className="day-side">
-          <DayMap places={dayPlaces} />
-        </aside>
       </div>
 
       {picking && <PlacePicker trip={trip} day={day} onClose={() => setPicking(false)} />}
       {suggestFor && <SuggestSheet trip={trip} stop={suggestFor} onClose={() => setSuggestFor(null)} />}
+      {stayFor && <StaySheet trip={trip} stop={stayFor} onClose={() => setStayFor(null)} />}
+      {transferSheet && (
+        <TransferSheet trip={trip} date={day.date} transfer={transferSheet.transfer} onClose={() => setTransferSheet(null)} />
+      )}
+      {sheetItem && (
+        <PlaceSheet placeId={sheetItem.placeId} visit={{ day, item: sheetItem }} onClose={() => setOpenItem(null)} />
+      )}
     </div>
   )
 }

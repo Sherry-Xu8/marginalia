@@ -1,14 +1,16 @@
-import { ArrowDown, ArrowUp, Plus, Sparkles } from 'lucide-react'
+import { ArrowDown, ArrowUp, BedDouble, Pencil, Plus, Sparkles } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { daysUntil, shortDate, toISO } from '../lib/days'
 import { stopDays } from '../lib/itinerary'
 import { fmtMoney } from '../lib/money'
 import { go } from '../lib/route'
 import { addStop, deleteStop, deleteTrip, moveStop, updateStop, updateTrip, useAppData } from '../lib/store'
-import type { Stop, Trip } from '../types'
+import type { Stop, Transfer, Trip } from '../types'
 import { BackupCard } from './BackupCard'
 import { Checklist } from './Checklist'
+import { StaySheet } from './StaySheet'
 import { SuggestSheet } from './SuggestSheet'
+import { KIND_INFO, TransferSheet } from './TransferSheet'
 import { TagIcon, tagName } from './TagIcon'
 import { NameDatesForm, fmt } from './TripForm'
 
@@ -18,6 +20,8 @@ function StopCard({ trip, stop, index }: { trip: Trip; stop: Stop; index: number
   const { groups, places, days } = useAppData()
   const [editing, setEditing] = useState(false)
   const [suggesting, setSuggesting] = useState(false)
+  const [staying, setStaying] = useState(false)
+  const stay = places.find((p) => p.id === stop.stayPlaceId)
   const areaIds = groups.filter((g) => g.stopId === stop.id).map((g) => g.id)
   const placeCount = places.filter((p) => p.groupId && areaIds.includes(p.groupId)).length
   const dates = stopDays(trip, stop).map((d) => d.date)
@@ -51,6 +55,11 @@ function StopCard({ trip, stop, index }: { trip: Trip; stop: Stop; index: number
         <div style={{ width: dates.length ? (planned / dates.length) * 100 + '%' : '0%' }} />
       </div>
       <p className="muted">{planned} of {dates.length} days planned</p>
+      <button className="stay-row" onClick={() => setStaying(true)}>
+        <BedDouble size={16} aria-hidden />
+        <span>{stay ? stay.name : 'Add where you’re staying'}</span>
+        <Pencil size={14} aria-hidden />
+      </button>
       <div className="row buttons">
         <button className="primary" onClick={() => setSuggesting(true)}>
           <Sparkles size={16} /> Suggest my days
@@ -67,6 +76,7 @@ function StopCard({ trip, stop, index }: { trip: Trip; stop: Stop; index: number
         </div>
       </details>
       {suggesting && <SuggestSheet trip={trip} stop={stop} onClose={() => setSuggesting(false)} />}
+      {staying && <StaySheet trip={trip} stop={stop} onClose={() => setStaying(false)} />}
     </div>
   )
 }
@@ -75,6 +85,8 @@ export function TripOverview({ trip }: { trip: Trip }) {
   const { days, places, expenses } = useAppData()
   const [addingStop, setAddingStop] = useState(false)
   const [editingTrip, setEditingTrip] = useState(false)
+  const [journey, setJourney] = useState<{ transfer?: Transfer } | null>(null)
+  const tripTransfers = useAppData().transfers.filter((t) => t.tripId === trip.id).sort((a, b) => (a.date + (a.departTime ?? '')).localeCompare(b.date + (b.departTime ?? '')))
 
   const toStart = daysUntil(trip.startDate)
   const toEnd = daysUntil(trip.endDate)
@@ -175,6 +187,27 @@ export function TripOverview({ trip }: { trip: Trip }) {
           </a>
         </div>
       </div>
+
+      <h3>Flights and transport</h3>
+      <div className="card">
+        {tripTransfers.length === 0 && <p className="muted">Add flights, trains and other journeys, especially between cities.</p>}
+        {tripTransfers.map((t) => {
+          const { Icon } = KIND_INFO[t.kind]
+          return (
+            <button key={t.id} className="line link-line" onClick={() => setJourney({ transfer: t })}>
+              <span className="stay-tile transfer"><Icon size={18} /></span>
+              <span style={{ textAlign: 'left' }}>
+                <strong>{t.title}</strong>
+                <span className="muted" style={{ display: 'block' }}>
+                  {shortDate(t.date)}{t.from && t.to ? ` · ${t.from} → ${t.to}` : ''}{t.departTime ? ` · ${t.departTime}` : ''}
+                </span>
+              </span>
+            </button>
+          )
+        })}
+        <button className="wide" onClick={() => setJourney({})}><Plus size={16} /> Add a journey</button>
+      </div>
+      {journey && <TransferSheet trip={trip} date={trip.startDate} transfer={journey.transfer} onClose={() => setJourney(null)} />}
 
       <div id="checklists"><Checklist trip={trip} /></div>
       <BackupCard trip={trip} />

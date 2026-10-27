@@ -41,9 +41,11 @@ export type Slot = { dayId: string; date: string; mode: DayMode }
 
 const isFood = (p: Place) => p.tag === 'Food & drink'
 
-export function suggestItinerary(opts: { places: Place[]; slots: Slot[]; pace: Pace; variant?: number }): Suggestion {
-  const { places, slots, pace, variant = 0 } = opts
-  const accommodations = places.filter((p) => p.tag === 'Accommodation')
+export function suggestItinerary(opts: { places: Place[]; slots: Slot[]; pace: Pace; variant?: number; stay?: Place }): Suggestion {
+  const { places, slots, pace, variant = 0, stay } = opts
+  // The accommodation you chose for the stop is the start and end of every day; otherwise any
+  // accommodation among the places is used.
+  const accommodations = stay ? [stay] : places.filter((p) => p.tag === 'Accommodation')
   const cands = places.filter((p) => p.tag !== 'Accommodation' && p.tag !== 'Transport')
   const active = slots.filter((s) => s.mode !== 'off')
   const caps = active.map((s) => capacityFor(pace, s.mode))
