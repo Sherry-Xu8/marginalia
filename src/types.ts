@@ -106,6 +106,8 @@ export type Place = {
   name: string
   details?: PlaceDetails
   photos?: string[] // your own photos (small, saved inside the app)
+  lookup?: 'found' | 'partial' | 'none' // result of the automatic online lookup
+  lookedUpAt?: string
   originalName?: string // set once you rename a place, so you can undo
   description: string
   lat: number

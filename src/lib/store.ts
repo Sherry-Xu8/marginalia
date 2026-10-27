@@ -680,3 +680,21 @@ export function updateTransfer(id: string, patch: Partial<Omit<Transfer, 'id' | 
 export function deleteTransfer(id: string) {
   update((s) => ({ ...s, transfers: s.transfers.filter((t) => t.id !== id) }))
 }
+
+// Saves what the automatic online lookup found. Anything you typed yourself is kept.
+export function applyLookups(
+  updates: { id: string; lookup: 'found' | 'partial' | 'none'; details?: PlaceDetails }[],
+) {
+  const by = new Map(updates.map((u) => [u.id, u]))
+  const now = new Date().toISOString()
+  update((s) => ({
+    ...s,
+    places: s.places.map((p) => {
+      const u = by.get(p.id)
+      if (!u) return p
+      const mine = Object.fromEntries(Object.entries(p.details ?? {}).filter(([, v]) => v))
+      const details = u.details ? { ...u.details, ...mine } : p.details
+      return { ...p, details, lookup: u.lookup, lookedUpAt: now }
+    }),
+  }))
+}

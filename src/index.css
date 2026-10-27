@@ -1,22 +1,24 @@
 :root {
-  --bg: #f6f4f0;
-  --card: #ffffff;
-  --text: #1f1c19;
-  --muted: #6f685e;
-  --accent: #c2582f;
+  --bg: #f8f6f1;
+  --card: #fcfbf8;
+  --text: #22332c;
+  --muted: #62736a;
+  --accent: #4a7461;
+  --accent-dark: #2f5646;
   --accent-text: #ffffff;
-  --sage: #6f7f4e;
-  --line: rgba(31, 28, 25, 0.09);
-  --sand: #e9d9c6;
-  --sand-deep: #dec6ac;
-  --danger: #a63d3d;
-  --soft: #f1ede6;
-  --accent-soft: #fbe9e1;
-  --shadow: 0 1px 2px rgba(31, 28, 25, 0.05), 0 10px 28px -14px rgba(31, 28, 25, 0.18);
-  --serif: ui-sans-serif, system-ui, -apple-system, 'SF Pro Display', 'Segoe UI', Roboto, sans-serif;
-  --topbar-h: 56px;
+  --accent-soft: #e4ebe1;
+  --soft: #edf1e9;
+  --sage: #4a7461;
+  --sand: #e2e9de;
+  --sand-deep: #d3ddcd;
+  --line: rgba(46, 80, 64, 0.14);
+  --danger: #a5483f;
+  --shadow: 0 1px 2px rgba(34, 51, 44, 0.04), 0 16px 36px -20px rgba(34, 51, 44, 0.25);
+  --serif: 'Newsreader Variable', 'Iowan Old Style', Georgia, serif;
+  --sans: 'Hanken Grotesk Variable', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --topbar-h: 72px;
   --tabbar-h: 64px;
-  font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  font-family: var(--sans);
   font-size: 16px;
   color: var(--text);
   color-scheme: light dark;
@@ -24,24 +26,25 @@
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --bg: #171513;
-    --card: #211e1b;
-    --text: #f0ebe3;
-    --muted: #a59e92;
-    --accent: #ec946a;
-    --accent-text: #2a1409;
-    --sage: #a3b37a;
+    --bg: #131916;
+    --card: #1a211d;
+    --text: #e8eee9;
+    --muted: #9bab9f;
+    --accent: #86bda3;
+    --accent-dark: #a9d3bd;
+    --accent-text: #0e1a14;
+    --accent-soft: #23312a;
+    --soft: #222b26;
+    --sage: #86bda3;
+    --sand: #243029;
+    --sand-deep: #2c3a32;
     --line: rgba(255, 255, 255, 0.1);
-    --sand: #3a3228;
-    --sand-deep: #4a3f31;
-    --danger: #e08a8a;
-    --soft: #2a2622;
-    --accent-soft: #3a2a22;
-    --shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 10px 28px -14px rgba(0, 0, 0, 0.6);
+    --danger: #e59a90;
+    --shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 16px 36px -20px rgba(0, 0, 0, 0.6);
   }
 }
 
 * { box-sizing: border-box; }
-body { margin: 0; background: var(--bg); line-height: 1.5; }
+body { margin: 0; background: var(--bg); line-height: 1.5; font-family: var(--sans); }
 a { color: inherit; }
-h1, h2, h3 { font-family: var(--serif); font-weight: 650; letter-spacing: -0.02em; line-height: 1.2; margin: 0; }
+h1, h2, h3 { font-family: var(--serif); font-weight: 420; letter-spacing: -0.015em; line-height: 1.15; margin: 0; }

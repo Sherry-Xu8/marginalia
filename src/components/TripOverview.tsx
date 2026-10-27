@@ -1,20 +1,27 @@
-import { ArrowDown, ArrowUp, BedDouble, Pencil, Plus, Sparkles } from 'lucide-react'
+import { ArrowDown, ArrowRight, ArrowUp, BedDouble, MapPin, Pencil, Plus, Route, Sparkles } from 'lucide-react'
 import { useMemo, useState } from 'react'
-import { daysUntil, shortDate, toISO } from '../lib/days'
+import { shortDate, toISO } from '../lib/days'
 import { stopDays } from '../lib/itinerary'
 import { fmtMoney } from '../lib/money'
 import { go } from '../lib/route'
-import { addStop, deleteStop, deleteTrip, moveStop, updateStop, updateTrip, useAppData } from '../lib/store'
+import { addStop, deleteStop, deleteTrip, moveStop, updateStop, useAppData } from '../lib/store'
 import type { Stop, Transfer, Trip } from '../types'
 import { BackupCard } from './BackupCard'
+import { isAutoLookupOn, setAutoLookup } from '../lib/autolookup'
 import { Checklist } from './Checklist'
+import { MapImport } from './MapImport'
 import { StaySheet } from './StaySheet'
 import { SuggestSheet } from './SuggestSheet'
 import { KIND_INFO, TransferSheet } from './TransferSheet'
-import { TagIcon, tagName } from './TagIcon'
+import { PlaceThumb } from './TagIcon'
 import { NameDatesForm, fmt } from './TripForm'
 
-const BANDS = ['#DCE5D8', '#EAD9C4', '#DCE6F5', '#EBDCE3']
+const BANDS = [
+  'linear-gradient(135deg, #cfe0cf, #a9c4ad)',
+  'linear-gradient(135deg, #f0dcc4, #e2bf98)',
+  'linear-gradient(135deg, #cfdcf2, #a7bfe6)',
+  'linear-gradient(135deg, #efd6e2, #dcaec4)',
+]
 
 function StopCard({ trip, stop, index }: { trip: Trip; stop: Stop; index: number }) {
   const { groups, places, days } = useAppData()
@@ -25,6 +32,9 @@ function StopCard({ trip, stop, index }: { trip: Trip; stop: Stop; index: number
   const areaIds = groups.filter((g) => g.stopId === stop.id).map((g) => g.id)
   const placeCount = places.filter((p) => p.groupId && areaIds.includes(p.groupId)).length
   const dates = stopDays(trip, stop).map((d) => d.date)
+  const coverPlace = places.find((p) => p.groupId && areaIds.includes(p.groupId) && (p.photos?.[0] ?? p.details?.imageUrl))
+  const cover = coverPlace?.photos?.[0] ?? coverPlace?.details?.imageUrl
+  const [coverFailed, setCoverFailed] = useState(false)
   const planned = days.filter((d) => d.tripId === trip.id && dates.includes(d.date) && d.items.length > 0).length
   const last = index === trip.stops.length - 1
 
@@ -47,7 +57,13 @@ function StopCard({ trip, stop, index }: { trip: Trip; stop: Stop; index: number
 
   return (
     <div className="card stop-card">
-      <div className="band" style={{ background: BANDS[index % BANDS.length] }} />
+      <div className="band" style={{ background: BANDS[index % BANDS.length] }}>
+        {cover && !coverFailed ? (
+          <img src={cover} alt="" loading="lazy" referrerPolicy="no-referrer" onError={() => setCoverFailed(true)} />
+        ) : (
+          <span className="band-initial" aria-hidden>{stop.name.charAt(0).toUpperCase()}</span>
+        )}
+      </div>
       <h2>{stop.name}</h2>
       <p className="muted">{fmt(stop.arrival)} → {fmt(stop.departure)}</p>
       <p className="muted">{placeCount} place{placeCount === 1 ? '' : 's'} saved</p>
@@ -81,17 +97,28 @@ function StopCard({ trip, stop, index }: { trip: Trip; stop: Stop; index: number
   )
 }
 
+function AutoLookupToggle() {
+  const [on, setOn] = useState(isAutoLookupOn)
+  return (
+    <label className="card inline">
+      <input type="checkbox" checked={on} onChange={(e) => { setOn(e.target.checked); setAutoLookup(e.target.checked) }} />
+      <span>
+        Look up photos and details for my places automatically
+        <small className="muted" style={{ display: 'block' }}>
+          Sends each place’s name and location to OpenStreetMap and Wikipedia. Turn off to keep everything on this device.
+        </small>
+      </span>
+    </label>
+  )
+}
+
 export function TripOverview({ trip }: { trip: Trip }) {
   const { days, places, expenses } = useAppData()
   const [addingStop, setAddingStop] = useState(false)
-  const [editingTrip, setEditingTrip] = useState(false)
   const [journey, setJourney] = useState<{ transfer?: Transfer } | null>(null)
-  const tripTransfers = useAppData().transfers.filter((t) => t.tripId === trip.id).sort((a, b) => (a.date + (a.departTime ?? '')).localeCompare(b.date + (b.departTime ?? '')))
-
-  const toStart = daysUntil(trip.startDate)
-  const toEnd = daysUntil(trip.endDate)
-  const big = toStart > 0 ? String(toStart) : toEnd >= 0 ? `Day ${-toStart + 1}` : '—'
-  const small = toStart > 0 ? (toStart === 1 ? 'day to go' : 'days to go') : toEnd >= 0 ? 'enjoy the trip' : 'trip finished'
+  const tripTransfers = useAppData()
+    .transfers.filter((t) => t.tripId === trip.id)
+    .sort((a, b) => (a.date + (a.departTime ?? '')).localeCompare(b.date + (b.departTime ?? '')))
 
   const tripDays = useMemo(
     () => days.filter((d) => d.tripId === trip.id).sort((a, b) => a.date.localeCompare(b.date)),
@@ -100,95 +127,137 @@ export function TripOverview({ trip }: { trip: Trip }) {
   const withItems = tripDays.filter((d) => d.items.length > 0)
   const today = toISO(new Date())
   const next = withItems.find((d) => d.date >= today) ?? withItems[0]
-  const placeById = new Map(places.filter((p) => p.tripId === trip.id).map((p) => [p.id, p]))
+  const mine = places.filter((p) => p.tripId === trip.id)
+  const placeById = new Map(mine.map((p) => [p.id, p]))
   const dayNumber = next ? tripDays.indexOf(next) + 1 : 0
+
+  const layers = useMemo(() => {
+    const m = new Map<string, number>()
+    for (const p of mine) m.set(p.layer, (m.get(p.layer) ?? 0) + 1)
+    return [...m].sort((a, b) => b[1] - a[1])
+  }, [mine])
 
   const spent = expenses.filter((e) => e.tripId === trip.id).reduce((s, e) => s + e.amount, 0)
   const done = trip.checklist.filter((c) => c.done).length
-  const placeCount = places.filter((p) => p.tripId === trip.id).length
 
   return (
     <div className="page">
-      <header className="page-head">
-        <div>
-          <p className="kicker">{fmt(trip.startDate)} – {fmt(trip.endDate)}</p>
-          <h1>{trip.name}</h1>
-        </div>
-        <div className="countdown-big">
-          <strong>{big}</strong>
-          <span>{small}</span>
-        </div>
-      </header>
+      <div className="overview-grid">
+        <section className="card panel">
+          <header className="panel-head">
+            <div>
+              <p className="eyebrow">The shape of the journey</p>
+              <h2 className="display">Stops along the way</h2>
+            </div>
+            <button className="primary" onClick={() => setAddingStop(true)}>
+              <Plus size={18} /> Add stop
+            </button>
+          </header>
 
-      <div className="grid stops">
-        {trip.stops.map((s, i) => (
-          <StopCard key={s.id} trip={trip} stop={s} index={i} />
-        ))}
-        {addingStop ? (
-          <NameDatesForm
-            title="Add a stop"
-            initial={{ name: '', start: trip.startDate, end: trip.endDate }}
-            nameLabel="City or area"
-            startLabel="Arrive"
-            endLabel="Leave"
-            onSave={(v) => {
-              addStop(trip.id, { name: v.name, arrival: v.start, departure: v.end })
-              setAddingStop(false)
-            }}
-            onCancel={() => setAddingStop(false)}
-          />
-        ) : (
-          <button className="card add-card" onClick={() => setAddingStop(true)}>
-            <Plus size={24} />
-            Add a stop
-          </button>
-        )}
+          {addingStop && (
+            <NameDatesForm
+              title="Add a stop"
+              initial={{ name: '', start: trip.startDate, end: trip.endDate }}
+              nameLabel="City or area"
+              startLabel="Arrive"
+              endLabel="Leave"
+              onSave={(v) => {
+                addStop(trip.id, { name: v.name, arrival: v.start, departure: v.end })
+                setAddingStop(false)
+              }}
+              onCancel={() => setAddingStop(false)}
+            />
+          )}
+
+          {trip.stops.length === 0 && !addingStop ? (
+            <div className="empty">
+              <span className="empty-icon"><Route size={30} /></span>
+              <h3 className="display">A journey takes shape one stop at a time.</h3>
+              <p className="muted">Add the cities you have in mind. You can adjust their order and dates whenever plans shift.</p>
+              <button className="soft-btn" onClick={() => setAddingStop(true)}><Plus size={18} /> Add your first stop</button>
+            </div>
+          ) : (
+            <div className="stop-list">
+              {trip.stops.map((s, i) => (
+                <StopCard key={s.id} trip={trip} stop={s} index={i} />
+              ))}
+            </div>
+          )}
+        </section>
+
+        <aside className="stack">
+          <section className="card panel">
+            <header className="panel-head">
+              <h2 className="display">Places by layer</h2>
+              <a className="link" href={`#/trip/${trip.id}/map`}>View map <ArrowRight size={16} /></a>
+            </header>
+            {layers.length === 0 ? (
+              <p className="note">Import a map to bring your saved places and layers into this trip.</p>
+            ) : (
+              <div className="layer-list">
+                {layers.map(([name, n]) => (
+                  <a key={name} href={`#/trip/${trip.id}/places`} className="layer-row">
+                    <span>{name}</span>
+                    <strong>{n}</strong>
+                  </a>
+                ))}
+              </div>
+            )}
+            <hr />
+            <header className="panel-head">
+              <h2 className="display">Map import</h2>
+              <MapPin size={20} aria-hidden />
+            </header>
+            <MapImport tripId={trip.id} />
+          </section>
+        </aside>
       </div>
 
       <div className="grid two">
-        <div className="card">
-          <h3 className="serif">{next ? `Next up · Day ${dayNumber}, ${shortDate(next.date)}` : 'Next up'}</h3>
+        <div className="card panel">
+          <p className="eyebrow">Coming up</p>
+          <h2 className="display">{next ? `Day ${dayNumber}, ${shortDate(next.date)}` : 'Next up'}</h2>
           {next ? (
             <>
               {next.items.slice(0, 5).map((i) => {
                 const p = placeById.get(i.placeId)
                 return (
                   <div key={i.id} className="line">
-                    {p && <TagIcon tag={tagName(p)} size={28} />}
+                    {p && <PlaceThumb place={p} size={36} />}
                     <span>{p?.name ?? '(place removed)'}</span>
                     {i.time && <span className="muted">{i.time}</span>}
                   </div>
                 )
               })}
               {next.items.length > 5 && <p className="muted">…and {next.items.length - 5} more</p>}
-              <a className="btn" href={`#/trip/${trip.id}/days/${next.date}`}>Open this day</a>
+              <a className="soft-btn" href={`#/trip/${trip.id}/days/${next.date}`}>Open this day <ArrowRight size={16} /></a>
             </>
           ) : (
-            <p className="muted">
+            <p className="note">
               Nothing planned yet. Import places, link an area to a stop, then press “Suggest my days” on the stop.
             </p>
           )}
         </div>
         <div className="stack">
           <a className="card summary" href={`#/trip/${trip.id}/budget`}>
-            <span className="muted">Budget</span>
-            <strong className="serif">
+            <span className="eyebrow">Budget</span>
+            <strong className="display">
               {fmtMoney(spent, trip.currency)}
               {trip.budget !== undefined && <small className="muted"> of {fmtMoney(trip.budget, trip.currency)}</small>}
             </strong>
           </a>
           <a className="card summary" href="#checklists" onClick={(e) => { e.preventDefault(); document.getElementById('checklists')?.scrollIntoView({ behavior: 'smooth' }) }}>
-            <span className="muted">Checklists</span>
-            <strong className="serif">{done}<small className="muted"> of {trip.checklist.length} done</small></strong>
+            <span className="eyebrow">Checklists</span>
+            <strong className="display">{done}<small className="muted"> of {trip.checklist.length} done</small></strong>
           </a>
           <a className="card summary" href={`#/trip/${trip.id}/places`}>
-            <span className="muted">Places</span>
-            <strong className="serif">{placeCount}<small className="muted"> saved</small></strong>
+            <span className="eyebrow">Places</span>
+            <strong className="display">{mine.length}<small className="muted"> saved</small></strong>
           </a>
         </div>
       </div>
 
-      <h3>Flights and transport</h3>
+      <h3 className="section-title">Flights and transport</h3>
       <div className="card">
         {tripTransfers.length === 0 && <p className="muted">Add flights, trains and other journeys, especially between cities.</p>}
         {tripTransfers.map((t) => {
@@ -205,43 +274,28 @@ export function TripOverview({ trip }: { trip: Trip }) {
             </button>
           )
         })}
-        <button className="wide" onClick={() => setJourney({})}><Plus size={16} /> Add a journey</button>
+        <button className="soft-btn" onClick={() => setJourney({})}><Plus size={16} /> Add a journey</button>
       </div>
       {journey && <TransferSheet trip={trip} date={trip.startDate} transfer={journey.transfer} onClose={() => setJourney(null)} />}
 
       <div id="checklists"><Checklist trip={trip} /></div>
       <BackupCard trip={trip} />
 
-      <h3>Trip settings</h3>
-      {editingTrip ? (
-        <NameDatesForm
-          title="Edit trip"
-          initial={{ name: trip.name, start: trip.startDate, end: trip.endDate }}
-          nameLabel="Trip name"
-          startLabel="Start date"
-          endLabel="End date"
-          onSave={(v) => {
-            updateTrip(trip.id, { name: v.name, startDate: v.start, endDate: v.end })
-            setEditingTrip(false)
+      <h3 className="section-title">Trip settings</h3>
+      <AutoLookupToggle />
+      <div className="card row buttons">
+        <button
+          className="danger"
+          onClick={() => {
+            if (confirm(`Delete “${trip.name}” and all its places? This can’t be undone.`)) {
+              deleteTrip(trip.id)
+              go({ page: 'home' })
+            }
           }}
-          onCancel={() => setEditingTrip(false)}
-        />
-      ) : (
-        <div className="card row buttons">
-          <button onClick={() => setEditingTrip(true)}>Edit name and dates</button>
-          <button
-            className="danger"
-            onClick={() => {
-              if (confirm(`Delete “${trip.name}” and all its places? This can’t be undone.`)) {
-                deleteTrip(trip.id)
-                go({ page: 'home' })
-              }
-            }}
-          >
-            Delete trip
-          </button>
-        </div>
-      )}
+        >
+          Delete trip
+        </button>
+      </div>
     </div>
   )
 }

@@ -5,6 +5,7 @@ import { fileToDataUrl } from '../lib/photo'
 import { fmtMoney } from '../lib/money'
 import {
   addPlacePhoto,
+  applyLookups,
   removeDayItem,
   removePlacePhoto,
   setPlaceDetails,
@@ -55,11 +56,12 @@ export function PlaceSheet({
       return
     }
     if (result.status === 'none') {
+      applyLookups([{ id: place!.id, lookup: 'none' }])
       setStatus('Couldn’t find a matching listing online. Try the search links below, or add details yourself.')
       return
     }
     // Keep anything you typed yourself; fill in the rest.
-    setPlaceDetails(place!.id, { ...result.details, ...Object.fromEntries(Object.entries(d).filter(([, v]) => v)) })
+    applyLookups([{ id: place!.id, lookup: result.complete ? 'found' : 'partial', details: result.details }])
     setStatus(`Found details from ${result.details.source}.`)
   }
 
@@ -92,7 +94,7 @@ export function PlaceSheet({
       </div>
       <div className="sheet-body place-sheet">
         <div className="photo-hero">
-          {hero ? <img src={hero} alt={place.name} loading="lazy" referrerPolicy="no-referrer" /> : (
+          {hero ? <img src={hero} alt={place.name} loading="lazy" referrerPolicy="no-referrer" onError={(e) => { e.currentTarget.style.display = 'none' }} /> : (
             <div className="photo-empty" style={{ background: TAG_STYLE[tag as keyof typeof TAG_STYLE].tint }}>
               <TagIcon tag={tag} size={56} />
               <span className="muted">No photo yet</span>

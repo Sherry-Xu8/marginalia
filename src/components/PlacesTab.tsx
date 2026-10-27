@@ -1,8 +1,6 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
-import { ImportError, readMapFile } from '../lib/kml'
+import { useEffect, useMemo, useState } from 'react'
 import {
   clearPlaces,
-  importPlaces,
   mergeGroups,
   movePlaces,
   renameGroup,
@@ -17,9 +15,11 @@ import {
   useAppData,
 } from '../lib/store'
 import { TAGS, TAG_STYLE } from '../lib/tagging'
-import type { Group, ImportSummary, Place, Stop, Tag } from '../types'
+import type { Group, Place, Stop, Tag } from '../types'
 import { FilterChips, tagOf } from './FilterChips'
+import { MapImport } from './MapImport'
 import { PlaceSheet } from './PlaceSheet'
+import { PlaceThumb } from './TagIcon'
 import { QuickTag } from './QuickTag'
 
 function NameField({ place }: { place: Place }) {
@@ -66,9 +66,14 @@ function PlaceRow({
   const style = TAG_STYLE[tagOf(place) as keyof typeof TAG_STYLE]
   const title = (
     <>
-      <i className="dot" style={{ background: style.colour }} />
-      {place.name}
-      <small className="muted"> {tagOf(place)}</small>
+      <PlaceThumb place={place} size={44} />
+      <span className="place-text">
+        <span className="place-name">{place.name}</span>
+        <small className="muted">
+          <i className="dot" style={{ background: style.colour }} />
+          {tagOf(place)}
+        </small>
+      </span>
     </>
   )
   if (selectMode) {
@@ -179,10 +184,6 @@ function GroupSection({
 export function PlacesTab({ tagFilter, setTagFilter }: { tagFilter: string[]; setTagFilter: (v: string[]) => void }) {
   const { places, groups, trips, activeTripId } = useAppData()
   const trip = trips.find((t) => t.id === activeTripId)
-  const fileInput = useRef<HTMLInputElement>(null)
-  const [busy, setBusy] = useState(false)
-  const [error, setError] = useState('')
-  const [summary, setSummary] = useState<ImportSummary | null>(null)
   const [query, setQuery] = useState('')
   const [view, setView] = useState<'location' | 'layer'>('location')
   const [quickTag, setQuickTag] = useState(false)
@@ -221,25 +222,6 @@ export function PlacesTab({ tagFilter, setTagFilter }: { tagFilter: string[]; se
 
   if (quickTag) return <QuickTag places={untagged} groups={myGroups} onDone={() => setQuickTag(false)} />
 
-  async function onFile(file: File | undefined) {
-    if (!file || !trip) return
-    setBusy(true)
-    setError('')
-    setSummary(null)
-    try {
-      const parsed = await readMapFile(file)
-      if (parsed.places.length === 0) {
-        throw new ImportError('We read the file but found no places with a location in it.')
-      }
-      setSummary(importPlaces(trip.id, parsed, file.name))
-    } catch (e) {
-      setError(e instanceof ImportError ? e.message : 'Something went wrong reading that file.')
-    } finally {
-      setBusy(false)
-      if (fileInput.current) fileInput.current.value = '' // allow choosing the same file again
-    }
-  }
-
   const toggle = (id: string) =>
     setSelected((s) => {
       const n = new Set(s)
@@ -257,28 +239,7 @@ export function PlacesTab({ tagFilter, setTagFilter }: { tagFilter: string[]; se
     <section>
       <h2>Places</h2>
       <div className="card">
-        <p>
-          Export your map from Google My Maps as <strong>KML/KMZ</strong>, then choose the file here.
-          Importing the same file again won’t create duplicates.
-        </p>
-        <input ref={fileInput} type="file" accept=".kml,.kmz" hidden onChange={(e) => onFile(e.target.files?.[0])} />
-        <button className="primary wide" disabled={busy} onClick={() => fileInput.current?.click()}>
-          {busy ? 'Reading…' : 'Import KML / KMZ file'}
-        </button>
-        {error && <p className="error" role="alert">{error}</p>}
-        {summary && (
-          <div className="import-summary" role="status">
-            <strong>Import finished — {summary.fileName}</strong>
-            <ul>
-              <li>{summary.found} places found</li>
-              <li>{summary.added} added</li>
-              {summary.duplicates > 0 && <li>{summary.duplicates} already in your trip (skipped)</li>}
-              {summary.noLocation > 0 && <li>{summary.noLocation} skipped (lines or areas, not single places)</li>}
-              <li>Layers: {summary.layers.map((l) => `${l.name} (${l.count})`).join(', ')}</li>
-              <li>Sorted into {myGroups.length} location group{myGroups.length === 1 ? '' : 's'}</li>
-            </ul>
-          </div>
-        )}
+        <MapImport tripId={trip.id} />
       </div>
 
       {mine.length > 0 && (

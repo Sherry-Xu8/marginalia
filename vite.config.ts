@@ -11,19 +11,20 @@ export default defineConfig({
       registerType: 'autoUpdate',
       includeAssets: ['favicon.svg', 'apple-touch-icon.png'],
       manifest: {
-        name: 'Trip Planner',
-        short_name: 'Trips',
-        description: 'A personal trip planner',
+        name: 'Wayfarer',
+        short_name: 'Wayfarer',
+        description: 'A little room for the road — your personal trip planner',
         start_url: '.',
         display: 'standalone',
-        background_color: '#f6f3ec',
-        theme_color: '#3f7d6e',
+        background_color: '#f8f6f1',
+        theme_color: '#4a7461',
         icons: [
           { src: 'icon-192.png', sizes: '192x192', type: 'image/png' },
           { src: 'icon-512.png', sizes: '512x512', type: 'image/png', purpose: 'any maskable' },
         ],
       },
       workbox: {
+        globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
         // Remember map tiles you've looked at so they still show offline.
         runtimeCaching: [
           {

@@ -51,7 +51,7 @@ export function DayMap({
     markers.current.clear()
     const route: Place[] = [startStay, ...places, endStay].filter((p): p is Place => !!p)
     const pts = route.map((p) => [p.lat, p.lon] as [number, number])
-    if (pts.length > 1) L.polyline(pts, { color: '#c2582f', weight: 3, opacity: 0.55, dashArray: '6 8' }).addTo(g)
+    if (pts.length > 1) L.polyline(pts, { color: '#4a7461', weight: 3, opacity: 0.6, dashArray: '6 8' }).addTo(g)
 
     const stays = [...new Map([startStay, endStay].filter((p): p is Place => !!p).map((p) => [p.id, p])).values()]
     for (const p of stays) {

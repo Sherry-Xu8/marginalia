@@ -57,30 +57,19 @@ const asUrl = (v: string | undefined): string | undefined => {
 
 const tidy = (v: string | undefined) => v?.replace(/;/g, ', ').replace(/_/g, ' ')
 
-export type LookupResult = { status: 'found'; details: PlaceDetails } | { status: 'none' } | { status: 'unavailable' }
+export type LookupResult =
+  | { status: 'found'; details: PlaceDetails; complete: boolean } // complete = every source answered
+  | { status: 'none' }
+  | { status: 'unavailable' }
 
-// OpenStreetMap listing nearby with a similar name: hours, website, phone, cuisine.
-async function fromOpenStreetMap(place: Place): Promise<{ ok: boolean; details?: PlaceDetails; wiki?: string }> {
-  const query = `[out:json][timeout:12];nwr(around:80,${place.lat.toFixed(6)},${place.lon.toFixed(6)})["name"];out tags center 60;`
-  let data: { elements?: Element[] } | null = null
-  for (const server of OVERPASS) {
-    data = await getJson<{ elements?: Element[] }>(
-      server,
-      { method: 'POST', body: 'data=' + encodeURIComponent(query), headers: { 'Content-Type': 'application/x-www-form-urlencoded' } },
-      9000,
-    )
-    if (data?.elements) break
-  }
-  if (!data?.elements) return { ok: false }
+const distMetres = (a: { lat: number; lon: number }, b: { lat: number; lon: number }) => {
+  const rad = Math.PI / 180
+  const x = (b.lon - a.lon) * rad * Math.cos(((a.lat + b.lat) / 2) * rad)
+  const y = (b.lat - a.lat) * rad
+  return Math.sqrt(x * x + y * y) * 6371000
+}
 
-  // Best matching listing by name (they have to share at least one real word).
-  const best = data.elements
-    .filter((e) => e.tags)
-    .map((e) => ({ tags: e.tags!, score: nameScore(place, e.tags!) }))
-    .filter((x) => x.score >= 0.34)
-    .sort((a, b) => b.score - a.score)[0]
-  if (!best) return { ok: true }
-  const t = best.tags
+function detailsFromTags(t: Tags): { details: PlaceDetails; wiki?: string } {
   const details: PlaceDetails = {
     summary: t['description:en'] ?? t.description,
     website: asUrl(t.website ?? t['contact:website'] ?? t.url),
@@ -91,13 +80,29 @@ async function fromOpenStreetMap(place: Place): Promise<{ ok: boolean; details?:
   }
   const commons = t.wikimedia_commons?.startsWith('File:') ? t.wikimedia_commons.slice(5) : undefined
   if (commons) details.imageUrl = `https://commons.wikimedia.org/wiki/Special:FilePath/${encodeURIComponent(commons)}?width=800`
-  return { ok: true, details, wiki: t.wikipedia }
+  return { details, wiki: t.wikipedia }
+}
+
+// One Overpass request for several places at once: everything named within 80 m of any of them.
+// Returns null if no server answered.
+async function overpassNear(places: Place[]): Promise<Element[] | null> {
+  const around = places.map((p) => `nwr(around:80,${p.lat.toFixed(6)},${p.lon.toFixed(6)})["name"];`).join('')
+  const query = `[out:json][timeout:20];(${around});out tags center 800;`
+  for (const server of OVERPASS) {
+    const data = await getJson<{ elements?: Element[] }>(
+      server,
+      { method: 'POST', body: 'data=' + encodeURIComponent(query), headers: { 'Content-Type': 'application/x-www-form-urlencoded' } },
+      20000,
+    )
+    if (data?.elements) return data.elements
+  }
+  return null
 }
 
 type WikiSummary = { extract?: string; thumbnail?: { source?: string } }
 
 // A Wikipedia article about this place (for well-known places): a description and a photo.
-async function fromWikipedia(place: Place, taggedArticle?: string): Promise<{ summary?: string; imageUrl?: string } | null> {
+async function fromWikipedia(place: Place, taggedArticle?: string): Promise<{ summary?: string; imageUrl?: string } | null | undefined> {
   let lang = 'en'
   let title: string | undefined
   const tagged = taggedArticle?.match(/^([a-z-]+):(.+)$/)
@@ -110,8 +115,9 @@ async function fromWikipedia(place: Place, taggedArticle?: string): Promise<{ su
       undefined,
       8000,
     )
+    if (!geo) return undefined // the service didn't answer (different from "no article")
     const mine = new Set([...words(place.name), ...words(englishPart(place.name) ?? '')])
-    title = geo?.query?.geosearch?.find((g) => words(g.title).some((w) => mine.has(w)))?.title
+    title = geo.query?.geosearch?.find((g) => words(g.title).some((w) => mine.has(w)))?.title
   }
   if (!title) return null
   const w = await getJson<WikiSummary>(
@@ -124,19 +130,55 @@ async function fromWikipedia(place: Place, taggedArticle?: string): Promise<{ su
   return { summary: w.extract, imageUrl: w.thumbnail?.source?.replace(/\/\d+px-/, '/500px-') }
 }
 
-export async function lookupPlace(place: Place): Promise<LookupResult> {
-  // Both sources are asked at the same time; either may have nothing, or be busy.
-  const [osm, wiki] = await Promise.all([fromOpenStreetMap(place), fromWikipedia(place)])
-  const wikiViaTag = osm.wiki && !wiki ? await fromWikipedia(place, osm.wiki) : null
-  const w = wiki ?? wikiViaTag
+// Looks up several places, kindly: one OpenStreetMap request for the lot, then Wikipedia a few at a time.
+export async function lookupMany(places: Place[]): Promise<Map<string, LookupResult>> {
+  const out = new Map<string, LookupResult>()
+  if (places.length === 0) return out
+  const elements = await overpassNear(places)
 
-  if (!osm.ok && !w) return { status: 'unavailable' }
-  const details: PlaceDetails = { ...osm.details }
-  if (w) {
-    details.summary = details.summary ?? w.summary
-    details.imageUrl = details.imageUrl ?? w.imageUrl
-  }
-  details.source = osm.details && w ? 'OpenStreetMap and Wikipedia' : w ? 'Wikipedia' : osm.details ? 'OpenStreetMap' : undefined
-  const useful = details.summary || details.website || details.hours || details.phone || details.cuisine || details.imageUrl
-  return useful ? { status: 'found', details } : { status: 'none' }
+  const work = places.map((place) => async () => {
+    let details: PlaceDetails | undefined
+    let wikiTag: string | undefined
+    if (elements) {
+      const best = elements
+        .filter((e) => e.tags)
+        .map((e) => {
+          const at = e.center ?? (e.lat !== undefined && e.lon !== undefined ? { lat: e.lat, lon: e.lon } : null)
+          return { tags: e.tags!, at, score: nameScore(place, e.tags!) }
+        })
+        .filter((x) => x.at && distMetres(place, x.at) <= 90 && x.score >= 0.34)
+        .sort((a, b) => b.score - a.score)[0]
+      if (best) {
+        const d = detailsFromTags(best.tags)
+        details = d.details
+        wikiTag = d.wiki
+      }
+    }
+    let wiki = await fromWikipedia(place, wikiTag)
+    if (wiki === null && wikiTag) wiki = undefined
+    const wikiAnswered = wiki !== undefined
+    const merged: PlaceDetails = { ...details }
+    if (wiki) {
+      merged.summary = merged.summary ?? wiki.summary
+      merged.imageUrl = merged.imageUrl ?? wiki.imageUrl
+    }
+    merged.source = details && wiki ? 'OpenStreetMap and Wikipedia' : wiki ? 'Wikipedia' : details ? 'OpenStreetMap' : undefined
+    const useful = merged.summary || merged.website || merged.hours || merged.phone || merged.cuisine || merged.imageUrl
+    if (useful) out.set(place.id, { status: 'found', details: merged, complete: !!elements && wikiAnswered })
+    else if (!elements || !wikiAnswered) out.set(place.id, { status: 'unavailable' })
+    else out.set(place.id, { status: 'none' })
+  })
+
+  // Wikipedia: three places at a time.
+  const queue = [...work]
+  await Promise.all(
+    Array.from({ length: 3 }, async () => {
+      for (let job = queue.shift(); job; job = queue.shift()) await job()
+    }),
+  )
+  return out
+}
+
+export async function lookupPlace(place: Place): Promise<LookupResult> {
+  return (await lookupMany([place])).get(place.id) ?? { status: 'unavailable' }
 }

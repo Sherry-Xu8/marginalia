@@ -33,7 +33,7 @@ import { FilterChips, tagOf } from './FilterChips'
 import { PlaceSheet } from './PlaceSheet'
 import { StaySheet } from './StaySheet'
 import { SuggestSheet } from './SuggestSheet'
-import { TagIcon } from './TagIcon'
+import { PlaceThumb, TagIcon } from './TagIcon'
 import { KIND_INFO, TransferSheet } from './TransferSheet'
 
 // ---- Travel between places ----
@@ -112,20 +112,6 @@ function DayTravel({ points, mode }: { points: Place[]; mode: Mode }) {
 
 // ---- Cards ----
 
-function Thumb({ place, number }: { place: Place | undefined; number?: number }) {
-  const src = place?.photos?.[0] ?? place?.details?.imageUrl
-  return (
-    <span className="thumbwrap">
-      {src ? (
-        <img className="thumb-img" src={src} alt="" loading="lazy" referrerPolicy="no-referrer" />
-      ) : (
-        <TagIcon tag={place ? tagOf(place) : 'Untagged'} size={48} />
-      )}
-      {number !== undefined && <i className="badge">{number}</i>}
-    </span>
-  )
-}
-
 function StayCard({ label, place, onClick }: { label: string; place: Place; onClick: () => void }) {
   return (
     <div className="item stay-card">
@@ -173,7 +159,7 @@ function ItemRow({
         <button className="handle" aria-label="Drag to reorder" {...attributes} {...listeners}>
           <GripVertical size={20} />
         </button>
-        <Thumb place={place} number={index + 1} />
+        <PlaceThumb place={place} size={52} number={index + 1} />
         <button className="item-main" onClick={onFocus} aria-label={`Show ${place?.name ?? 'place'} on the map`}>
           <strong className="serif">{place?.name ?? '(place removed)'}</strong>
           <span className="muted">{tag}</span>
