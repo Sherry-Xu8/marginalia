@@ -251,3 +251,5 @@ main > section > h2 { font-size: 2rem; margin: 0 0 12px; }
 .grid.trips, .grid.stops { grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); }
 .area-row { min-height: 52px; }
 details.card > summary { cursor: pointer; }
+.map-bar .segmented { margin: 4px 0 8px; max-width: 360px; }
+.map-bar .segmented button { min-height: 36px; font-size: 0.85rem; }

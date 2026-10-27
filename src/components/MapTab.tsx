@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { fromISO, stopsOn } from '../lib/days'
 import { addToDay, getState, useAppData } from '../lib/store'
 import { TAG_STYLE } from '../lib/tagging'
+import { baseLayer, getMapLabels, setMapLabels, type MapLabels } from '../lib/tiles'
 import type { Place } from '../types'
 import { FilterChips, tagOf } from './FilterChips'
 
@@ -67,14 +68,23 @@ export function MapTab({ tagFilter, setTagFilter }: { tagFilter: string[]; setTa
   const el = useRef<HTMLDivElement>(null)
   const map = useRef<L.Map | null>(null)
   const pins = useRef<L.LayerGroup | null>(null)
+  const tiles = useRef<L.TileLayer | null>(null)
+  const [labels, setLabels] = useState<MapLabels>(getMapLabels)
+
+  // Switching label language swaps the map pictures underneath the pins.
+  useEffect(() => {
+    const m = map.current
+    if (!m) return
+    tiles.current?.remove()
+    tiles.current = baseLayer(labels).addTo(m)
+    tiles.current.bringToBack()
+    setMapLabels(labels)
+  }, [labels])
 
   useEffect(() => {
     if (!el.current) return
     const m = L.map(el.current, { zoomControl: true }).setView([20, 0], 2)
-    L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      maxZoom: 19,
-      attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
-    }).addTo(m)
+    tiles.current = baseLayer(labels).addTo(m)
     pins.current = L.layerGroup().addTo(m)
     map.current = m
     setTimeout(() => m.invalidateSize(), 0)
@@ -119,6 +129,10 @@ export function MapTab({ tagFilter, setTagFilter }: { tagFilter: string[]; setTa
             ))}
           </select>
         )}
+        <div className="segmented" role="group" aria-label="Map labels">
+          <button className={labels === 'english' ? 'on' : ''} onClick={() => setLabels('english')}>English labels</button>
+          <button className={labels === 'local' ? 'on' : ''} onClick={() => setLabels('local')}>Local language</button>
+        </div>
         {mine.length === 0 && <p className="muted">No places yet — import a file on the Places tab to see pins here.</p>}
       </div>
       <div ref={el} className="map" />

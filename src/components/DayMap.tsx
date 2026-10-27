@@ -1,6 +1,7 @@
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 import { useEffect, useRef } from 'react'
+import { baseLayer, getMapLabels } from '../lib/tiles'
 import type { Place } from '../types'
 
 // A small map of one day: numbered pins joined by a line in visiting order.
@@ -12,10 +13,7 @@ export function DayMap({ places }: { places: Place[] }) {
   useEffect(() => {
     if (!el.current) return
     const m = L.map(el.current, { zoomControl: true, scrollWheelZoom: false }).setView([20, 0], 2)
-    L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      maxZoom: 19,
-      attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
-    }).addTo(m)
+    baseLayer(getMapLabels()).addTo(m)
     layer.current = L.layerGroup().addTo(m)
     map.current = m
     setTimeout(() => m.invalidateSize(), 0)
