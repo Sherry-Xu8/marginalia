@@ -1,13 +1,16 @@
 import { get, set } from 'idb-keyval'
 import { useSyncExternalStore } from 'react'
-import type { AppData, ImportSummary, Place, Stop, Trip } from '../types'
+import type { AppData, Group, ImportSummary, Place, Stop, Tag, Trip } from '../types'
+import { distanceKm } from './geo'
+import { GROUP_RADIUS_KM, clusterPlaces, nextAreaName } from './grouping'
 import type { ParseResult } from './kml'
+import { suggestTags } from './tagging'
 
 // One small store holds everything and saves it to the browser (IndexedDB)
 // after each change. Components read it with useAppData().
 
 const KEY = 'trip-planner-data'
-const empty: AppData = { version: 1, trips: [], places: [], activeTripId: null }
+const empty: AppData = { version: 1, trips: [], places: [], groups: [], activeTripId: null }
 
 let state: AppData = empty
 const listeners = new Set<() => void>()
@@ -16,10 +19,19 @@ let saveTimer: ReturnType<typeof setTimeout> | undefined
 export async function loadData(): Promise<void> {
   try {
     const saved = await get<AppData>(KEY)
-    if (saved && saved.version === 1) state = saved
+    if (saved && saved.version === 1) {
+      // Data saved by Stage 1 has no groups yet — fill them in.
+      state = { ...saved, groups: saved.groups ?? [] }
+      for (const t of state.trips) state = assignGroups(state, t.id)
+      void tagUntagged()
+    }
   } catch {
     // Storage can be unavailable (e.g. private browsing) — start empty.
   }
+}
+
+export function getState(): AppData {
+  return state
 }
 
 function update(fn: (s: AppData) => AppData) {
@@ -63,6 +75,7 @@ export function deleteTrip(id: string) {
       ...s,
       trips,
       places: s.places.filter((p) => p.tripId !== id),
+      groups: s.groups.filter((g) => g.tripId !== id),
       activeTripId: s.activeTripId === id ? (trips[0]?.id ?? null) : s.activeTripId,
     }
   })
@@ -126,7 +139,10 @@ export function importPlaces(tripId: string, parsed: ParseResult, fileName: stri
     added.push({ id: newId(), tripId, dedupeKey: key, ...p })
   }
 
-  if (added.length > 0) update((s) => ({ ...s, places: [...s.places, ...added] }))
+  if (added.length > 0) {
+    update((s) => assignGroups({ ...s, places: [...s.places, ...added] }, tripId))
+    void tagUntagged()
+  }
 
   return {
     fileName,
@@ -139,5 +155,153 @@ export function importPlaces(tripId: string, parsed: ParseResult, fileName: stri
 }
 
 export function clearPlaces(tripId: string) {
-  update((s) => ({ ...s, places: s.places.filter((p) => p.tripId !== tripId) }))
+  update((s) => ({
+    ...s,
+    places: s.places.filter((p) => p.tripId !== tripId),
+    groups: s.groups.filter((g) => g.tripId !== tripId),
+  }))
+}
+
+// ---- Location groups ----
+
+// Puts every place that has no group into one: an existing group if it is within
+// 30 km of one of that group's places, otherwise a new group (chain-linked clusters).
+function assignGroups(s: AppData, tripId: string): AppData {
+  const ungrouped = s.places.filter((p) => p.tripId === tripId && !p.groupId)
+  if (ungrouped.length === 0) return s
+  const groups = s.groups.filter((g) => g.tripId === tripId)
+  const assigned = new Map<string, string>() // place id → group id
+  const newGroups: Group[] = []
+
+  const leftover: Place[] = []
+  for (const p of ungrouped) {
+    let best: { id: string; d: number } | null = null
+    for (const q of s.places) {
+      if (q.tripId !== tripId || !q.groupId) continue
+      const d = distanceKm(p, q)
+      if (d <= GROUP_RADIUS_KM && (!best || d < best.d)) best = { id: q.groupId, d }
+    }
+    if (best) assigned.set(p.id, best.id)
+    else leftover.push(p)
+  }
+
+  for (const indexes of clusterPlaces(leftover)) {
+    const group: Group = {
+      id: newId(),
+      tripId,
+      name: nextAreaName([...groups, ...newGroups]),
+      nameSource: 'auto',
+    }
+    newGroups.push(group)
+    for (const i of indexes) assigned.set(leftover[i].id, group.id)
+  }
+
+  return {
+    ...s,
+    groups: [...s.groups, ...newGroups],
+    places: s.places.map((p) => (assigned.has(p.id) ? { ...p, groupId: assigned.get(p.id) } : p)),
+  }
+}
+
+function dropEmptyGroups(s: AppData): AppData {
+  const used = new Set(s.places.map((p) => p.groupId))
+  return { ...s, groups: s.groups.filter((g) => used.has(g.id)) }
+}
+
+export function renameGroup(id: string, name: string) {
+  update((s) => ({
+    ...s,
+    groups: s.groups.map((g) => (g.id === id ? { ...g, name, nameSource: 'user' } : g)),
+  }))
+}
+
+// Used by the name lookup: only fills in a name if you haven't renamed it yourself.
+export function applyLookedUpName(id: string, name: string | null) {
+  update((s) => {
+    const group = s.groups.find((g) => g.id === id)
+    if (!group || group.nameSource !== 'auto') return s
+    const taken = s.groups.some((g) => g.tripId === group.tripId && g.id !== id && g.name === name)
+    const finalName = name ? (taken ? `${name} (2)` : name) : group.name
+    return {
+      ...s,
+      groups: s.groups.map((g) =>
+        g.id === id ? { ...g, name: finalName, nameSource: name ? 'geocoded' : 'fallback' } : g,
+      ),
+    }
+  })
+}
+
+export function retryNaming() {
+  update((s) => ({
+    ...s,
+    groups: s.groups.map((g) => (g.nameSource === 'fallback' ? { ...g, nameSource: 'auto' } : g)),
+  }))
+}
+
+export function setGroupStop(groupId: string, stopId: string | undefined) {
+  update((s) => ({ ...s, groups: s.groups.map((g) => (g.id === groupId ? { ...g, stopId } : g)) }))
+}
+
+export function mergeGroups(fromId: string, intoId: string) {
+  update((s) => {
+    const from = s.groups.find((g) => g.id === fromId)
+    return dropEmptyGroups({
+      ...s,
+      groups: s.groups.map((g) => (g.id === intoId && !g.stopId && from?.stopId ? { ...g, stopId: from.stopId } : g)),
+      places: s.places.map((p) => (p.groupId === fromId ? { ...p, groupId: intoId } : p)),
+    })
+  })
+}
+
+// Moves places to another group, or to a brand-new one (this is also how you split a group).
+export function movePlaces(placeIds: string[], target: string | 'new') {
+  update((s) => {
+    const ids = new Set(placeIds)
+    const first = s.places.find((p) => ids.has(p.id))
+    if (!first) return s
+    let groups = s.groups
+    let groupId = target
+    if (target === 'new') {
+      const group: Group = {
+        id: newId(),
+        tripId: first.tripId,
+        name: nextAreaName(s.groups.filter((g) => g.tripId === first.tripId)),
+        nameSource: 'auto', // gets a looked-up name
+      }
+      groups = [...groups, group]
+      groupId = group.id
+    }
+    return dropEmptyGroups({
+      ...s,
+      groups,
+      places: s.places.map((p) => (ids.has(p.id) ? { ...p, groupId } : p)),
+    })
+  })
+}
+
+// ---- Tags ----
+
+export function setPlaceTag(placeId: string, tag: Tag | undefined) {
+  update((s) => ({
+    ...s,
+    places: s.places.map((p) =>
+      p.id === placeId ? { ...p, tag, tagSource: tag ? 'user' : undefined } : p,
+    ),
+  }))
+}
+
+// Runs the taggers over places that have no tag yet. Never touches tags you set yourself.
+export async function tagUntagged() {
+  const todo = state.places.filter((p) => !p.tag && p.tagSource !== 'user')
+  if (todo.length === 0) return
+  const found = await suggestTags(todo)
+  if (found.size === 0) return
+  update((s) => ({
+    ...s,
+    places: s.places.map((p) =>
+      found.has(p.id) && !p.tag && p.tagSource !== 'user'
+        ? { ...p, tag: found.get(p.id), tagSource: 'rule' }
+        : p,
+    ),
+  }))
 }

@@ -1,6 +1,5 @@
 // The shape of everything the app saves. Later stages add more fields
-// (groups, tags, days) — optional ones are already here so saved data
-// from Stage 1 keeps working.
+// (days, budget, …) — saved data from earlier stages keeps working.
 
 export type Stop = {
   id: string
@@ -17,6 +16,18 @@ export type Trip = {
   stops: Stop[]
 }
 
+export const TAGS = [
+  'Food & drink',
+  'Sightseeing',
+  'Accommodation',
+  'Shopping',
+  'Nature & outdoors',
+  'Nightlife',
+  'Transport',
+  'Other',
+] as const
+export type Tag = (typeof TAGS)[number]
+
 export type Place = {
   id: string
   tripId: string
@@ -26,14 +37,27 @@ export type Place = {
   lon: number
   layer: string // the original My Maps layer (folder)
   dedupeKey: string // used so re-importing never creates duplicates
-  groupId?: string // Stage 2
-  tag?: string // Stage 2
+  groupId?: string
+  tag?: Tag // no tag = "Untagged"
+  tagSource?: 'rule' | 'user' // user choices are never overwritten by automatic tagging
+}
+
+// A location group: places roughly within 30 km of each other.
+export type Group = {
+  id: string
+  tripId: string
+  name: string
+  // auto = still waiting for a name lookup, geocoded = named from OpenStreetMap,
+  // fallback = lookup failed (shows "Area N"), user = renamed by you
+  nameSource: 'auto' | 'geocoded' | 'fallback' | 'user'
+  stopId?: string // which trip stop this group belongs to
 }
 
 export type AppData = {
   version: 1
   trips: Trip[]
   places: Place[]
+  groups: Group[]
   activeTripId: string | null
 }
 

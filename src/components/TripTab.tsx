@@ -69,6 +69,8 @@ function NameDatesForm({ title, initial, nameLabel, startLabel, endLabel, onSave
 }
 
 function StopCard({ trip, stop, index }: { trip: Trip; stop: Stop; index: number }) {
+  const { groups } = useAppData()
+  const areas = groups.filter((g) => g.stopId === stop.id).map((g) => g.name)
   const [editing, setEditing] = useState(false)
   if (editing) {
     return (
@@ -92,6 +94,7 @@ function StopCard({ trip, stop, index }: { trip: Trip; stop: Stop; index: number
       <div className="stop-info">
         <strong>{stop.name}</strong>
         <span className="muted">{fmt(stop.arrival)} → {fmt(stop.departure)}</span>
+        {areas.length > 0 && <span className="muted">Places from: {areas.join(', ')}</span>}
       </div>
       <div className="row buttons">
         <button aria-label="Move up" disabled={index === 0} onClick={() => moveStop(trip.id, stop.id, -1)}>↑</button>

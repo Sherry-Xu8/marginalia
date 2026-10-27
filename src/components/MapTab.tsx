@@ -1,20 +1,22 @@
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
-import { useEffect, useMemo, useRef } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useAppData } from '../lib/store'
+import { TAG_STYLE } from '../lib/tagging'
+import { FilterChips, tagOf } from './FilterChips'
 
-// Pin colours. In Stage 1 pins are coloured by My Maps layer;
-// Stage 2 switches this to colour by category.
-const PALETTE = ['#3f7d6e', '#c2693c', '#4c6fb0', '#a8508a', '#8a8a2e', '#2e8a9a', '#b04c4c', '#6b5bb0']
-function colourFor(key: string): string {
-  let h = 0
-  for (const ch of key) h = (h * 31 + ch.charCodeAt(0)) >>> 0
-  return PALETTE[h % PALETTE.length]
-}
-
-export function MapTab() {
-  const { places, activeTripId } = useAppData()
+export function MapTab({ tagFilter, setTagFilter }: { tagFilter: string[]; setTagFilter: (v: string[]) => void }) {
+  const { places, groups, activeTripId } = useAppData()
+  const [groupId, setGroupId] = useState('all')
   const mine = useMemo(() => places.filter((p) => p.tripId === activeTripId), [places, activeTripId])
+  const myGroups = useMemo(() => groups.filter((g) => g.tripId === activeTripId), [groups, activeTripId])
+  const visible = useMemo(
+    () =>
+      mine.filter(
+        (p) => (tagFilter.length === 0 || tagFilter.includes(tagOf(p))) && (groupId === 'all' || p.groupId === groupId),
+      ),
+    [mine, tagFilter, groupId],
+  )
   const el = useRef<HTMLDivElement>(null)
   const map = useRef<L.Map | null>(null)
   const pins = useRef<L.LayerGroup | null>(null)
@@ -40,12 +42,14 @@ export function MapTab() {
     const m = map.current
     if (!group || !m) return
     group.clearLayers()
-    for (const p of mine) {
+    for (const p of visible) {
+      const tag = tagOf(p)
+      const style = TAG_STYLE[tag as keyof typeof TAG_STYLE]
       const marker = L.circleMarker([p.lat, p.lon], {
-        radius: 9,
+        radius: 10,
         color: '#fff',
         weight: 2,
-        fillColor: colourFor(p.layer),
+        fillColor: style.colour,
         fillOpacity: 0.95,
       })
       // Built from plain elements (not HTML strings) so text from a file can't inject code.
@@ -53,28 +57,37 @@ export function MapTab() {
       const title = document.createElement('strong')
       title.textContent = p.name
       box.append(title)
+      const tagLine = document.createElement('div')
+      tagLine.textContent = `${style.emoji} ${tag}`
+      box.append(tagLine)
       if (p.description) {
         const d = document.createElement('p')
         d.textContent = p.description.length > 200 ? p.description.slice(0, 200) + '…' : p.description
         box.append(d)
       }
-      const layer = document.createElement('small')
-      layer.textContent = p.layer
-      box.append(layer)
       marker.bindPopup(box)
       group.addLayer(marker)
     }
-    if (mine.length > 0) {
+    if (visible.length > 0) {
       m.invalidateSize() // make sure the map knows its real size before zooming to fit
-      m.fitBounds(L.latLngBounds(mine.map((p) => [p.lat, p.lon] as [number, number])), { padding: [30, 30] })
+      m.fitBounds(L.latLngBounds(visible.map((p) => [p.lat, p.lon] as [number, number])), { padding: [30, 30], maxZoom: 16 })
     }
-  }, [mine])
+  }, [visible])
 
   return (
     <section className="map-section">
-      {mine.length === 0 && (
-        <p className="muted map-note">No places yet — import a file on the Places tab to see pins here.</p>
-      )}
+      <div className="map-bar">
+        {mine.length > 0 && <FilterChips places={mine} value={tagFilter} onChange={setTagFilter} />}
+        {myGroups.length > 1 && (
+          <select aria-label="Show area" value={groupId} onChange={(e) => setGroupId(e.target.value)}>
+            <option value="all">All areas</option>
+            {myGroups.map((g) => (
+              <option key={g.id} value={g.id}>{g.name}</option>
+            ))}
+          </select>
+        )}
+        {mine.length === 0 && <p className="muted">No places yet — import a file on the Places tab to see pins here.</p>}
+      </div>
       <div ref={el} className="map" />
     </section>
   )

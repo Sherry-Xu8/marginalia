@@ -1,7 +1,9 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { MapTab } from './components/MapTab'
 import { PlacesTab } from './components/PlacesTab'
 import { TripTab } from './components/TripTab'
+import { nameAutoGroups } from './lib/naming'
+import { useAppData } from './lib/store'
 import './App.css'
 
 const TABS = [
@@ -14,12 +16,19 @@ type TabId = (typeof TABS)[number]['id']
 
 export default function App() {
   const [tab, setTab] = useState<TabId>('trip')
+  const [tagFilter, setTagFilter] = useState<string[]>([]) // shared by the Places and Map tabs
+  const { groups } = useAppData()
+
+  // Whenever a group is waiting for a name, look it up (one at a time, politely).
+  useEffect(() => {
+    if (groups.some((g) => g.nameSource === 'auto')) void nameAutoGroups()
+  }, [groups])
   return (
     <div className="app">
       <main>
         {tab === 'trip' && <TripTab />}
-        {tab === 'places' && <PlacesTab />}
-        {tab === 'map' && <MapTab />}
+        {tab === 'places' && <PlacesTab tagFilter={tagFilter} setTagFilter={setTagFilter} />}
+        {tab === 'map' && <MapTab tagFilter={tagFilter} setTagFilter={setTagFilter} />}
       </main>
       <nav className="tabbar" aria-label="Main">
         {TABS.map((t) => (

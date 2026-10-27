@@ -59,8 +59,6 @@ details.place > summary { padding: 14px 0; cursor: pointer; }
 .desc { white-space: pre-wrap; margin: 0 0 8px; }
 
 .map-section { margin: -16px -16px -96px; }
-.map { height: calc(100dvh - 72px); width: 100%; }
-.map-note { position: absolute; z-index: 500; left: 16px; right: 16px; top: 12px; background: var(--card); padding: 8px 12px; border-radius: 12px; }
 .leaflet-popup-content p { margin: 4px 0; }
 
 .tabbar {
@@ -75,3 +73,37 @@ details.place > summary { padding: 14px 0; cursor: pointer; }
 }
 .tabbar button span { font-size: 1.4rem; }
 .tabbar button.active { color: var(--accent); font-weight: 700; }
+
+/* Stage 2: chips, groups, tagging */
+.chips { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0; }
+.chip { min-height: 44px; border-radius: 999px; padding: 0 14px; display: inline-flex; align-items: center; gap: 6px; font-size: 0.9rem; }
+.chip i, .dot { width: 12px; height: 12px; border-radius: 50%; display: inline-block; flex: none; }
+.dot { margin-right: 8px; }
+.chip.on { background: var(--accent); color: var(--accent-text); border-color: var(--accent); }
+.chip.on .muted { color: inherit; }
+.chip.clear { border-style: dashed; }
+
+.segmented { display: flex; margin: 12px 0 4px; }
+.segmented button { flex: 1; border-radius: 0; }
+.segmented button:first-child { border-radius: 12px 0 0 12px; }
+.segmented button:last-child { border-radius: 0 12px 12px 0; border-left: 0; }
+.segmented button.on { background: var(--accent); color: var(--accent-text); border-color: var(--accent); }
+
+.manage { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 8px; }
+.manage select { width: auto; flex: 1; min-width: 140px; }
+.select-row { display: flex; align-items: center; gap: 12px; background: var(--card); border: 1px solid var(--line); border-radius: 12px; margin: 6px 0; padding: 0 14px; min-height: 52px; color: var(--text); font-size: 1rem; }
+.select-row input { width: 24px; min-height: 24px; flex: none; margin: 0; }
+details.place select { margin-top: 4px; }
+
+.movebar { position: fixed; left: 0; right: 0; bottom: calc(64px + env(safe-area-inset-bottom)); z-index: 900; background: var(--card); border-top: 1px solid var(--line); padding: 10px 16px; display: flex; gap: 8px; align-items: center; }
+.movebar select { flex: 1; }
+
+.tag-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 12px 0; }
+.tag-grid button { min-height: 64px; border-width: 2px; font-size: 1rem; }
+
+.map-section { display: flex; flex-direction: column; height: calc(100dvh - 64px - env(safe-area-inset-bottom)); margin-bottom: 0; }
+.map-bar { padding: 4px 16px; max-height: 38vh; overflow-y: auto; background: var(--bg); }
+.map-bar .chips { margin: 4px 0; }
+.map-bar .chip { min-height: 36px; padding: 0 10px; }
+.map-bar select { margin-bottom: 6px; min-height: 40px; }
+.map { flex: 1; height: auto; min-height: 200px; }
