@@ -10,7 +10,7 @@ import {
 import { SortableContext, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 import { BedDouble, ChevronDown, ChevronUp, GripVertical, Info, Pencil, Plus, Sparkles } from 'lucide-react'
-import { Fragment, useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import {
   LONG_TRAVEL_MINUTES,
   MODES,
@@ -287,6 +287,26 @@ export function DaysTab({ initialDate }: { initialDate?: string }) {
     [day, placeById],
   )
 
+  // The days grouped by month, so the strip can label each month once.
+  const monthGroups = useMemo(() => {
+    const groups: { key: string; label: string; year: number; days: Day[] }[] = []
+    for (const d of tripDays) {
+      const date = fromISO(d.date)
+      const key = d.date.slice(0, 7)
+      const last = groups[groups.length - 1]
+      if (last && last.key === key) last.days.push(d)
+      else groups.push({ key, label: date.toLocaleDateString(undefined, { month: 'long' }), year: date.getFullYear(), days: [d] })
+    }
+    return groups
+  }, [tripDays])
+
+  // Keep the chosen day in view as you move between days.
+  useEffect(() => {
+    const strip = document.querySelector<HTMLElement>('.pills')
+    const chip = strip?.querySelector<HTMLElement>('button.on')
+    if (strip && chip) strip.scrollTo({ left: chip.offsetLeft - strip.clientWidth / 2 + chip.clientWidth / 2 })
+  }, [selected, monthGroups])
+
   if (!trip) return null
   if (!day) {
     return (
@@ -332,29 +352,30 @@ export function DaysTab({ initialDate }: { initialDate?: string }) {
       </div>
 
       <div className="pills" role="tablist" aria-label="Days">
-        {tripDays.map((d, i) => {
-          const monthStart = i === 0 || fromISO(d.date).getMonth() !== fromISO(tripDays[i - 1].date).getMonth()
-          return (
-            <Fragment key={d.id}>
-              {monthStart && (
-                <span className="pill-month" aria-hidden>
-                  {fromISO(d.date).toLocaleDateString(undefined, { month: 'short' })}
-                </span>
-              )}
-              <button
-                role="tab"
-                aria-selected={d.id === selected}
-                aria-label={`${fromISO(d.date).toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'long' })}, ${d.items.length} places`}
-                className={d.id === selected ? 'on' : ''}
-                onClick={() => setSelected(d.id)}
-              >
-                <small>{fromISO(d.date).toLocaleDateString(undefined, { weekday: 'short' })}</small>
-                <b>{fromISO(d.date).getDate()}</b>
-                <span className="pill-dot">{d.items.length > 0 ? <i>{d.items.length}</i> : null}</span>
-              </button>
-            </Fragment>
-          )
-        })}
+        {monthGroups.map((g, gi) => (
+          <div key={g.key} className="pill-group">
+            <div className="mo">
+              {g.label}
+              {(gi === 0 || g.year !== monthGroups[gi - 1].year) && <span className="mo-year"> {g.year}</span>}
+            </div>
+            <div className="pill-row">
+              {g.days.map((d) => (
+                <button
+                  key={d.id}
+                  role="tab"
+                  aria-selected={d.id === selected}
+                  aria-label={`${fromISO(d.date).toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'long' })}, ${d.items.length} places`}
+                  className={d.id === selected ? 'on' : ''}
+                  onClick={() => setSelected(d.id)}
+                >
+                  <small>{fromISO(d.date).toLocaleDateString(undefined, { weekday: 'short' })}</small>
+                  <b>{fromISO(d.date).getDate()}</b>
+                  <span className="pill-dot">{d.items.length > 0 ? <i>{d.items.length}</i> : null}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        ))}
       </div>
 
       <div className="day-grid">

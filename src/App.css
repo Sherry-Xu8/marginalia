@@ -541,4 +541,9 @@ details.place, .select-row, .pick { background: var(--card); border: 1px solid v
 main > section > h2 { font-family: var(--serif); font-weight: 420; }
 .countdown-big, .stats div { background: var(--soft); }
 .stats div { border-radius: 18px; }
-.pill-month { flex: none; align-self: stretch; display: flex; align-items: center; padding: 0 2px 0 6px; text-transform: uppercase; letter-spacing: 0.14em; font-size: 0.78rem; font-weight: 700; color: var(--accent-dark); writing-mode: vertical-rl; transform: rotate(180deg); }
+.pills { position: relative; align-items: flex-start; gap: 0; padding: 4px 2px 14px; }
+.pill-group { flex: none; padding: 0 18px 0 0; margin-right: 18px; border-right: 1px solid var(--line); }
+.pill-group:last-child { border-right: 0; margin-right: 0; padding-right: 0; }
+.pill-group .mo { text-transform: uppercase; letter-spacing: 0.16em; font-size: 0.72rem; font-weight: 700; color: var(--accent-dark); margin: 0 0 8px 4px; }
+.mo-year { color: var(--muted); font-weight: 600; letter-spacing: 0.1em; }
+.pill-row { display: flex; gap: 8px; }
