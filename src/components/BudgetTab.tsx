@@ -6,6 +6,7 @@ import { getRate, useRate } from '../lib/rates'
 import { addExpense, deleteExpense, setBudget, setFoodPerDay, setHomeCurrency, useAppData } from '../lib/store'
 import { TAG_STYLE } from '../lib/tagging'
 import { EXPENSE_CATEGORIES, type Expense, type ExpenseCategory } from '../types'
+import { ask } from '../lib/confirm'
 
 // Each kind of spending borrows a colour and icon from the place categories, so the app looks consistent.
 const CAT: Record<ExpenseCategory, { Icon: LucideIcon; style: keyof typeof TAG_STYLE }> = {
@@ -318,7 +319,7 @@ export function BudgetTab() {
                       {money(e.amount)}
                       <Fx n={e.amount} />
                     </strong>
-                    <button className="icon-btn" aria-label={`Delete ${e.title}`} onClick={() => confirm(`Delete “${e.title}”?`) && deleteExpense(e.id)}>
+                    <button className="icon-btn" aria-label={`Delete ${e.title}`} onClick={() => ask(`Delete “${e.title}”?`, () => deleteExpense(e.id))}>
                       <X size={16} />
                     </button>
                   </div>

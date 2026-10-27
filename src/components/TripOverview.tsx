@@ -20,6 +20,7 @@ import { SuggestSheet } from './SuggestSheet'
 import { KIND_INFO, TransferSheet } from './TransferSheet'
 import { PlaceThumb } from './TagIcon'
 import { NameDatesForm, fmt } from './TripForm'
+import { ask } from '../lib/confirm'
 
 const BANDS = [
   'linear-gradient(135deg, #cfe0cf, #a9c4ad)',
@@ -66,6 +67,7 @@ function StopCard({ trip, stop, index, onStays }: { trip: Trip; stop: Stop; inde
 
   return (
     <div className="card stop-card">
+      <a className="tcard-link" href={`#/trip/${trip.id}/days/${dates[0] ?? ''}`} aria-label={`Open the days in ${stop.name}`} />
       <div className="band" style={{ background: BANDS[index % BANDS.length] }}>
         {cover && !coverFailed ? (
           <img src={cover} alt="" loading="lazy" referrerPolicy="no-referrer" onError={() => setCoverFailed(true)} />
@@ -85,7 +87,7 @@ function StopCard({ trip, stop, index, onStays }: { trip: Trip; stop: Stop; inde
               <button role="menuitem" onClick={() => { setMenu(false); setEditing(true) }}><Pencil size={16} /> Edit</button>
               <button role="menuitem" disabled={index === 0} onClick={() => { setMenu(false); moveStop(trip.id, stop.id, -1) }}><ArrowUp size={16} /> Move earlier</button>
               <button role="menuitem" disabled={last} onClick={() => { setMenu(false); moveStop(trip.id, stop.id, 1) }}><ArrowDown size={16} /> Move later</button>
-              <button role="menuitem" className="danger" onClick={() => { setMenu(false); if (confirm(`Remove the stop “${stop.name}”?`)) deleteStop(trip.id, stop.id) }}><Trash2 size={16} /> Remove</button>
+              <button role="menuitem" className="danger" onClick={() => { setMenu(false); ask(`Remove the stop “${stop.name}”?`, () => deleteStop(trip.id, stop.id), 'Remove') }}><Trash2 size={16} /> Remove</button>
             </div>
           )}
         </div>
@@ -101,11 +103,10 @@ function StopCard({ trip, stop, index, onStays }: { trip: Trip; stop: Stop; inde
         <span>{stayNames.length > 0 ? `${stayNames.join(', ')}${nightCount ? ` · ${nightCount} night${nightCount === 1 ? '' : 's'}` : ''}` : 'Add where you’re staying'}</span>
         <Pencil size={14} aria-hidden />
       </button>
-      <div className="row buttons">
-        <button className="primary" onClick={() => setSuggesting(true)}>
+      <div className="row buttons stop-actions">
+        <button className="primary wide" onClick={() => setSuggesting(true)}>
           <Sparkles size={16} /> Suggest my days
         </button>
-        <a className="btn" href={`#/trip/${trip.id}/days/${dates[0] ?? ''}`}>Open days</a>
       </div>
       {suggesting && <SuggestSheet trip={trip} stop={stop} onClose={() => setSuggesting(false)} />}
       {staying && <StaySheet trip={trip} defaults={{ checkIn: stop.arrival, checkOut: stop.departure }} onClose={() => setStaying(false)} />}
@@ -365,10 +366,10 @@ export function TripOverview({ trip }: { trip: Trip }) {
           <button
             className="danger"
             onClick={() => {
-              if (confirm(`Delete “${trip.name}” and all its places? This can’t be undone.`)) {
+              ask(`Delete “${trip.name}” and all its places? This can’t be undone.`, () => {
                 deleteTrip(trip.id)
                 go({ page: 'home' })
-              }
+              }, 'Delete trip')
             }}
           >
             Delete trip

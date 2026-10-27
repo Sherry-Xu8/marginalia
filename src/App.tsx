@@ -4,6 +4,7 @@ import { BudgetTab } from './components/BudgetTab'
 import { DaysTab } from './components/DaysTab'
 import { LogoMark, Wordmark } from './components/Logo'
 import { PlacesTab } from './components/PlacesTab'
+import { ConfirmHost } from './components/ConfirmHost'
 import { SharedView } from './components/SharedView'
 import { TripHero } from './components/TripHero'
 import { TripOverview } from './components/TripOverview'
@@ -61,7 +62,7 @@ function TopBar() {
   )
 }
 
-export default function App() {
+function AppView() {
   const route = useRoute()
   const { trips, groups, places, activeTripId } = useAppData()
   const lookup = useLookupProgress()
@@ -160,5 +161,14 @@ export default function App() {
         ))}
       </nav>
     </div>
+  )
+}
+
+export default function App() {
+  return (
+    <>
+      <AppView />
+      <ConfirmHost />
+    </>
   )
 }

@@ -40,6 +40,7 @@ import { SuggestSheet } from './SuggestSheet'
 import { PlaceThumb, TagIcon } from './TagIcon'
 import { KIND_INFO, TransferSheet } from './TransferSheet'
 import { WeatherChip } from './WeatherChip'
+import { ask } from '../lib/confirm'
 
 // ---- Travel between places ----
 
@@ -293,7 +294,7 @@ function ItemRow({
               <button onClick={() => setPanel(panel === 'edit' ? null : 'edit')}>Time and note</button>
               <button onClick={() => setPanel(panel === 'book' ? null : 'book')}><CalendarCheck size={15} /> Booking</button>
               {allDays.length > 1 && <button onClick={() => setPanel(panel === 'move' ? null : 'move')}><MoveRight size={15} /> Move</button>}
-              <button className="danger" onClick={() => confirm(`Remove “${place.name}” from this day?`) && removeDayItem(day.id, item.id)}>Remove</button>
+              <button className="danger" onClick={() => ask(`Remove “${place.name}” from this day?`, () => removeDayItem(day.id, item.id), 'Remove')}>Remove</button>
             </div>
             {panel === 'expense' && <QuickExpense place={place} day={day} currency={currency} onDone={() => setPanel(null)} />}
             {panel === 'book' && (

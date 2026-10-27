@@ -4,6 +4,7 @@ import { buildShareLink, canMakeLinks, qrFor } from '../lib/sharelink'
 import { markBackedUp } from '../lib/backupState'
 import { getState, importTripData, replaceAllData } from '../lib/store'
 import type { Trip } from '../types'
+import { ask } from '../lib/confirm'
 
 export function BackupCard({ trip }: { trip?: Trip }) {
   const fileInput = useRef<HTMLInputElement>(null)
@@ -52,13 +53,16 @@ export function BackupCard({ trip }: { trip?: Trip }) {
       if (parsed.kind === 'trip') {
         const name = importTripData(parsed.data)
         setMessage(`Added the trip “${name}”. Your other trips are untouched.`)
-      } else if (
-        confirm(
-          `This backup has ${parsed.data.trips.length} trip(s). Importing it will REPLACE everything currently on this device. Continue?`,
+      } else {
+        const data = parsed.data
+        ask(
+          `This backup has ${data.trips.length} trip(s). Importing it will REPLACE everything currently on this device. Continue?`,
+          () => {
+            replaceAllData(data)
+            setMessage('Backup restored.')
+          },
+          'Replace everything',
         )
-      ) {
-        replaceAllData(parsed.data)
-        setMessage('Backup restored.')
       }
     } catch (e) {
       setError(e instanceof BackupError ? e.message : 'Something went wrong reading that file.')

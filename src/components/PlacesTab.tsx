@@ -21,6 +21,7 @@ import { PlaceSheet } from './PlaceSheet'
 import { PlacesMap } from './PlacesMap'
 import { QuickTag } from './QuickTag'
 import { PlaceThumb } from './TagIcon'
+import { ask } from '../lib/confirm'
 
 // True on phones and small tablets, where the list and the map take turns instead of sitting side by side.
 function useNarrow(): boolean {
@@ -141,7 +142,7 @@ function GroupSection({
                 value=""
                 onChange={(e) => {
                   const into = otherGroups.find((g) => g.id === e.target.value)
-                  if (into && confirm(`Merge “${group.name}” into “${into.name}”?`)) mergeGroups(group.id, into.id)
+                  if (into) ask(`Merge “${group.name}” into “${into.name}”?`, () => mergeGroups(group.id, into.id), 'Merge')
                 }}
               >
                 <option value="">Merge into…</option>
@@ -380,7 +381,7 @@ export function PlacesTab({
 
               <button
                 className="link-btn remove-all"
-                onClick={() => confirm(`Remove all ${mine.length} places from “${trip.name}”?`) && clearPlaces(trip.id)}
+                onClick={() => ask(`Remove all ${mine.length} places from “${trip.name}”?`, () => clearPlaces(trip.id), 'Remove all')}
               >
                 Remove all places from this trip
               </button>

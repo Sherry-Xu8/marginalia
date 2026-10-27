@@ -2,6 +2,7 @@ import { Copy, Maximize2, Pencil, Plus, Trash2, X } from 'lucide-react'
 import { useState } from 'react'
 import { addNote, deleteNote, updateNote, useAppData } from '../lib/store'
 import type { Note, Trip } from '../types'
+import { ask } from '../lib/confirm'
 
 const IDEAS = ['Hotel address (to show a taxi driver)', 'Wi-Fi', 'Emergency numbers', 'Useful phrases', 'Insurance and passport details']
 
@@ -50,7 +51,7 @@ export function NotesPanel({ trip }: { trip: Trip }) {
               <button className="icon-btn" aria-label={`Show ${n.title} large`} onClick={() => setBig(n)}><Maximize2 size={17} /></button>
               <button className="icon-btn" aria-label={`Copy ${n.title}`} onClick={() => copy(n)}><Copy size={17} /></button>
               <button className="icon-btn" aria-label={`Edit ${n.title}`} onClick={() => open(n)}><Pencil size={17} /></button>
-              <button className="icon-btn" aria-label={`Delete ${n.title}`} onClick={() => confirm(`Delete “${n.title}”?`) && deleteNote(trip.id, n.id)}><Trash2 size={17} /></button>
+              <button className="icon-btn" aria-label={`Delete ${n.title}`} onClick={() => ask(`Delete “${n.title}”?`, () => deleteNote(trip.id, n.id))}><Trash2 size={17} /></button>
             </span>
           </div>
           {n.text && <p className="note-text">{n.text}</p>}

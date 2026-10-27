@@ -4,6 +4,7 @@ import { stopsOn } from '../lib/days'
 import { expandAirport, flightLinks, flightTitle, getFlightService, lookupFlight, parseFlightNumber } from '../lib/flights'
 import { addTransfer, deleteTransfer, updateTransfer } from '../lib/store'
 import { TRANSFER_KINDS, type Transfer, type TransferKind, type Trip } from '../types'
+import { ask } from '../lib/confirm'
 
 export const KIND_INFO: Record<TransferKind, { label: string; Icon: ComponentType<{ size?: number }> }> = {
   flight: { label: 'Flight', Icon: Plane },
@@ -158,7 +159,7 @@ export function TransferSheet({
         <div className="row buttons">
           <button className="primary" onClick={save}>Save</button>
           {transfer && (
-            <button className="danger" onClick={() => confirm('Delete this journey?') && (deleteTransfer(transfer.id), onClose())}>Delete</button>
+            <button className="danger" onClick={() => ask('Delete this journey?', () => { deleteTransfer(transfer.id); onClose() })}>Delete</button>
           )}
         </div>
       </div>

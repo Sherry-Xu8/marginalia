@@ -913,3 +913,20 @@ i.spent.over { background: #c2582f; }
 .add-row { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 12px; }
 .add-row button { flex: 1; min-width: 140px; }
 .journey-note { margin: 8px 0 0; }
+
+/* The whole stop card opens its days; the controls on it sit above that link */
+.stop-card { position: relative; cursor: pointer; transition: transform 0.15s, box-shadow 0.15s; }
+.stop-card:hover { transform: translateY(-2px); box-shadow: 0 2px 4px rgba(31, 28, 25, 0.06), 0 16px 36px -16px rgba(31, 28, 25, 0.3); }
+.stop-card .tcard-link { border-radius: 26px; }
+.stop-card .tcard-menu, .stop-card .stay-row, .stop-card .stop-actions { position: relative; z-index: 2; }
+.stop-card .stop-actions { margin-top: 8px; }
+.stop-card .stop-actions button { width: 100%; }
+
+/* In-app confirmation (the browser's own box is blocked in some places) */
+.confirm-scrim { position: fixed; inset: 0; z-index: 4000; background: rgba(20, 30, 25, 0.45); display: grid; place-items: center; padding: 20px; }
+.confirm-box { background: var(--card); color: var(--text); border-radius: 22px; padding: 22px; width: min(100%, 380px); box-shadow: 0 24px 60px -20px rgba(0, 0, 0, 0.5); }
+.confirm-box p { margin: 0 0 18px; font-size: 1.02rem; line-height: 1.45; }
+.confirm-box .buttons { display: flex; gap: 10px; justify-content: flex-end; flex-wrap: wrap; margin: 0; }
+.confirm-box button { min-height: 46px; padding: 0 18px; }
+button.danger-solid { background: var(--danger); color: #fff; }
+button.danger-solid:hover:not(:disabled) { background: color-mix(in srgb, var(--danger) 88%, black); }

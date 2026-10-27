@@ -6,6 +6,7 @@ import { nightsOf } from '../lib/stays'
 import type { Stay, Trip } from '../types'
 import { PinPicker } from './PinPicker'
 import { tagName } from './TagIcon'
+import { ask } from '../lib/confirm'
 
 const PRECISION_NOTE: Record<Located['precision'], string> = {
   exact: '',
@@ -146,7 +147,7 @@ export function StaySheet({
             {error && <p className="error" role="alert">{error}</p>}
             <button className="primary wide" onClick={save}>{stay ? 'Save changes' : 'Add this stay'}</button>
             {stay && (
-              <button className="danger wide" onClick={() => confirm('Remove this stay?') && (deleteStay(trip.id, stay.id), onClose())}>
+              <button className="danger wide" onClick={() => ask('Remove this stay?', () => { deleteStay(trip.id, stay.id); onClose() }, 'Remove')}>
                 Remove this stay
               </button>
             )}

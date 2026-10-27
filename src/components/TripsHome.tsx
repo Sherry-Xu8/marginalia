@@ -7,6 +7,7 @@ import type { Place, Trip } from '../types'
 import { BackupCard } from './BackupCard'
 import { BackupNudge } from './BackupNudge'
 import { NameDatesForm, fmt } from './TripForm'
+import { ask } from '../lib/confirm'
 
 function when(startDate: string, endDate: string): string {
   const toStart = daysUntil(startDate)
@@ -105,7 +106,7 @@ function TripCard({ trip }: { trip: Trip }) {
                 className="danger"
                 onClick={() => {
                   setMenu(false)
-                  if (confirm(`Delete “${trip.name}” and all its places? This can’t be undone.`)) deleteTrip(trip.id)
+                  ask(`Delete “${trip.name}” and all its places? This can’t be undone.`, () => deleteTrip(trip.id), 'Delete trip')
                 }}
               >
                 <Trash2 size={16} /> Delete
