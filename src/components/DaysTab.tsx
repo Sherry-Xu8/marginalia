@@ -281,8 +281,9 @@ function ItemRow({
                     Time
                     <input type="time" value={item.time ?? ''} onChange={(e) => updateDayItem(day.id, item.id, { time: e.target.value || undefined })} />
                   </label>
+                  {place.tag !== 'Food' && place.tag !== 'Cafes' && (
                   <label>
-                    Planned cost
+                    Planned cost (tickets, tours)
                     <input
                       inputMode="decimal"
                       value={item.cost ?? ''}
@@ -292,6 +293,7 @@ function ItemRow({
                       }}
                     />
                   </label>
+                  )}
                 </div>
                 <label>
                   Note, such as the dish to order

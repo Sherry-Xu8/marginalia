@@ -3,7 +3,7 @@ import { useMemo, useState } from 'react'
 import { shortDate, toISO } from '../lib/days'
 import { fmtMoney, normaliseCurrency, roundToCurrency } from '../lib/money'
 import { getRate, useRate } from '../lib/rates'
-import { addExpense, deleteExpense, setBudget, setHomeCurrency, useAppData } from '../lib/store'
+import { addExpense, deleteExpense, setBudget, setFoodPerDay, setHomeCurrency, useAppData } from '../lib/store'
 import { TAG_STYLE } from '../lib/tagging'
 import { EXPENSE_CATEGORIES, type Expense, type ExpenseCategory } from '../types'
 
@@ -87,9 +87,11 @@ export function BudgetTab() {
     return v ? <small className="fx">≈ {v}</small> : null
   }
 
-  const planned =
+  const foodPerDay = trip.foodPerDay ?? 0
+  const ticketsPlanned =
     tripDays.reduce((s, d) => s + d.items.reduce((t, i) => t + (i.cost ?? 0), 0), 0) +
     transfers.filter((t) => t.tripId === activeTripId).reduce((s, t) => s + (t.cost ?? 0), 0)
+  const planned = ticketsPlanned + foodPerDay * tripDays.length
   const spent = mine.reduce((s, e) => s + e.amount, 0)
   const budget = trip.budget
   const left = budget !== undefined ? budget - spent : undefined
@@ -104,7 +106,7 @@ export function BudgetTab() {
   const dayData = tripDays
     .map((d) => ({
       date: d.date,
-      planned: d.items.reduce((s, i) => s + (i.cost ?? 0), 0),
+      planned: d.items.reduce((s, i) => s + (i.cost ?? 0), 0) + foodPerDay,
       spent: mine.filter((e) => e.date === d.date).reduce((s, e) => s + e.amount, 0),
     }))
     .filter((d) => d.planned > 0 || d.spent > 0)
@@ -154,7 +156,7 @@ export function BudgetTab() {
         </div>
         <div className="money-tiles">
           <div><span>Budget</span><strong>{budget !== undefined ? money(budget) : '—'}</strong>{budget !== undefined && <Fx n={budget} />}</div>
-          <div><span>Planned</span><strong>{money(planned)}</strong><Fx n={planned} /></div>
+          {planned > 0 && <div><span>Planned</span><strong>{money(planned)}</strong><Fx n={planned} /></div>}
         </div>
       </section>
       {planned > 0 && budget !== undefined && planned > budget && (
@@ -233,6 +235,18 @@ export function BudgetTab() {
                       setBudget(trip.id, e.target.value.trim() === '' || !Number.isFinite(n) || n < 0 ? undefined : n, local)
                     }}
                     onBlur={() => setBudgetText(null)}
+                  />
+                </label>
+                <label>
+                  Daily food and drink allowance
+                  <input
+                    inputMode="decimal"
+                    placeholder="e.g. 60000 — optional"
+                    defaultValue={trip.foodPerDay ?? ''}
+                    onBlur={(e) => {
+                      const n = parseFloat(e.target.value)
+                      setFoodPerDay(trip.id, e.target.value.trim() === '' || !Number.isFinite(n) || n < 0 ? undefined : n)
+                    }}
                   />
                 </label>
                 <div className="row">

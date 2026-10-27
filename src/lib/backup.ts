@@ -110,6 +110,7 @@ function cleanTrip(v: unknown): Trip | null {
     id, name, startDate, endDate, stops, checklist,
     budget: num(o.budget) ?? undefined,
     currency: str(o.currency, 4) ?? undefined,
+    foodPerDay: num(o.foodPerDay) !== null && num(o.foodPerDay)! >= 0 ? num(o.foodPerDay)! : undefined,
     homeCurrency: str(o.homeCurrency, 4) ?? undefined,
   }
 }

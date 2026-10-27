@@ -520,6 +520,10 @@ export function setBudget(tripId: string, budget: number | undefined, currency: 
   }))
 }
 
+export function setFoodPerDay(tripId: string, amount: number | undefined) {
+  update((s) => ({ ...s, trips: s.trips.map((t) => (t.id === tripId ? { ...t, foodPerDay: amount } : t)) }))
+}
+
 export function setHomeCurrency(tripId: string, code: string) {
   const clean = code.trim().toUpperCase().slice(0, 4)
   update((s) => ({ ...s, trips: s.trips.map((t) => (t.id === tripId ? { ...t, homeCurrency: clean || undefined } : t)) }))

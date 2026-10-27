@@ -46,6 +46,7 @@ export type Trip = {
   checklist: ChecklistItem[]
   budget?: number // total trip budget, in `currency`
   currency?: string // the local currency you spend in, e.g. "KRW"
+  foodPerDay?: number // daily food and drink allowance, in `currency`
   homeCurrency?: string // your own currency, for showing equivalents, e.g. "USD"
 }
 
