@@ -615,3 +615,11 @@ main > section > h2 { font-family: var(--serif); font-weight: 420; }
 .places-page .page-head { flex-wrap: wrap; align-items: flex-end; }
 .segmented button, .import-top { white-space: nowrap; }
 .layer-select { width: auto; min-width: 150px; min-height: 52px; border-radius: 18px; }
+
+/* top bar: on phones the tagline sits under the name and Backup is left to the trip pages;
+   on wider screens the tagline is centred and Backup stays on the right */
+.brand-text { display: flex; flex-direction: column; gap: 5px; }
+.brand-tagline { text-transform: uppercase; letter-spacing: 0.16em; font-size: 0.58rem; font-weight: 600; color: var(--muted); line-height: 1; white-space: nowrap; }
+.topbar .link-btn { grid-column: 3; }
+@media (max-width: 759px) { .topbar .link-btn { display: none; } .topbar { grid-template-columns: 1fr; } }
+@media (min-width: 900px) { .brand-tagline { display: none; } }

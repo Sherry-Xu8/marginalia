@@ -26,7 +26,10 @@ function TopBar() {
     <header className="topbar">
       <a className="brand" href="#/">
         <LogoMark size={46} />
-        <Wordmark />
+        <span className="brand-text">
+          <Wordmark />
+          <span className="brand-tagline">A little room for the road</span>
+        </span>
       </a>
       <span className="tagline">A little room for the road</span>
       <button
