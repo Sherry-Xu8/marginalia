@@ -1,9 +1,54 @@
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { useAppData } from '../lib/store'
+import { fromISO, stopsOn } from '../lib/days'
+import { addToDay, getState, useAppData } from '../lib/store'
 import { TAG_STYLE } from '../lib/tagging'
+import type { Place } from '../types'
 import { FilterChips, tagOf } from './FilterChips'
+
+// The popup shown when you tap a pin. Built when it opens (so the day list is current)
+// from plain elements, not HTML strings, so text from a file can't inject code.
+function buildPopup(p: Place): HTMLElement {
+  const style = TAG_STYLE[tagOf(p) as keyof typeof TAG_STYLE]
+  const box = document.createElement('div')
+  box.className = 'popup'
+  const title = document.createElement('strong')
+  title.textContent = p.name
+  const tagLine = document.createElement('div')
+  tagLine.textContent = `${style.emoji} ${tagOf(p)}`
+  box.append(title, tagLine)
+  if (p.description) {
+    const d = document.createElement('p')
+    d.textContent = p.description.length > 200 ? p.description.slice(0, 200) + '…' : p.description
+    box.append(d)
+  }
+
+  const s = getState()
+  const trip = s.trips.find((t) => t.id === p.tripId)
+  const days = s.days.filter((d) => d.tripId === p.tripId).sort((a, b) => a.date.localeCompare(b.date))
+  if (trip && days.length > 0) {
+    const select = document.createElement('select')
+    days.forEach((d, i) => {
+      const o = document.createElement('option')
+      o.value = d.id
+      o.textContent = `Day ${i + 1} · ${fromISO(d.date).toLocaleDateString(undefined, { day: 'numeric', month: 'short' })}`
+      select.append(o)
+    })
+    // Pre-select the first day whose stop is this place's area.
+    const group = s.groups.find((g) => g.id === p.groupId)
+    const match = days.find((d) => group?.stopId && stopsOn(trip, d.date).some((st) => st.id === group.stopId))
+    if (match) select.value = match.id
+    const button = document.createElement('button')
+    button.className = 'primary'
+    button.textContent = 'Add to day'
+    button.onclick = () => {
+      button.textContent = addToDay(select.value, p.id) ? 'Added ✓' : 'Already on that day'
+    }
+    box.append(select, button)
+  }
+  return box
+}
 
 export function MapTab({ tagFilter, setTagFilter }: { tagFilter: string[]; setTagFilter: (v: string[]) => void }) {
   const { places, groups, activeTripId } = useAppData()
@@ -43,8 +88,7 @@ export function MapTab({ tagFilter, setTagFilter }: { tagFilter: string[]; setTa
     if (!group || !m) return
     group.clearLayers()
     for (const p of visible) {
-      const tag = tagOf(p)
-      const style = TAG_STYLE[tag as keyof typeof TAG_STYLE]
+      const style = TAG_STYLE[tagOf(p) as keyof typeof TAG_STYLE]
       const marker = L.circleMarker([p.lat, p.lon], {
         radius: 10,
         color: '#fff',
@@ -52,20 +96,7 @@ export function MapTab({ tagFilter, setTagFilter }: { tagFilter: string[]; setTa
         fillColor: style.colour,
         fillOpacity: 0.95,
       })
-      // Built from plain elements (not HTML strings) so text from a file can't inject code.
-      const box = document.createElement('div')
-      const title = document.createElement('strong')
-      title.textContent = p.name
-      box.append(title)
-      const tagLine = document.createElement('div')
-      tagLine.textContent = `${style.emoji} ${tag}`
-      box.append(tagLine)
-      if (p.description) {
-        const d = document.createElement('p')
-        d.textContent = p.description.length > 200 ? p.description.slice(0, 200) + '…' : p.description
-        box.append(d)
-      }
-      marker.bindPopup(box)
+      marker.bindPopup(() => buildPopup(p))
       group.addLayer(marker)
     }
     if (visible.length > 0) {

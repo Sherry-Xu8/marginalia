@@ -1,6 +1,7 @@
 import { get, set } from 'idb-keyval'
 import { useSyncExternalStore } from 'react'
-import type { AppData, Group, ImportSummary, Place, Stop, Tag, Trip } from '../types'
+import type { AppData, ChecklistItem, Day, DayItem, Group, ImportSummary, Place, Stop, Tag, Trip } from '../types'
+import { eachDate } from './days'
 import { distanceKm } from './geo'
 import { GROUP_RADIUS_KM, clusterPlaces, nextAreaName } from './grouping'
 import type { ParseResult } from './kml'
@@ -10,7 +11,7 @@ import { suggestTags } from './tagging'
 // after each change. Components read it with useAppData().
 
 const KEY = 'trip-planner-data'
-const empty: AppData = { version: 1, trips: [], places: [], groups: [], activeTripId: null }
+const empty: AppData = { version: 1, trips: [], places: [], groups: [], days: [], activeTripId: null }
 
 let state: AppData = empty
 const listeners = new Set<() => void>()
@@ -21,8 +22,13 @@ export async function loadData(): Promise<void> {
     const saved = await get<AppData>(KEY)
     if (saved && saved.version === 1) {
       // Data saved by Stage 1 has no groups yet — fill them in.
-      state = { ...saved, groups: saved.groups ?? [] }
-      for (const t of state.trips) state = assignGroups(state, t.id)
+      state = {
+        ...saved,
+        groups: saved.groups ?? [],
+        days: saved.days ?? [],
+        trips: saved.trips.map((t) => ({ ...t, checklist: t.checklist ?? seedChecklist() })),
+      }
+      for (const t of state.trips) state = syncDays(assignGroups(state, t.id), t.id)
       void tagUntagged()
     }
   } catch {
@@ -60,12 +66,12 @@ export function newId(): string {
 // ---- Trips and stops ----
 
 export function addTrip(name: string, startDate: string, endDate: string) {
-  const trip: Trip = { id: newId(), name, startDate, endDate, stops: [] }
-  update((s) => ({ ...s, trips: [...s.trips, trip], activeTripId: trip.id }))
+  const trip: Trip = { id: newId(), name, startDate, endDate, stops: [], checklist: seedChecklist() }
+  update((s) => syncDays({ ...s, trips: [...s.trips, trip], activeTripId: trip.id }, trip.id))
 }
 
 export function updateTrip(id: string, patch: Partial<Pick<Trip, 'name' | 'startDate' | 'endDate'>>) {
-  update((s) => ({ ...s, trips: s.trips.map((t) => (t.id === id ? { ...t, ...patch } : t)) }))
+  update((s) => syncDays({ ...s, trips: s.trips.map((t) => (t.id === id ? { ...t, ...patch } : t)) }, id))
 }
 
 export function deleteTrip(id: string) {
@@ -76,6 +82,7 @@ export function deleteTrip(id: string) {
       trips,
       places: s.places.filter((p) => p.tripId !== id),
       groups: s.groups.filter((g) => g.tripId !== id),
+      days: s.days.filter((d) => d.tripId !== id),
       activeTripId: s.activeTripId === id ? (trips[0]?.id ?? null) : s.activeTripId,
     }
   })
@@ -159,6 +166,7 @@ export function clearPlaces(tripId: string) {
     ...s,
     places: s.places.filter((p) => p.tripId !== tripId),
     groups: s.groups.filter((g) => g.tripId !== tripId),
+    days: s.days.map((d) => (d.tripId === tripId ? { ...d, items: [] } : d)),
   }))
 }
 
@@ -304,4 +312,105 @@ export async function tagUntagged() {
         : p,
     ),
   }))
+}
+
+// ---- Days ----
+
+// Makes sure there's a day for every date of the trip. Days outside the dates are
+// dropped only if empty, so changing the dates never loses a plan you made.
+function syncDays(s: AppData, tripId: string): AppData {
+  const trip = s.trips.find((t) => t.id === tripId)
+  if (!trip) return s
+  const dates = eachDate(trip.startDate, trip.endDate)
+  const have = new Set(s.days.filter((d) => d.tripId === tripId).map((d) => d.date))
+  const keep = s.days.filter((d) => d.tripId !== tripId || dates.includes(d.date) || d.items.length > 0)
+  const added: Day[] = dates.filter((d) => !have.has(d)).map((date) => ({ id: newId(), tripId, date, items: [] }))
+  return { ...s, days: [...keep, ...added] }
+}
+
+function mapDay(dayId: string, fn: (d: Day) => Day) {
+  update((s) => ({ ...s, days: s.days.map((d) => (d.id === dayId ? fn(d) : d)) }))
+}
+
+// Returns false (and changes nothing) if that place is already on the day.
+export function addToDay(dayId: string, placeId: string): boolean {
+  const day = state.days.find((d) => d.id === dayId)
+  if (!day || day.items.some((i) => i.placeId === placeId)) return false
+  mapDay(dayId, (d) => ({ ...d, items: [...d.items, { id: newId(), placeId, note: '', done: false }] }))
+  return true
+}
+
+export function updateDayItem(dayId: string, itemId: string, patch: Partial<Pick<DayItem, 'time' | 'note' | 'done'>>) {
+  mapDay(dayId, (d) => ({ ...d, items: d.items.map((i) => (i.id === itemId ? { ...i, ...patch } : i)) }))
+}
+
+export function removeDayItem(dayId: string, itemId: string) {
+  mapDay(dayId, (d) => ({ ...d, items: d.items.filter((i) => i.id !== itemId) }))
+}
+
+export function moveDayItem(dayId: string, activeId: string, overId: string) {
+  mapDay(dayId, (d) => {
+    const from = d.items.findIndex((i) => i.id === activeId)
+    const to = d.items.findIndex((i) => i.id === overId)
+    if (from < 0 || to < 0 || from === to) return d
+    const items = [...d.items]
+    items.splice(to, 0, items.splice(from, 1)[0])
+    return { ...d, items }
+  })
+}
+
+// Items with a time go in time order; items without one keep their place at the end.
+export function sortDayByTime(dayId: string) {
+  mapDay(dayId, (d) => {
+    const timed = d.items.filter((i) => i.time).sort((a, b) => a.time!.localeCompare(b.time!))
+    return { ...d, items: [...timed, ...d.items.filter((i) => !i.time)] }
+  })
+}
+
+// ---- Checklist ----
+
+const STARTER: Record<ChecklistItem['section'], string[]> = {
+  pre: [
+    'Passport valid for 6+ months',
+    'Check visa / entry requirements',
+    'Travel insurance',
+    'Book flights',
+    'Book accommodation',
+    'Tell your bank you’re travelling',
+    'Phone plan or eSIM sorted',
+    'Download offline maps',
+  ],
+  packing: [
+    'Passport and copies',
+    'Phone and charger',
+    'Power adapter',
+    'Medications',
+    'Clothes for the weather',
+    'Toiletries',
+    'Comfortable shoes',
+    'Rain jacket or umbrella',
+    'Reusable bag',
+  ],
+}
+
+function seedChecklist(): ChecklistItem[] {
+  return (Object.keys(STARTER) as ChecklistItem['section'][]).flatMap((section) =>
+    STARTER[section].map((text) => ({ id: newId(), section, text, done: false })),
+  )
+}
+
+function mapChecklist(tripId: string, fn: (items: ChecklistItem[]) => ChecklistItem[]) {
+  update((s) => ({ ...s, trips: s.trips.map((t) => (t.id === tripId ? { ...t, checklist: fn(t.checklist) } : t)) }))
+}
+
+export function addCheckItem(tripId: string, section: ChecklistItem['section'], text: string) {
+  mapChecklist(tripId, (items) => [...items, { id: newId(), section, text, done: false }])
+}
+
+export function toggleCheckItem(tripId: string, itemId: string) {
+  mapChecklist(tripId, (items) => items.map((i) => (i.id === itemId ? { ...i, done: !i.done } : i)))
+}
+
+export function removeCheckItem(tripId: string, itemId: string) {
+  mapChecklist(tripId, (items) => items.filter((i) => i.id !== itemId))
 }

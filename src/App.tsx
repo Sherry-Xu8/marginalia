@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { DaysTab } from './components/DaysTab'
 import { MapTab } from './components/MapTab'
 import { PlacesTab } from './components/PlacesTab'
 import { TripTab } from './components/TripTab'
@@ -10,6 +11,7 @@ const TABS = [
   { id: 'trip', label: 'Trip', icon: '🧳' },
   { id: 'places', label: 'Places', icon: '📍' },
   { id: 'map', label: 'Map', icon: '🗺️' },
+  { id: 'days', label: 'Days', icon: '📅' },
 ] as const
 
 type TabId = (typeof TABS)[number]['id']
@@ -28,6 +30,7 @@ export default function App() {
       <main>
         {tab === 'trip' && <TripTab />}
         {tab === 'places' && <PlacesTab tagFilter={tagFilter} setTagFilter={setTagFilter} />}
+        {tab === 'days' && <DaysTab />}
         {tab === 'map' && <MapTab tagFilter={tagFilter} setTagFilter={setTagFilter} />}
       </main>
       <nav className="tabbar" aria-label="Main">

@@ -8,12 +8,37 @@ export type Stop = {
   departure: string // yyyy-mm-dd
 }
 
+export type ChecklistItem = {
+  id: string
+  section: 'pre' | 'packing' // "before you go" or "packing"
+  text: string
+  done: boolean
+}
+
 export type Trip = {
   id: string
   name: string
   startDate: string
   endDate: string
   stops: Stop[]
+  checklist: ChecklistItem[]
+}
+
+// One planned visit in a day.
+export type DayItem = {
+  id: string
+  placeId: string
+  time?: string // "HH:MM", optional
+  note: string // e.g. opening hours
+  done: boolean
+}
+
+// A day of the trip. Days are created automatically for every date of the trip.
+export type Day = {
+  id: string
+  tripId: string
+  date: string // yyyy-mm-dd
+  items: DayItem[] // in the order you'll visit them
 }
 
 export const TAGS = [
@@ -58,6 +83,7 @@ export type AppData = {
   trips: Trip[]
   places: Place[]
   groups: Group[]
+  days: Day[]
   activeTripId: string | null
 }
 

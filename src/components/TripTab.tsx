@@ -10,7 +10,9 @@ import {
   updateTrip,
   useAppData,
 } from '../lib/store'
+import { daysUntil } from '../lib/days'
 import type { Stop, Trip } from '../types'
+import { Checklist } from './Checklist'
 
 function fmt(date: string): string {
   if (!date) return '—'
@@ -111,6 +113,29 @@ function StopCard({ trip, stop, index }: { trip: Trip; stop: Stop; index: number
   )
 }
 
+function Countdown({ trip }: { trip: Trip }) {
+  const toStart = daysUntil(trip.startDate)
+  const toEnd = daysUntil(trip.endDate)
+  let big: string
+  let small: string
+  if (toStart > 0) {
+    big = `${toStart} day${toStart === 1 ? '' : 's'}`
+    small = 'until your trip starts'
+  } else if (toEnd >= 0) {
+    big = `Day ${-toStart + 1}`
+    small = 'Your trip is on — enjoy!'
+  } else {
+    big = 'Trip complete'
+    small = `${-toEnd} day${toEnd === -1 ? '' : 's'} ago`
+  }
+  return (
+    <div className="card countdown">
+      <strong>{big}</strong>
+      <span>{small}</span>
+    </div>
+  )
+}
+
 export function TripTab() {
   const { trips, activeTripId } = useAppData()
   const [creating, setCreating] = useState(false)
@@ -184,6 +209,8 @@ export function TripTab() {
         </div>
       )}
 
+      <Countdown trip={trip} />
+
       <h3>Stops</h3>
       <p className="muted">Cities or areas you’ll visit, in order.</p>
       {trip.stops.map((stop, i) => (
@@ -205,6 +232,8 @@ export function TripTab() {
       ) : (
         <button className="primary wide" onClick={() => setAddingStop(true)}>+ Add a stop</button>
       )}
+
+      <Checklist trip={trip} />
     </section>
   )
 }

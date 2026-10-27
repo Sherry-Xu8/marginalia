@@ -33,7 +33,7 @@ Import it on the **Places** tab.
 
 - [x] Stage 1 — trips and stops, KML/KMZ import, map
 - [x] Stage 2 — location groups and tags
-- [ ] Stage 3 — daily plan, checklist, countdown
+- [x] Stage 3 — daily plan, checklist, countdown
 - [ ] Stage 4 — suggested itinerary
 - [ ] Stage 5 — commute times
 - [ ] Stage 6 — free hosting
