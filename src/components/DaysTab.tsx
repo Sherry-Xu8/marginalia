@@ -9,6 +9,7 @@ import {
 } from '@dnd-kit/core'
 import { SortableContext, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
+import { ChevronDown, ChevronUp, GripVertical, Plus, Sparkles } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import {
   LONG_TRAVEL_MINUTES,
@@ -23,12 +24,14 @@ import {
   type Commute,
   type Mode,
 } from '../lib/commute'
-import { fmtMoney } from '../lib/money'
 import { fromISO, shortDate, stopLabel, stopsOn, toISO } from '../lib/days'
+import { fmtMoney } from '../lib/money'
 import { addToDay, moveDayItem, removeDayItem, sortDayByTime, updateDayItem, useAppData } from '../lib/store'
-import { TAG_STYLE } from '../lib/tagging'
-import type { Day, DayItem, Place, Trip } from '../types'
+import type { Day, DayItem, Place, Stop, Trip } from '../types'
+import { DayMap } from './DayMap'
 import { FilterChips, tagOf } from './FilterChips'
+import { SuggestSheet } from './SuggestSheet'
+import { TagIcon } from './TagIcon'
 
 // ---- Travel between places ----
 
@@ -37,7 +40,7 @@ function ModeLine({ from, to, mode }: { from: Place; to: Place; mode: Mode }) {
   const info = MODES.find((m) => m.id === mode)!
   return (
     <p className="mode-line">
-      {info.emoji} {info.label}: {c && `${fmtMinutes(c.minutes)} · ${fmtKm(c.km)}`}
+      <info.Icon size={15} aria-hidden /> {info.label}: {c && `${fmtMinutes(c.minutes)} · ${fmtKm(c.km)}`}
       {c?.approx && <small className="muted"> approx.</small>}
     </p>
   )
@@ -51,9 +54,9 @@ function LegRow({ from, to, mode }: { from: Place; to: Place; mode: Mode }) {
   return (
     <div className="leg">
       <button className="leg-sum" onClick={() => setOpen(!open)} aria-expanded={open}>
-        ↓ {info.emoji} {fmtMinutes(c.minutes)} · {fmtKm(c.km)}
+        <info.Icon size={15} aria-hidden /> {fmtMinutes(c.minutes)} · {fmtKm(c.km)}
         {c.approx && <small> approx.</small>}
-        <span aria-hidden>{open ? '▴' : '▾'}</span>
+        {open ? <ChevronUp size={14} aria-hidden /> : <ChevronDown size={14} aria-hidden />}
       </button>
       {open && (
         <div className="leg-more">
@@ -96,70 +99,76 @@ function DayTravel({ places, mode }: { places: Place[]; mode: Mode }) {
   return (
     <div className={'travel' + (sum > LONG_TRAVEL_MINUTES ? ' warn' : '')}>
       <strong>
-        {info.emoji} Travel between places: {fmtMinutes(sum)}
+        <info.Icon size={16} aria-hidden /> Travel between places: {fmtMinutes(sum)}
         {approx && <small> approx.</small>}
       </strong>
-      {sum > LONG_TRAVEL_MINUTES && <span>⚠️ That’s over 2½ hours of travel — consider moving something to another day.</span>}
+      {sum > LONG_TRAVEL_MINUTES && <span>That’s over 2½ hours of travel — consider moving something to another day.</span>}
     </div>
   )
 }
 
-function ItemRow({ day, item, place, next, mode, currency }: { day: Day; item: DayItem; place: Place | undefined; next: Place | undefined; mode: Mode; currency: string }) {
+// ---- One planned place ----
+
+function ItemRow({
+  day, item, place, next, mode, currency,
+}: {
+  day: Day; item: DayItem; place: Place | undefined; next: Place | undefined; mode: Mode; currency: string
+}) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: item.id })
   const [open, setOpen] = useState(false)
   const style = { transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.6 : 1 }
-  const emoji = place ? TAG_STYLE[tagOf(place) as keyof typeof TAG_STYLE].emoji : '❔'
+  const tag = place ? (place.tag ?? 'Untagged') : 'Untagged'
+  const sub = [item.time, place ? tag : '', item.cost ? fmtMoney(item.cost, currency) : '', item.note].filter(Boolean).join(' · ')
 
   return (
-    <div ref={setNodeRef} style={style} className={'item' + (item.done ? ' done' : '')}>
-      <button className="handle" aria-label="Drag to reorder" {...attributes} {...listeners}>⠿</button>
-      <input
-        type="checkbox"
-        className="tick"
-        aria-label="Done"
-        checked={item.done}
-        onChange={(e) => updateDayItem(day.id, item.id, { done: e.target.checked })}
-      />
-      <button className="item-main" onClick={() => setOpen(!open)} aria-expanded={open}>
-        <strong>{emoji} {place?.name ?? '(place removed)'}</strong>
-        {(item.time || item.note || item.cost) && (
-          <span className="muted">
-            {[item.time, item.cost ? fmtMoney(item.cost, currency) : '', item.note].filter(Boolean).join(' · ')}
-          </span>
+    <div ref={setNodeRef} style={style} className="item-wrap">
+      <div className={'item' + (item.done ? ' done' : '')}>
+        <button className="handle" aria-label="Drag to reorder" {...attributes} {...listeners}>
+          <GripVertical size={20} />
+        </button>
+        <TagIcon tag={tag} />
+        <button className="item-main" onClick={() => setOpen(!open)} aria-expanded={open}>
+          <strong className="serif">{place?.name ?? '(place removed)'}</strong>
+          {sub && <span className="muted">{sub}</span>}
+        </button>
+        <input
+          type="checkbox"
+          className="tick"
+          aria-label="Done"
+          checked={item.done}
+          onChange={(e) => updateDayItem(day.id, item.id, { done: e.target.checked })}
+        />
+        {open && (
+          <div className="item-edit">
+            <label>
+              Time (optional)
+              <input type="time" value={item.time ?? ''} onChange={(e) => updateDayItem(day.id, item.id, { time: e.target.value || undefined })} />
+            </label>
+            <label>
+              Planned cost (optional)
+              <input
+                inputMode="decimal"
+                value={item.cost ?? ''}
+                onChange={(e) => {
+                  const n = parseFloat(e.target.value)
+                  updateDayItem(day.id, item.id, { cost: Number.isFinite(n) && n >= 0 ? n : undefined })
+                }}
+              />
+            </label>
+            <label>
+              Note (e.g. opening hours)
+              <textarea rows={2} value={item.note} onChange={(e) => updateDayItem(day.id, item.id, { note: e.target.value })} />
+            </label>
+            <button className="danger" onClick={() => removeDayItem(day.id, item.id)}>Remove from this day</button>
+          </div>
         )}
-      </button>
-      {open && (
-        <div className="item-edit">
-          <label>
-            Time (optional)
-            <input type="time" value={item.time ?? ''} onChange={(e) => updateDayItem(day.id, item.id, { time: e.target.value || undefined })} />
-          </label>
-          <label>
-            Planned cost (optional)
-            <input
-              inputMode="decimal"
-              value={item.cost ?? ''}
-              onChange={(e) => {
-                const n = parseFloat(e.target.value)
-                updateDayItem(day.id, item.id, { cost: Number.isFinite(n) && n >= 0 ? n : undefined })
-              }}
-            />
-          </label>
-          <label>
-            Note (e.g. opening hours)
-            <textarea
-              rows={2}
-              value={item.note}
-              onChange={(e) => updateDayItem(day.id, item.id, { note: e.target.value })}
-            />
-          </label>
-          <button className="danger" onClick={() => removeDayItem(day.id, item.id)}>Remove from this day</button>
-        </div>
-      )}
+      </div>
       {place && next && <LegRow from={place} to={next} mode={mode} />}
     </div>
   )
 }
+
+// ---- Adding places ----
 
 function PlacePicker({ trip, day, onClose }: { trip: Trip; day: Day; onClose: () => void }) {
   const { places, groups } = useAppData()
@@ -182,7 +191,7 @@ function PlacePicker({ trip, day, onClose }: { trip: Trip; day: Day; onClose: ()
   return (
     <div className="sheet" role="dialog" aria-label="Add places">
       <div className="sheet-head">
-        <strong>Add to {shortDate(day.date)}</strong>
+        <strong className="serif">Add to {shortDate(day.date)}</strong>
         <button className="primary" onClick={onClose}>Done</button>
       </div>
       <div className="sheet-body">
@@ -199,8 +208,9 @@ function PlacePicker({ trip, day, onClose }: { trip: Trip; day: Day; onClose: ()
         {list.length === 0 && <p className="muted">Nothing left to add with these filters.</p>}
         {list.slice(0, 100).map((p) => (
           <button key={p.id} className="pick" onClick={() => addToDay(day.id, p.id)}>
-            <span>{TAG_STYLE[tagOf(p) as keyof typeof TAG_STYLE].emoji} {p.name}</span>
-            <b>+ Add</b>
+            <TagIcon tag={tagOf(p)} size={32} />
+            <span>{p.name}</span>
+            <b>Add</b>
           </button>
         ))}
         {list.length > 100 && <p className="muted">Showing 100 — search or filter to narrow down.</p>}
@@ -209,7 +219,9 @@ function PlacePicker({ trip, day, onClose }: { trip: Trip; day: Day; onClose: ()
   )
 }
 
-export function DaysTab() {
+// ---- The screen ----
+
+export function DaysTab({ initialDate }: { initialDate?: string }) {
   const { trips, activeTripId, days, places } = useAppData()
   const trip = trips.find((t) => t.id === activeTripId)
   const tripDays = useMemo(
@@ -218,6 +230,7 @@ export function DaysTab() {
   )
   const [selected, setSelected] = useState('')
   const [picking, setPicking] = useState(false)
+  const [suggestFor, setSuggestFor] = useState<Stop | null>(null)
   const [mode, setModeState] = useState<Mode>(() => {
     try {
       const saved = localStorage.getItem('travel-mode')
@@ -239,36 +252,59 @@ export function DaysTab() {
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
   )
 
-  // Start on today if it's a trip day, otherwise the first day.
+  // Open on the day from the address, else today if it's a trip day, else the first day.
   useEffect(() => {
-    if (tripDays.length > 0 && !tripDays.some((d) => d.id === selected)) {
+    if (tripDays.length === 0) return
+    const wanted = initialDate && tripDays.find((d) => d.date === initialDate)
+    if (wanted && wanted.id !== selected) setSelected(wanted.id)
+    else if (!tripDays.some((d) => d.id === selected)) {
       setSelected((tripDays.find((d) => d.date === toISO(new Date())) ?? tripDays[0]).id)
     }
-  }, [tripDays, selected])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tripDays, initialDate])
 
-  if (!trip) {
+  const day = tripDays.find((d) => d.id === selected)
+  const placeById = useMemo(() => new Map(places.map((p) => [p.id, p])), [places])
+  const dayPlaces = useMemo(
+    () => (day ? day.items.map((i) => placeById.get(i.placeId)).filter((p): p is Place => !!p) : []),
+    [day, placeById],
+  )
+
+  if (!trip) return null
+  if (!day) {
     return (
-      <section>
-        <h2>Days</h2>
-        <p className="muted">Create a trip first (on the Trip tab).</p>
-      </section>
+      <div className="page">
+        <h1>Days</h1>
+        <p className="muted">This trip has no dates yet.</p>
+      </div>
     )
   }
-  const day = tripDays.find((d) => d.id === selected)
-  if (!day) return <section><h2>Days</h2><p className="muted">This trip has no dates yet.</p></section>
 
-  const placeById = new Map(places.map((p) => [p.id, p]))
   const dayNumber = tripDays.indexOf(day) + 1
   const label = stopLabel(trip, day.date)
+  const dayStops = stopsOn(trip, day.date)
+  const arriving = dayStops[dayStops.length - 1]
   const done = day.items.filter((i) => i.done).length
   const timed = day.items.filter((i) => i.time).length
+  const planned = day.items.reduce((s, i) => s + (i.cost ?? 0), 0)
 
   function onDragEnd(e: DragEndEvent) {
     if (day && e.over && e.active.id !== e.over.id) moveDayItem(day.id, String(e.active.id), String(e.over.id))
   }
 
   return (
-    <section>
+    <div className="page wide">
+      <div className="hero">
+        <div>
+          <h1>{label || 'No stop for this date'}</h1>
+          <p>{shortDate(day.date)} · Day {dayNumber} of {tripDays.length}</p>
+        </div>
+        <div className="hero-badge">
+          <strong className="serif">{day.items.length}</strong>
+          <span>{day.items.length === 1 ? 'place' : 'places'}</span>
+        </div>
+      </div>
+
       <div className="pills" role="tablist" aria-label="Days">
         {tripDays.map((d, i) => (
           <button
@@ -278,55 +314,70 @@ export function DaysTab() {
             className={d.id === selected ? 'on' : ''}
             onClick={() => setSelected(d.id)}
           >
-            <small>Day {i + 1}</small>
-            {fromISO(d.date).toLocaleDateString(undefined, { day: 'numeric', month: 'short' })}
-            {d.items.length > 0 && <small>{d.items.length} 📍</small>}
+            <small>{fromISO(d.date).toLocaleDateString(undefined, { weekday: 'short' })}</small>
+            <b>{fromISO(d.date).getDate()}</b>
+            <small>{d.items.length > 0 ? `${d.items.length} ·` : `D${i + 1}`}</small>
           </button>
         ))}
       </div>
 
-      <h2>Day {dayNumber} · {shortDate(day.date)}</h2>
-      <p className="muted">
-        {label || 'No trip stop for this date yet'}
-        {day.items.some((i) => i.cost) &&
-          ` · planned ${fmtMoney(day.items.reduce((s, i) => s + (i.cost ?? 0), 0), trip.currency ?? 'USD')}`}
-      </p>
-
-      {day.items.length === 0 ? (
-        <div className="card">
-          <p>Nothing planned yet. Add places from your imported list, or tap a pin on the Map and choose “Add to day”.</p>
-        </div>
-      ) : (
-        <>
-          <p className="muted">{done} of {day.items.length} done · drag ⠿ to reorder · tap a place for time and notes</p>
-          <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
-            <SortableContext items={day.items.map((i) => i.id)} strategy={verticalListSortingStrategy}>
-              {day.items.map((item, i) => (
-                <ItemRow
-                  key={item.id}
-                  day={day}
-                  item={item}
-                  place={placeById.get(item.placeId)}
-                  next={placeById.get(day.items[i + 1]?.placeId ?? '')}
-                  mode={mode}
-                  currency={trip.currency ?? 'USD'}
-                />
-              ))}
-            </SortableContext>
-          </DndContext>
-          <div className="segmented" role="group" aria-label="Travel mode">
-            {MODES.map((m) => (
-              <button key={m.id} className={mode === m.id ? 'on' : ''} onClick={() => setMode(m.id)}>
-                {m.emoji} {m.label}
+      <div className="day-grid">
+        <div>
+          <div className="row between day-actions">
+            <p className="muted">
+              {done} of {day.items.length} done
+              {planned > 0 && ` · planned ${fmtMoney(planned, trip.currency)}`}
+            </p>
+            {arriving && (
+              <button onClick={() => setSuggestFor(arriving)}>
+                <Sparkles size={16} /> Suggest my days
               </button>
-            ))}
+            )}
           </div>
-          <DayTravel places={day.items.map((i) => placeById.get(i.placeId)).filter((p): p is Place => !!p)} mode={mode} />
-          {timed > 1 && <button className="wide" onClick={() => sortDayByTime(day.id)}>Sort by time</button>}
-        </>
-      )}
-      <button className="primary wide" onClick={() => setPicking(true)}>+ Add places</button>
+
+          {day.items.length === 0 ? (
+            <div className="card">
+              <p>Nothing planned yet. Add places from your imported list, or tap a pin on the Map and choose “Add to day”.</p>
+            </div>
+          ) : (
+            <>
+              <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
+                <SortableContext items={day.items.map((i) => i.id)} strategy={verticalListSortingStrategy}>
+                  {day.items.map((item, i) => (
+                    <ItemRow
+                      key={item.id}
+                      day={day}
+                      item={item}
+                      place={placeById.get(item.placeId)}
+                      next={placeById.get(day.items[i + 1]?.placeId ?? '')}
+                      mode={mode}
+                      currency={trip.currency ?? 'USD'}
+                    />
+                  ))}
+                </SortableContext>
+              </DndContext>
+              <div className="segmented" role="group" aria-label="Travel mode">
+                {MODES.map((m) => (
+                  <button key={m.id} className={mode === m.id ? 'on' : ''} onClick={() => setMode(m.id)}>
+                    <m.Icon size={16} aria-hidden /> {m.label}
+                  </button>
+                ))}
+              </div>
+              <DayTravel places={dayPlaces} mode={mode} />
+              {timed > 1 && <button className="wide" onClick={() => sortDayByTime(day.id)}>Sort by time</button>}
+            </>
+          )}
+          <button className="primary wide" onClick={() => setPicking(true)}>
+            <Plus size={18} /> Add places
+          </button>
+        </div>
+        <aside className="day-side">
+          <DayMap places={dayPlaces} />
+        </aside>
+      </div>
+
       {picking && <PlacePicker trip={trip} day={day} onClose={() => setPicking(false)} />}
-    </section>
+      {suggestFor && <SuggestSheet trip={trip} stop={suggestFor} onClose={() => setSuggestFor(null)} />}
+    </div>
   )
 }

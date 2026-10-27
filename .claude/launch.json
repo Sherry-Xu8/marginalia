@@ -2,14 +2,10 @@
   "version": "0.0.1",
   "configurations": [
     {
-      "name": "trip-planner",
+      "name": "trip-planner-new",
       "runtimeExecutable": "/Users/sherry/tools/node/bin/node",
-      "runtimeArgs": [
-        "node_modules/vite/bin/vite.js",
-        "--port",
-        "5173"
-      ],
-      "port": 5173
+      "runtimeArgs": ["/Users/sherry/Travel App/node_modules/vite/bin/vite.js", "/Users/sherry/Travel App", "--port", "5176"],
+      "port": 5176
     }
   ]
 }

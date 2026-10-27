@@ -16,7 +16,9 @@ function buildPopup(p: Place): HTMLElement {
   const title = document.createElement('strong')
   title.textContent = p.name
   const tagLine = document.createElement('div')
-  tagLine.textContent = `${style.emoji} ${tagOf(p)}`
+  tagLine.textContent = tagOf(p)
+  tagLine.className = 'popup-tag'
+  tagLine.style.color = style.ink
   box.append(title, tagLine)
   if (p.description) {
     const d = document.createElement('p')

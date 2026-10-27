@@ -117,16 +117,17 @@ export async function suggestTags(places: TagInput[]): Promise<Map<string, Tag>>
   return result
 }
 
-export const TAG_STYLE: Record<Tag | 'Untagged', { colour: string; emoji: string }> = {
-  'Food & drink': { colour: '#c2693c', emoji: '🍜' },
-  Sightseeing: { colour: '#3a6fc4', emoji: '🏛️' },
-  Accommodation: { colour: '#6b5bb0', emoji: '🛏️' },
-  Shopping: { colour: '#c04f94', emoji: '🛍️' },
-  'Nature & outdoors': { colour: '#3f8a4f', emoji: '🌿' },
-  Nightlife: { colour: '#2b2f77', emoji: '🍸' },
-  Transport: { colour: '#5f6b73', emoji: '🚆' },
-  Other: { colour: '#a68a1f', emoji: '📌' },
-  Untagged: { colour: '#9aa3a0', emoji: '❔' },
+// colour = map pin, tint/ink = the soft tile and its icon colour in lists.
+export const TAG_STYLE: Record<Tag | 'Untagged', { colour: string; tint: string; ink: string }> = {
+  'Food & drink': { colour: '#C2693C', tint: '#F6E1D6', ink: '#8F3F1E' },
+  Sightseeing: { colour: '#3A6FC4', tint: '#DCE6F5', ink: '#274B86' },
+  Accommodation: { colour: '#6B5BB0', tint: '#E4E0F3', ink: '#493C86' },
+  Shopping: { colour: '#C04F94', tint: '#EBDCE3', ink: '#7A3A55' },
+  'Nature & outdoors': { colour: '#3F8A4F', tint: '#E3E8D3', ink: '#4A5731' },
+  Nightlife: { colour: '#2B2F77', tint: '#DDDFF0', ink: '#232763' },
+  Transport: { colour: '#5F6B73', tint: '#E3E6E8', ink: '#434C52' },
+  Other: { colour: '#A68A1F', tint: '#F1E8C9', ink: '#6E5A0F' },
+  Untagged: { colour: '#9AA3A0', tint: '#ECEBE6', ink: '#6B665A' },
 }
 
 export { TAGS }

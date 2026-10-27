@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { TAGS, TAG_STYLE } from '../lib/tagging'
 import { setPlaceTag } from '../lib/store'
 import type { Group, Place } from '../types'
+import { TagIcon } from './TagIcon'
 
 // One place at a time, one tap to tag it.
 export function QuickTag({
@@ -49,7 +50,7 @@ export function QuickTag({
       <div className="tag-grid">
         {TAGS.map((t) => (
           <button key={t} onClick={() => setPlaceTag(current.id, t)} style={{ borderColor: TAG_STYLE[t].colour }}>
-            <span aria-hidden>{TAG_STYLE[t].emoji}</span> {t}
+            <TagIcon tag={t} size={32} /> {t}
           </button>
         ))}
       </div>

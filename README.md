@@ -24,6 +24,12 @@ See [DEPLOY.md](DEPLOY.md) for step-by-step instructions (Netlify Drop or GitHub
 `test-data-Korea-3.kmz` is a sample Google My Maps export (47 places in Korea).
 Import it on the **Places** tab.
 
+## How the app is laid out
+
+- **Your trips** (front page): all trips, and a way to start a new one.
+- **Overview** (inside a trip): stops with progress, what's next, checklists, sharing and backup.
+- **Places**, **Map**, **Days**, **Budget**: the working screens.
+
 ## Progress
 
 - [x] Stage 1 — trips and stops, KML/KMZ import, map

@@ -225,7 +225,7 @@ export function PlacesTab({ tagFilter, setTagFilter }: { tagFilter: string[]; se
         </button>
         {error && <p className="error" role="alert">{error}</p>}
         {summary && (
-          <div className="summary" role="status">
+          <div className="import-summary" role="status">
             <strong>Import finished — {summary.fileName}</strong>
             <ul>
               <li>{summary.found} places found</li>

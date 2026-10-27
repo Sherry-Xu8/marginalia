@@ -60,11 +60,11 @@ export function BackupCard({ trip }: { trip?: Trip }) {
             >
               Share this trip
             </button>
-            <button className="wide" onClick={() => send(buildFullBackup(getState()), fileNameFor('backup'), 'Backup')}>
-              Back up everything
-            </button>
           </>
         )}
+        <button className="wide" onClick={() => send(buildFullBackup(getState()), fileNameFor('backup'), 'Backup')}>
+          Back up everything
+        </button>
         <input ref={fileInput} type="file" accept=".json,application/json" hidden onChange={(e) => onFile(e.target.files?.[0])} />
         <button className="wide" onClick={() => fileInput.current?.click()}>Import a file…</button>
         {message && <p role="status">{message}</p>}

@@ -9,9 +9,9 @@ import {
   type Suggestion,
 } from '../lib/itinerary'
 import { applySuggestion, useAppData } from '../lib/store'
-import { TAG_STYLE } from '../lib/tagging'
 import type { Place, Stop, Trip } from '../types'
 import { tagOf } from './FilterChips'
+import { TagIcon } from './TagIcon'
 
 const PACES: { id: Pace; label: string }[] = [
   { id: 'relaxed', label: 'Relaxed' },
@@ -75,7 +75,13 @@ export function SuggestSheet({ trip, stop, onClose }: { trip: Trip; stop: Stop; 
     )
 
   const row = (p: Place | undefined) =>
-    p ? `${TAG_STYLE[tagOf(p) as keyof typeof TAG_STYLE].emoji} ${p.name}` : '(removed)'
+    p ? (
+      <>
+        <TagIcon tag={tagOf(p)} size={26} /> {p.name}
+      </>
+    ) : (
+      '(removed)'
+    )
 
   return (
     <div className="sheet" role="dialog" aria-label={`Suggest days for ${stop.name}`}>
@@ -155,7 +161,7 @@ export function SuggestSheet({ trip, stop, onClose }: { trip: Trip; stop: Stop; 
                 <div key={d.dayId} className="card">
                   <strong>{shortDate(d.date)}</strong>
                   <span className="muted"> · {MODE_LABEL[d.mode]}</span>
-                  {anchor && <p className="muted">Starts and ends at 🛏️ {anchor.name}</p>}
+                  {anchor && <p className="muted">Starts and ends at {anchor.name}</p>}
                   {d.mode === 'off' && <p className="muted">Day off</p>}
                   {d.mode !== 'off' && d.placeIds.length === 0 && <p className="muted">Nothing scheduled</p>}
                   {d.placeIds.map((id, n) => (

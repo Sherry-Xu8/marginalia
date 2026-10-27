@@ -1,5 +1,6 @@
 import { get, set } from 'idb-keyval'
-import { useEffect, useState } from 'react'
+import { Bus, CarTaxiFront, Footprints } from 'lucide-react'
+import { useEffect, useState, type ComponentType } from 'react'
 import { distanceKm } from './geo'
 
 // ---- The one function the rest of the app uses ----
@@ -10,10 +11,10 @@ export type Mode = 'walk' | 'transit' | 'taxi'
 export type Point = { lat: number; lon: number }
 export type Commute = { mode: Mode; km: number; minutes: number; approx: boolean }
 
-export const MODES: { id: Mode; label: string; emoji: string }[] = [
-  { id: 'walk', label: 'Walk', emoji: '🚶' },
-  { id: 'transit', label: 'Public transport', emoji: '🚇' },
-  { id: 'taxi', label: 'Taxi', emoji: '🚕' },
+export const MODES: { id: Mode; label: string; Icon: ComponentType<{ size?: number }> }[] = [
+  { id: 'walk', label: 'Walk', Icon: Footprints },
+  { id: 'transit', label: 'Public transport', Icon: Bus },
+  { id: 'taxi', label: 'Taxi', Icon: CarTaxiFront },
 ]
 
 // ---- Estimates from straight-line distance (always available, shown as "approx.") ----
