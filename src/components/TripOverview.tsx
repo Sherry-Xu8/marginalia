@@ -1,5 +1,6 @@
 import { ArrowDown, ArrowRight, ArrowUp, BedDouble, ChevronDown, MoreHorizontal, Pencil, Plus, Route, Sparkles, Trash2 } from 'lucide-react'
 import { useMemo, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { shortDate, toISO } from '../lib/days'
 import { arrivalDate } from '../lib/journeys'
 import { stopDays } from '../lib/itinerary'
@@ -107,8 +108,9 @@ function StopCard({ trip, stop, index, onStays }: { trip: Trip; stop: Stop; inde
           <Sparkles size={16} /> Suggest my days
         </button>
       </div>
-      {suggesting && <SuggestSheet trip={trip} stop={stop} onClose={() => setSuggesting(false)} />}
-      {staying && <StaySheet trip={trip} defaults={{ checkIn: stop.arrival, checkOut: stop.departure }} onClose={() => setStaying(false)} />}
+      {/* Sheets sit on the page itself: inside the card, its hover lift would pin them to the card. */}
+      {suggesting && createPortal(<SuggestSheet trip={trip} stop={stop} onClose={() => setSuggesting(false)} />, document.body)}
+      {staying && createPortal(<StaySheet trip={trip} defaults={{ checkIn: stop.arrival, checkOut: stop.departure }} onClose={() => setStaying(false)} />, document.body)}
     </div>
   )
 }
