@@ -26,16 +26,25 @@ const KEYWORDS: Record<Exclude<Tag, 'Other'>, string[]> = {
     'tteok', 'tteokbokki', 'tteokboki', 'bibimbap', 'gopchang', 'jokbal', 'galbi', 'dakgalbi', 'gejang', 'samgyetang',
     'hotteok', 'sandwich', 'curry', 'udon', 'tempura', 'fried', 'porridge', 'jjajangmyeon', 'gamjatang', 'claypot',
     'braised', 'italian', 'korean', 'japanese', 'tapas', 'brunch', 'cheese',
+    // South-east Asia and beyond
+    'mee', 'laksa', 'popiah', 'prawn', 'satay', 'nasi', 'roti', 'prata', 'kway', 'char kway teow', 'hawker', 'kopitiam',
+    'food centre', 'food court', 'bak kut teh', 'dim sum', 'wonton', 'congee', 'biryani', 'dosa', 'murtabak', 'rojak',
+    'chicken rice', 'curry rice', 'claypot', 'roast', 'steamboat', 'hotpot', 'hot pot', 'banana leaf', 'mamak', 'warung',
+    'taco', 'taqueria', 'pasta', 'trattoria', 'osteria', 'steakhouse', 'canteen', 'cookhouse', 'dim sum',
     '식당', '국밥', '죽', '곱창', '족발', '떡볶이', '맛집',
   ],
   Cafes: [
     'cafe', 'café', 'coffee', 'bakery', 'bakeries', 'bread', 'bagel', 'dessert', 'tea', 'donut', 'pastry', 'toast',
-    'bingsu', 'ice cream', 'gelato', 'patisserie', 'roastery', 'espresso', 'latte', '카페', '커피', '베이커리',
+    'bingsu', 'kaya', 'cendol', 'confectionery', 'chocolate', 'boba', 'bubble tea', 'creamery', '甜品', '糖水', 'ice cream', 'gelato', 'patisserie', 'roastery', 'espresso', 'latte', '카페', '커피', '베이커리',
   ],
   Sightseeing: [
     'museum', 'temple', 'palace', 'tower', 'gallery', 'monument', 'castle', 'shrine', 'cathedral',
     'church', 'viewpoint', 'observatory', 'landmark', 'historic', 'heritage', 'hanok', 'memorial',
     'fortress', 'aquarium', 'zoo', 'theme park', 'sightseeing', 'attraction', '궁', '사찰',
+    'mosque', 'synagogue', 'pagoda', 'statue', 'sculpture', 'bridge', 'merlion', 'supertree', 'skypark', 'lane', 'alley',
+    'district', 'quarter', 'old town', 'chinatown', 'little india', 'kampong', 'kampung', 'house of', 'square', 'plaza',
+    'arch', 'gate', 'ruins', 'bay sands', 'night safari', 'sentosa', 'universal studios', 'esplanade', 'twin towers',
+    'petronas', 'batu caves', 'mansion', 'clock tower', 'lighthouse', 'canal', 'waterfront', 'promenade', 'street art', 'mural',
   ],
   Accommodation: [
     'hotel', 'hostel', 'guesthouse', 'guest house', 'motel', 'resort', 'inn', 'airbnb', 'apartment',
@@ -43,7 +52,7 @@ const KEYWORDS: Record<Exclude<Tag, 'Other'>, string[]> = {
   ],
   Shopping: [
     'shop', 'store', 'mall', 'market', 'boutique', 'outlet', 'department store', 'supermarket',
-    'duty free', 'olive young', 'daiso', 'souvenir', 'bookstore', 'gift', 'shopping', '시장',
+    'duty free', 'orchard', 'olive young', 'plaza singapura', 'pavilion', 'bazaar', 'arcade', 'daiso', 'souvenir', 'bookstore', 'gift', 'shopping', '시장',
   ],
   'Nature & outdoors': [
     'park', 'beach', 'mountain', 'hike', 'hiking', 'trail', 'garden', 'lake', 'river', 'island',

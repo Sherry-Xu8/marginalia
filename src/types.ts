@@ -25,6 +25,7 @@ export type Transfer = {
   to: string
   departTime?: string
   arriveTime?: string
+  arriveDate?: string // yyyy-mm-dd, when it lands, if that is not the day you set off
   reference?: string // booking reference
   note?: string
   cost?: number
@@ -128,6 +129,7 @@ export type PlaceDetails = {
   phone?: string
   cuisine?: string
   imageUrl?: string // a photo from Wikipedia/Wikimedia, if one exists
+  suggestedTag?: Tag // what OpenStreetMap says the place is; used once to tag it, never saved
   source?: string
 }
 

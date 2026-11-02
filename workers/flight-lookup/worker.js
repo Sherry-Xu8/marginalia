@@ -22,6 +22,9 @@ function json(body, status, cors, extra = {}) {
 // "2026-11-13 09:10+09:00" → "09:10"
 const clock = (t) => (t && t.local && /\d{2}:\d{2}/.test(t.local.slice(11, 16)) ? t.local.slice(11, 16) : undefined)
 
+// "2026-11-13 09:10+09:00" → "2026-11-13"
+const day = (t) => (t && t.local && /^\d{4}-\d{2}-\d{2}/.test(t.local) ? t.local.slice(0, 10) : undefined)
+
 // Turns AeroDataBox's answer into the small shape the app expects.
 export function shape(flights, date) {
   if (!Array.isArray(flights) || flights.length === 0) return null
@@ -37,6 +40,7 @@ export function shape(flights, date) {
     to: arr.airport?.iata,
     departTime: clock(dep.scheduledTime),
     arriveTime: clock(arr.scheduledTime),
+    arriveDate: day(arr.scheduledTime),
     note: notes.length ? notes.join(', ') : undefined,
   }
 }

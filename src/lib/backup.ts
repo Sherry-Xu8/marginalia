@@ -267,6 +267,7 @@ function cleanTransfer(v: unknown): Transfer | null {
     to: str(o.to, 200) ?? '',
     departTime: time(o.departTime),
     arriveTime: time(o.arriveTime),
+    arriveDate: date(o.arriveDate) && date(o.arriveDate)! > d ? date(o.arriveDate)! : undefined,
     reference: str(o.reference, 100) ?? undefined,
     note: str(o.note, 1000) ?? undefined,
     cost: num(o.cost) ?? undefined,

@@ -125,7 +125,7 @@ export function flightLinks(f: FlightNumber, date: string) {
   ]
 }
 
-export type FlightInfo = { from?: string; to?: string; departTime?: string; arriveTime?: string; note?: string }
+export type FlightInfo = { from?: string; to?: string; departTime?: string; arriveTime?: string; arriveDate?: string; note?: string }
 
 // Optional: a small web service you run (it holds your flight-data key privately) that answers
 //   GET <VITE_FLIGHT_PROXY_URL>?flight=KE123&date=2026-11-13
@@ -168,7 +168,7 @@ export async function lookupFlight(f: FlightNumber, date: string): Promise<Fligh
     const d = (await res.json()) as Record<string, unknown>
     const time = (v: unknown) => (typeof v === 'string' && /^\d{2}:\d{2}$/.test(v) ? v : undefined)
     const text = (v: unknown) => (typeof v === 'string' ? v.slice(0, 200) : undefined)
-    return { from: text(d.from), to: text(d.to), departTime: time(d.departTime), arriveTime: time(d.arriveTime), note: text(d.note) }
+    return { from: text(d.from), to: text(d.to), departTime: time(d.departTime), arriveTime: time(d.arriveTime), arriveDate: typeof d.arriveDate === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(d.arriveDate) ? d.arriveDate : undefined, note: text(d.note) }
   } catch {
     return null
   } finally {

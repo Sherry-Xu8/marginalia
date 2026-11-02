@@ -1,6 +1,7 @@
 import { ArrowDown, ArrowRight, ArrowUp, BedDouble, ChevronDown, MoreHorizontal, Pencil, Plus, Route, Sparkles, Trash2 } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { shortDate, toISO } from '../lib/days'
+import { arrivalDate } from '../lib/journeys'
 import { stopDays } from '../lib/itinerary'
 import { nightsOf, staysForStop } from '../lib/stays'
 import { fmtMoney } from '../lib/money'
@@ -288,7 +289,7 @@ export function TripOverview({ trip }: { trip: Trip }) {
               <span style={{ textAlign: 'left' }}>
                 <strong>{t.title}</strong>
                 <span className="muted" style={{ display: 'block' }}>
-                  {shortDate(t.date)}{t.from && t.to ? ` · ${t.from} → ${t.to}` : ''}{t.departTime ? ` · ${t.departTime}` : ''}
+                  {shortDate(t.date)}{t.from && t.to ? ` · ${t.from} → ${t.to}` : ''}{t.departTime ? ` · ${t.departTime}` : ''}{arrivalDate(t) !== t.date ? ` → ${shortDate(arrivalDate(t))}${t.arriveTime ? ' ' + t.arriveTime : ''}` : ''}
                 </span>
               </span>
             </button>

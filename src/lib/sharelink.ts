@@ -52,7 +52,7 @@ export async function buildShareLink(state: AppData, tripId: string): Promise<st
       id: sid(d.id), tripId: 't', date: d.date,
       items: d.items.map((i) => ({ id: sid(i.id), placeId: sid(i.placeId), time: i.time, note: i.note, done: false, reservation: i.reservation, reservationNote: i.reservationNote })),
     })),
-    transfers: state.transfers.filter((t) => t.tripId === tripId).map((t) => ({ id: sid(t.id), tripId: 't', date: t.date, kind: t.kind, title: t.title, from: t.from, to: t.to, departTime: t.departTime, arriveTime: t.arriveTime, note: t.note })),
+    transfers: state.transfers.filter((t) => t.tripId === tripId).map((t) => ({ id: sid(t.id), tripId: 't', date: t.date, kind: t.kind, title: t.title, from: t.from, to: t.to, departTime: t.departTime, arriveTime: t.arriveTime, arriveDate: t.arriveDate, note: t.note })),
     expenses: [],
   }
   const json = JSON.stringify({ app: 'trip-planner', kind: 'trip', version: 1, exportedAt: '', data })

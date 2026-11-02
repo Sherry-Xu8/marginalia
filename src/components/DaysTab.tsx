@@ -27,7 +27,7 @@ import {
 } from '../lib/commute'
 import { fromISO, shortDate, stopLabel, stopsOn, toISO } from '../lib/days'
 import { hoursWarning } from '../lib/hours'
-import { journeyPositions } from '../lib/journeys'
+import { arrivalDate, journeyPositions } from '../lib/journeys'
 import { dayStays } from '../lib/stays'
 import { fmtMoney } from '../lib/money'
 import { addExpense, addToDay, moveDayItem, moveItemToDay, removeDayItem, setLegMode, sortDayByTime, updateDayItem, useAppData } from '../lib/store'
@@ -153,9 +153,15 @@ function StayCard({ label, place, onClick }: { label: string; place: Place; onCl
   )
 }
 
-function TransferCard({ t, onEdit }: { t: Transfer; onEdit: () => void }) {
+function TransferCard({ t, day, onEdit }: { t: Transfer; day: string; onEdit: () => void }) {
   const { Icon, label } = KIND_INFO[t.kind]
-  const times = [t.departTime, t.arriveTime].filter(Boolean).join(' → ')
+  const end = arrivalDate(t)
+  const times =
+    end === t.date
+      ? [t.departTime, t.arriveTime].filter(Boolean).join(' → ')
+      : day === t.date
+        ? [t.departTime, `arrives ${shortDate(end)}${t.arriveTime ? ' ' + t.arriveTime : ''}`].filter(Boolean).join(' → ')
+        : `${t.departTime ? `left ${shortDate(t.date)} ${t.departTime} → ` : ''}arrives ${t.arriveTime ?? 'today'}`
   return (
     <div className="item transfer-card">
       <span aria-hidden />
@@ -492,17 +498,17 @@ export function DaysTab({ initialDate }: { initialDate?: string }) {
   const endStay = placeById.get(stays.end?.placeId ?? '')
   const done = day.items.filter((i) => i.done).length
   const dayTransfers = transfers
-    .filter((t) => t.tripId === trip.id && t.date === day.date)
-    .sort((a, b) => (a.departTime ?? '').localeCompare(b.departTime ?? ''))
+    .filter((t) => t.tripId === trip.id && (t.date === day.date || arrivalDate(t) === day.date))
+    .sort((a, b) => ((a.date === day.date ? a.departTime : a.arriveTime) ?? '').localeCompare((b.date === day.date ? b.departTime : b.arriveTime) ?? ''))
   const planned =
     day.items.reduce((s, i) => s + (i.cost ?? 0), 0) + dayTransfers.reduce((s, t) => s + (t.cost ?? 0), 0)
   const timed = day.items.filter((i) => i.time).length
   const route = [startStay, ...dayPlaces, endStay].filter((p): p is Place => !!p)
   const weatherPoint =
     route[0] ?? places.find((p) => p.tripId === trip.id && p.groupId && groups.some((g) => g.id === p.groupId && g.stopId === arriving?.id))
-  const jpos = journeyPositions(day.items, dayTransfers)
+  const jpos = journeyPositions(day.items, dayTransfers, day.date)
   const journeysAt = (i: number) => dayTransfers.filter((t) => jpos.get(t.id) === i)
-  const journeyCard = (t: Transfer) => <TransferCard key={t.id} t={t} onEdit={() => setTransferSheet({ transfer: t })} />
+  const journeyCard = (t: Transfer) => <TransferCard key={t.id} t={t} day={day.date} onEdit={() => setTransferSheet({ transfer: t })} />
   const sheetItem = openItem ? day.items.find((i) => i.id === openItem) : undefined
 
   function onDragEnd(e: DragEndEvent) {

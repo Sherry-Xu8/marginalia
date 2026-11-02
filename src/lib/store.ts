@@ -827,8 +827,11 @@ export function applyLookups(
       const u = by.get(p.id)
       if (!u) return p
       const mine = Object.fromEntries(Object.entries(p.details ?? {}).filter(([, v]) => v))
-      const details = u.details ? { ...u.details, ...mine } : p.details
-      return { ...p, details, lookup: u.lookup, lookedUpAt: now }
+      const { suggestedTag, ...found } = u.details ?? {}
+      const details = u.details ? { ...found, ...mine } : p.details
+      // A place the name couldn't place gets its category from what OpenStreetMap calls it. Your own choice always stays.
+      const tagged = !p.tag && p.tagSource !== 'user' && suggestedTag ? { tag: suggestedTag, tagSource: 'rule' as const } : {}
+      return { ...p, ...tagged, details, lookup: u.lookup, lookedUpAt: now }
     }),
   }))
 }

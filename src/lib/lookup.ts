@@ -1,4 +1,4 @@
-import type { Place, PlaceDetails } from '../types'
+import type { Place, PlaceDetails, Tag } from '../types'
 import { englishPart } from './names'
 
 // Looks a place up in free, open sources — no account or key needed:
@@ -69,6 +69,23 @@ const distMetres = (a: { lat: number; lon: number }, b: { lat: number; lon: numb
   return Math.sqrt(x * x + y * y) * 6371000
 }
 
+// What OpenStreetMap's own labels say a place is (a restaurant, a temple, a hotel…), as one of our tags.
+export function tagFromOsm(t: Tags): Tag | undefined {
+  const a = t.amenity
+  if (a && ['restaurant', 'fast_food', 'food_court', 'biergarten'].includes(a)) return 'Food'
+  if (a && ['cafe', 'ice_cream'].includes(a)) return 'Cafes'
+  if (a && ['bar', 'pub', 'nightclub', 'casino', 'karaoke_box', 'stripclub'].includes(a)) return 'Nightlife'
+  if (a === 'marketplace' || t.shop) return t.shop === 'bakery' || t.shop === 'pastry' || t.shop === 'coffee' || t.shop === 'tea' ? 'Cafes' : t.shop === 'deli' || t.shop === 'seafood' ? 'Food' : 'Shopping'
+  if (a === 'place_of_worship' || a === 'theatre' || a === 'arts_centre' || a === 'planetarium') return 'Sightseeing'
+  if (t.tourism && ['hotel', 'hostel', 'guest_house', 'motel', 'apartment', 'chalet', 'resort'].includes(t.tourism)) return 'Accommodation'
+  if (t.tourism || t.historic || t.man_made === 'tower' || t.man_made === 'lighthouse' || t.man_made === 'bridge' || t.bridge) return 'Sightseeing'
+  if (t.leisure && ['park', 'garden', 'nature_reserve', 'beach_resort', 'playground'].includes(t.leisure)) return 'Nature & outdoors'
+  if (t.natural || t.waterway) return 'Nature & outdoors'
+  if (t.leisure === 'water_park' || t.leisure === 'stadium') return 'Sightseeing'
+  if (t.railway === 'station' || t.public_transport === 'station' || t.aeroway === 'terminal' || t.amenity === 'bus_station' || t.amenity === 'ferry_terminal') return 'Transport'
+  return undefined
+}
+
 function detailsFromTags(t: Tags): { details: PlaceDetails; wiki?: string } {
   const details: PlaceDetails = {
     summary: t['description:en'] ?? t.description,
@@ -77,6 +94,7 @@ function detailsFromTags(t: Tags): { details: PlaceDetails; wiki?: string } {
     phone: t.phone ?? t['contact:phone'],
     cuisine: tidy(t.cuisine),
     source: 'OpenStreetMap',
+    suggestedTag: tagFromOsm(t),
   }
   const commons = t.wikimedia_commons?.startsWith('File:') ? t.wikimedia_commons.slice(5) : undefined
   if (commons) details.imageUrl = `https://commons.wikimedia.org/wiki/Special:FilePath/${encodeURIComponent(commons)}?width=800`
@@ -180,7 +198,7 @@ export async function lookupMany(places: Place[]): Promise<Map<string, LookupRes
       merged.imageUrl = merged.imageUrl ?? wiki.imageUrl
     }
     merged.source = details && wiki ? 'OpenStreetMap and Wikipedia' : wiki ? 'Wikipedia' : details ? 'OpenStreetMap' : undefined
-    const useful = merged.summary || merged.website || merged.hours || merged.phone || merged.cuisine || merged.imageUrl
+    const useful = merged.suggestedTag || merged.summary || merged.website || merged.hours || merged.phone || merged.cuisine || merged.imageUrl
     if (useful) out.set(place.id, { status: 'found', details: merged, complete: !!elements && wikiAnswered })
     else if (!wikiAnswered && !elements) out.set(place.id, { status: 'unavailable' })
     else out.set(place.id, { status: 'none', complete: !!elements && wikiAnswered })
