@@ -26,7 +26,8 @@ import {
   type Mode,
 } from '../lib/commute'
 import { fromISO, shortDate, stopLabel, stopsOn, toISO } from '../lib/days'
-import { hoursWarning } from '../lib/hours'
+import { distanceKm } from '../lib/geo'
+import { hoursOn, hoursWarning } from '../lib/hours'
 import { arrivalDate, journeyPositions } from '../lib/journeys'
 import { dayStays } from '../lib/stays'
 import { fmtMoney } from '../lib/money'
@@ -174,6 +175,37 @@ function TransferCard({ t, day, onEdit }: { t: Transfer; day: string; onEdit: ()
         {t.note && <span className="muted">{t.note}</span>}
       </div>
       <button className="icon-btn" aria-label="Edit journey" onClick={onEdit}><Pencil size={18} /></button>
+    </div>
+  )
+}
+
+// Places from this day's area that aren't planned on any day yet, nearest to what's planned here first.
+function DayIdeas({ trip, day, route }: { trip: Trip; day: Day; route: Place[] }) {
+  const { places, groups, days } = useAppData()
+  const stopIds = new Set(stopsOn(trip, day.date).map((s) => s.id))
+  const areaIds = new Set(groups.filter((g) => g.tripId === trip.id && g.stopId && stopIds.has(g.stopId)).map((g) => g.id))
+  const planned = new Set(days.filter((d) => d.tripId === trip.id).flatMap((d) => d.items.map((i) => i.placeId)))
+  const ideas = places
+    .filter((p) => p.tripId === trip.id && p.groupId && areaIds.has(p.groupId) && !planned.has(p.id) && p.tag !== 'Accommodation' && p.tag !== 'Transport')
+    .filter((p) => hoursOn(p.details?.hours, day.date).status !== 'closed')
+    .map((p) => ({ p, km: route.length ? Math.min(...route.map((r) => distanceKm(p, r))) : Infinity }))
+    .sort((a, b) => a.km - b.km || Number(!!b.p.must) - Number(!!a.p.must))
+    .slice(0, 4)
+  if (ideas.length === 0) return null
+  const away = (km: number) => (km === Infinity ? '' : km < 1 ? ` · ${Math.max(50, Math.round(km * 10) * 100)} m away` : ` · ${km.toFixed(1)} km away`)
+  return (
+    <div className="card day-ideas">
+      <strong>Ideas for this day</strong>
+      <p className="muted">Saved places not on any day yet{route.length ? ', nearest to this day’s plan first' : ''}.</p>
+      {ideas.map(({ p, km }) => (
+        <div key={p.id} className="check">
+          <span style={{ flex: 1 }}>
+            <TagIcon tag={tagOf(p)} size={26} /> {p.name}
+            <small className="muted">{away(km)}</small>
+          </span>
+          <button onClick={() => addToDay(day.id, p.id)}><Plus size={16} /> Add</button>
+        </div>
+      ))}
     </div>
   )
 }
@@ -621,6 +653,7 @@ export function DaysTab({ initialDate }: { initialDate?: string }) {
               <Plus size={18} /> Add journey
             </button>
           </div>
+          <DayIdeas trip={trip} day={day} route={route} />
         </div>
       </div>
 
