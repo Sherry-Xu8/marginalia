@@ -1,4 +1,5 @@
 import { Star } from 'lucide-react'
+import { distanceKm } from '../lib/geo'
 import { useMemo, useState } from 'react'
 import { shortDate } from '../lib/days'
 import { stayForStop } from '../lib/stays'
@@ -158,6 +159,25 @@ export function SuggestSheet({ trip, stop, onClose }: { trip: Trip; stop: Stop; 
       },
     )
 
+  // For a place that didn't fit: the days it would suit best, nearest first. A day's distance is how far the place is
+  // from the closest thing already planned that day (or from the hotel on an empty day). Days it's closed on are left out.
+  function rankDays(placeId: string) {
+    const p = placeById.get(placeId)
+    if (!p || !plan) return []
+    const hotel = places.find((x) => x.id === stayForStop(trip, stop)?.placeId)
+    return plan.days
+      .filter((d) => d.mode !== 'off' && hoursOn(p.details?.hours, d.date).status !== 'closed')
+      .map((d) => {
+        const near = [...d.placeIds.map((id) => placeById.get(id)), ...(d.placeIds.length === 0 && hotel ? [hotel] : [])]
+          .filter((x): x is Place => !!x)
+          .map((x) => ({ x, km: distanceKm(p, x) }))
+          .sort((a, b) => a.km - b.km)[0]
+        return { day: d, km: near?.km ?? Infinity, near: near?.x, count: d.placeIds.length }
+      })
+      .sort((a, b) => a.km - b.km || a.count - b.count)
+  }
+  const kmText = (km: number) => (km < 1 ? `${Math.max(50, Math.round(km * 10) * 100)} m` : `${km.toFixed(1)} km`)
+
   const row = (p: Place | undefined) =>
     p ? (
       <>
@@ -302,12 +322,21 @@ export function SuggestSheet({ trip, stop, onClose }: { trip: Trip; stop: Stop; 
             })}
             <div className="card">
               <strong>Unscheduled ({plan.unscheduled.length})</strong>
-              <p className="muted">Places that didn’t fit. Add one to a day if you like.</p>
-              {plan.unscheduled.slice(0, 60).map((id) => (
+              <p className="muted">Places that didn’t fit, with the day each would suit best (nearest to what’s already planned).</p>
+              {plan.unscheduled.slice(0, 60).map((id) => {
+                const ranked = rankDays(id)
+                const best = ranked[0]
+                return (
                 <div key={id} className="check">
                   <span style={{ flex: 1 }}>
                     {row(placeById.get(id))}
                     {plan.reasons?.[id] && <small className="muted"> · {plan.reasons[id]}</small>}
+                    {best && (
+                      <button className="soft-btn" style={{ display: 'block', marginTop: 6 }} onClick={() => addToPlanDay(best.day.dayId, id)}>
+                        Best fit: {shortDate(best.day.date)}
+                        {best.near ? ` · ${kmText(best.km)} from ${best.near.name}` : ` · quietest day (${best.count})`}
+                      </button>
+                    )}
                   </span>
                   <select
                     aria-label="Add to day"
@@ -316,12 +345,13 @@ export function SuggestSheet({ trip, stop, onClose }: { trip: Trip; stop: Stop; 
                     onChange={(e) => e.target.value && addToPlanDay(e.target.value, id)}
                   >
                     <option value="">Add to…</option>
-                    {plan.days.filter((d) => d.mode !== 'off').map((d) => (
-                      <option key={d.dayId} value={d.dayId}>{shortDate(d.date)}</option>
+                    {ranked.map((r) => (
+                      <option key={r.day.dayId} value={r.day.dayId}>{shortDate(r.day.date)}{r.near ? ` · ${kmText(r.km)}` : ''}</option>
                     ))}
                   </select>
                 </div>
-              ))}
+                )
+              })}
               {plan.unscheduled.length > 60 && <p className="muted">…and {plan.unscheduled.length - 60} more.</p>}
             </div>
             <div className="row buttons">
