@@ -963,3 +963,6 @@ button.danger-solid:hover:not(:disabled) { background: color-mix(in srgb, var(--
 .today-spend > span { flex: 1; }
 .sync-code { font-family: ui-monospace, Menlo, monospace; font-size: 1.4rem; letter-spacing: 0.08em; text-align: center; background: var(--soft); border-radius: 14px; padding: 14px; margin: 12px 0 6px; user-select: all; }
 .sync-card .buttons { margin-top: 10px; }
+
+.meal-gaps { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; margin: 8px 0; }
+.meal-gaps .soft-btn { text-align: left; }

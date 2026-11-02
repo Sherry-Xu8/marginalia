@@ -1,6 +1,6 @@
 import { Star } from 'lucide-react'
 import { distanceKm } from '../lib/geo'
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { shortDate } from '../lib/days'
 import { stayForStop } from '../lib/stays'
 import { clock, describeTransfer, freeWindow } from '../lib/journeys'
@@ -11,12 +11,14 @@ import {
   PACE_COUNT,
   stopDays,
   suggestItinerary,
+  quotaFor,
   type DayMode,
+  type MealName,
   type Pace,
   type Prefs,
   type Suggestion,
 } from '../lib/itinerary'
-import { applySuggestion, setGroupStop, useAppData } from '../lib/store'
+import { applySuggestion, setGroupStop, tagUntagged, useAppData } from '../lib/store'
 import type { Place, Stop, Trip } from '../types'
 import { tagOf } from './FilterChips'
 import { TagIcon } from './TagIcon'
@@ -112,6 +114,44 @@ export function SuggestSheet({ trip, stop, onClose }: { trip: Trip; stop: Stop; 
   const areaIds = new Set(groups.filter((g) => g.stopId === stop.id).map((g) => g.id))
   const stopPlaces = places.filter((p) => p.tripId === trip.id && p.groupId && areaIds.has(p.groupId))
   const placeById = new Map(places.map((p) => [p.id, p]))
+
+  // Places the app couldn't categorise earlier get another go (it now knows more), so a restaurant isn't planned as a sight.
+  useEffect(() => { void tagUntagged() }, [])
+
+  // The meals a day should have (by your meals-a-day choice and any journey) that the draft doesn't cover yet.
+  function missingMeals(d: Suggestion['days'][number]): MealName[] {
+    if (d.mode === 'off') return []
+    const w = windowOf(d.date)
+    const q = quotaFor(pace, d.mode, prefs, w ? { start: w.start, end: w.end } : undefined)
+    const all: MealName[] = ['Breakfast', 'Lunch', 'Dinner']
+    const names: MealName[] = q.mealNames ?? (prefs.meals === 3 ? all : prefs.meals === 2 ? (['Lunch', 'Dinner'] as MealName[]) : ([] as MealName[])).slice(q.meals ? -q.meals : 99)
+    const have = new Set<string>(Object.values(d.labels ?? {}))
+    return names.filter((n) => !have.has(n))
+  }
+  // The nearest restaurant still left over for this day (not closed that date).
+  function mealFor(d: Suggestion['days'][number]): { place: Place; km: number } | undefined {
+    const near = d.placeIds.map((id) => placeById.get(id)).filter((x): x is Place => !!x)
+    return (plan?.unscheduled ?? [])
+      .map((id) => placeById.get(id))
+      .filter((p): p is Place => !!p && p.tag === 'Food' && hoursOn(p.details?.hours, d.date).status !== 'closed')
+      .map((place) => ({ place, km: near.length ? Math.min(...near.map((x) => distanceKm(place, x))) : 0 }))
+      .sort((a, b) => a.km - b.km)[0]
+  }
+  function addMeal(d: Suggestion['days'][number], name: MealName, id: string) {
+    setPlan((p) => {
+      if (!p) return p
+      return {
+        ...p,
+        unscheduled: p.unscheduled.filter((x) => x !== id),
+        days: p.days.map((x) => {
+          if (x.dayId !== d.dayId) return x
+          const at = name === 'Breakfast' ? 0 : name === 'Dinner' ? x.placeIds.length : Math.floor(x.placeIds.length / 2)
+          const placeIds = [...x.placeIds.slice(0, at), id, ...x.placeIds.slice(at)]
+          return { ...x, placeIds, labels: { ...x.labels, [id]: name } }
+        }),
+      }
+    })
+  }
 
   // Days that already have a plan are left alone unless you tick "replace".
   const locked = (date: string) => {
@@ -308,6 +348,20 @@ export function SuggestSheet({ trip, stop, onClose }: { trip: Trip; stop: Stop; 
                   {anchor && <p className="muted">Starts and ends at {anchor.name}</p>}
                   {d.mode === 'off' && <p className="muted">Day off</p>}
                   {d.mode !== 'off' && d.placeIds.length === 0 && <p className="muted">Nothing scheduled</p>}
+                  {missingMeals(d).length > 0 && (
+                    <div className="meal-gaps">
+                      {missingMeals(d).map((name) => {
+                        const m = mealFor(d)
+                        return m ? (
+                          <button key={name} className="soft-btn" onClick={() => addMeal(d, name, m.place.id)}>
+                            + Add {name.toLowerCase()} · {m.place.name}{m.km > 0 ? ` (${kmText(m.km)})` : ''}
+                          </button>
+                        ) : (
+                          <span key={name} className="muted">No {name.toLowerCase()} planned, and no restaurants left to add.</span>
+                        )
+                      })}
+                    </div>
+                  )}
                   {d.placeIds.map((id, n) => (
                     <div key={id} className="check">
                       <span style={{ flex: 1 }}>
