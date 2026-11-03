@@ -410,8 +410,8 @@ function ItemRow({
 
 // ---- Adding places ----
 
-function PlacePicker({ trip, day, onClose }: { trip: Trip; day: Day; onClose: () => void }) {
-  const { places, groups } = useAppData()
+function PlacePicker({ trip, day, route, onClose }: { trip: Trip; day: Day; route: Place[]; onClose: () => void }) {
+  const { places, groups, days } = useAppData()
   const mine = useMemo(() => places.filter((p) => p.tripId === trip.id), [places, trip.id])
   const myGroups = groups.filter((g) => g.tripId === trip.id)
   const stopIds = stopsOn(trip, day.date).map((s) => s.id)
@@ -420,12 +420,41 @@ function PlacePicker({ trip, day, onClose }: { trip: Trip; day: Day; onClose: ()
   const [query, setQuery] = useState('')
   const onDay = new Set(day.items.map((i) => i.placeId))
   const q = query.trim().toLowerCase()
-  const list = mine.filter(
+  // Which other days each place is already planned on, so a repeat is a choice you can see.
+  const elsewhere = new Map<string, string[]>()
+  for (const d of days) {
+    if (d.tripId !== trip.id || d.id === day.id) continue
+    for (const i of d.items) elsewhere.set(i.placeId, [...(elsewhere.get(i.placeId) ?? []), d.date])
+  }
+  const matches = mine.filter(
     (p) =>
       !onDay.has(p.id) &&
       (groupId === 'all' || p.groupId === groupId) &&
       (tags.length === 0 || tags.includes(tagOf(p))) &&
       (!q || p.name.toLowerCase().includes(q)),
+  )
+  const fresh = matches.filter((p) => !elsewhere.has(p.id))
+  const repeats = matches.filter((p) => elsewhere.has(p.id))
+  // Unplanned places that sit close to what this day already has (hidden while you search or filter).
+  const near = (q || tags.length > 0 || route.length === 0
+    ? []
+    : fresh
+        .filter((p) => p.tag !== 'Accommodation' && p.tag !== 'Transport' && hoursOn(p.details?.hours, day.date).status !== 'closed')
+        .map((p) => ({ p, km: Math.min(...route.map((r) => distanceKm(p, r))) }))
+        .sort((a, b) => a.km - b.km)
+        .slice(0, 4)
+  )
+  const nearIds = new Set(near.map((n) => n.p.id))
+  const away = (km: number) => (km < 1 ? `${Math.max(50, Math.round(km * 10) * 100)} m` : `${km.toFixed(1)} km`)
+  const pick = (p: Place, note?: string, repeat?: boolean) => (
+    <button key={p.id} className={`pick${repeat ? ' planned' : ''}`} onClick={() => addToDay(day.id, p.id)}>
+      <TagIcon tag={tagOf(p)} size={32} />
+      <span>
+        {p.name}
+        {note && <small className="muted" style={{ display: 'block' }}>{note}</small>}
+      </span>
+      <b>{repeat ? 'Add again' : 'Add'}</b>
+    </button>
   )
 
   return (
@@ -445,15 +474,22 @@ function PlacePicker({ trip, day, onClose }: { trip: Trip; day: Day; onClose: ()
           </select>
         )}
         <FilterChips places={mine} value={tags} onChange={setTags} />
-        {list.length === 0 && <p className="muted">Nothing left to add with these filters.</p>}
-        {list.slice(0, 100).map((p) => (
-          <button key={p.id} className="pick" onClick={() => addToDay(day.id, p.id)}>
-            <TagIcon tag={tagOf(p)} size={32} />
-            <span>{p.name}</span>
-            <b>Add</b>
-          </button>
-        ))}
-        {list.length > 100 && <p className="muted">Showing 100 — search or filter to narrow down.</p>}
+        {matches.length === 0 && <p className="muted">Nothing left to add with these filters.</p>}
+        {near.length > 0 && (
+          <>
+            <p className="pick-head">Near this day’s plan</p>
+            {near.map(({ p, km }) => pick(p, `${away(km)} from the nearest stop`))}
+          </>
+        )}
+        {fresh.length > nearIds.size && <p className="pick-head">Not planned yet</p>}
+        {fresh.filter((p) => !nearIds.has(p.id)).slice(0, 100).map((p) => pick(p))}
+        {repeats.length > 0 && (
+          <>
+            <p className="pick-head">Already on another day (faded). Add again to repeat one</p>
+            {repeats.slice(0, 100).map((p) => pick(p, `On ${elsewhere.get(p.id)!.sort().map((d) => shortDate(d)).join(', ')}`, true))}
+          </>
+        )}
+        {matches.length > 200 && <p className="muted">Showing the first 200. Search or filter to narrow down.</p>}
       </div>
     </div>
   )
@@ -657,7 +693,7 @@ export function DaysTab({ initialDate }: { initialDate?: string }) {
         </div>
       </div>
 
-      {picking && <PlacePicker trip={trip} day={day} onClose={() => setPicking(false)} />}
+      {picking && <PlacePicker trip={trip} day={day} route={route} onClose={() => setPicking(false)} />}
       {suggestFor && <SuggestSheet trip={trip} stop={suggestFor} onClose={() => setSuggestFor(null)} />}
       {stayFor && <StaySheet trip={trip} defaults={stayFor} onClose={() => setStayFor(null)} />}
       {transferSheet && (

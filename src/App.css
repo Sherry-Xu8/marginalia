@@ -966,3 +966,7 @@ button.danger-solid:hover:not(:disabled) { background: color-mix(in srgb, var(--
 
 .meal-gaps { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; margin: 8px 0; }
 .meal-gaps .soft-btn { text-align: left; }
+
+.pick.planned { opacity: 0.55; background: transparent; border-style: dashed; }
+.pick.planned b { font-weight: 500; }
+.pick-head { margin: 14px 0 4px; font-size: 0.78rem; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
