@@ -5,6 +5,8 @@ import { expandAirport, flightLinks, flightTitle, getFlightService, lookupFlight
 import { addTransfer, deleteTransfer, updateTransfer } from '../lib/store'
 import { TRANSFER_KINDS, type Transfer, type TransferKind, type Trip } from '../types'
 import { ask } from '../lib/confirm'
+import { AmountInput } from './AmountInput'
+import { toTripAmount, tripCurrency } from '../lib/convert'
 import { shortDate, fromISO, toISO } from '../lib/days'
 import { toMinutes } from '../lib/journeys'
 
@@ -48,7 +50,9 @@ export function TransferSheet({
   const [arrive, setArrive] = useState(transfer?.arriveTime ?? '')
   const [arriveOn, setArriveOn] = useState(transfer?.arriveDate ?? '')
   const [reference, setReference] = useState(transfer?.reference ?? '')
-  const [cost, setCost] = useState(transfer?.cost !== undefined ? String(transfer.cost) : '')
+  const [cost, setCost] = useState(transfer?.paid ? String(transfer.paid.amount) : transfer?.cost !== undefined ? String(transfer.cost) : '')
+  const [costCur, setCostCur] = useState(transfer?.paid?.currency ?? tripCurrency(trip))
+  const [saving, setSaving] = useState(false)
   const [note, setNote] = useState(transfer?.note ?? '')
   const [error, setError] = useState('')
   const [flightNo, setFlightNo] = useState(transfer?.kind === 'flight' ? flightNoFrom(transfer.title) : '')
@@ -106,9 +110,16 @@ export function TransferSheet({
     }
   }
 
-  function save() {
+  async function save() {
     if (!title.trim() && !(from.trim() && to.trim())) return setError('Add a title, or where it goes from and to.')
     const n = parseFloat(cost)
+    let money: { amount: number; paid?: { amount: number; currency: string } } | null = null
+    if (cost.trim() !== '' && Number.isFinite(n) && n >= 0) {
+      setSaving(true)
+      money = await toTripAmount(n, costCur, tripCurrency(trip))
+      setSaving(false)
+      if (!money) return setError(`Couldn’t get the ${costCur}→${tripCurrency(trip)} exchange rate. Try again, or enter the cost in ${tripCurrency(trip)}.`)
+    }
     const data = {
       date: when,
       kind,
@@ -120,7 +131,8 @@ export function TransferSheet({
       arriveDate: endDate > when ? endDate : undefined,
       reference: reference.trim() || undefined,
       note: note.trim() || undefined,
-      cost: Number.isFinite(n) && n >= 0 && cost.trim() !== '' ? n : undefined,
+      cost: money?.amount,
+      paid: money?.paid,
     }
     if (transfer) updateTransfer(transfer.id, data)
     else addTransfer({ tripId: trip.id, ...data })
@@ -192,12 +204,12 @@ export function TransferSheet({
         <p className="muted">Add the times and “Suggest my days” will plan around them: no sightseeing while you’re travelling, and only the meals that fit before or after.</p>
         <div className="row">
           <label>Booking reference<input value={reference} onChange={(e) => setReference(e.target.value)} /></label>
-          <label>Cost<input inputMode="decimal" value={cost} onChange={(e) => setCost(e.target.value)} /></label>
+          <AmountInput label="Cost" trip={trip} amount={cost} currency={costCur} onChange={(a, c) => { setCost(a); setCostCur(c) }} />
         </div>
         <label>Notes<textarea rows={2} value={note} onChange={(e) => setNote(e.target.value)} placeholder="Platform, seat, terminal…" /></label>
         {error && <p className="error">{error}</p>}
         <div className="row buttons">
-          <button className="primary" onClick={save}>Save</button>
+          <button className="primary" disabled={saving} onClick={() => void save()}>{saving ? 'Converting…' : 'Save'}</button>
           {transfer && (
             <button className="danger" onClick={() => ask('Delete this journey?', () => { deleteTransfer(transfer.id); onClose() })}>Delete</button>
           )}

@@ -28,7 +28,7 @@ export function TodayCard({ trip }: { trip: Trip }) {
   const warning = nextPlace ? hoursWarning(nextPlace.details?.hours, today, next?.time) : null
   const spent = expenses.filter((e) => e.tripId === trip.id && e.date === today).reduce((s, e) => s + e.amount, 0)
   const foodSpent = expenses.filter((e) => e.tripId === trip.id && e.date === today && e.category === 'Food & drink').reduce((s, e) => s + e.amount, 0)
-  const currency = trip.currency ?? 'USD'
+  const currency = trip.currency ?? 'GBP'
   const done = day.items.filter((i) => i.done).length
 
   return (

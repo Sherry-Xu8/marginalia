@@ -5,7 +5,6 @@ import { fileToDataUrl } from '../lib/photo'
 import { fmtMoney } from '../lib/money'
 import {
   setPlaceMust,
-  addExpense,
   addPlacePhoto,
   applyLookups,
   deleteExpense,
@@ -19,8 +18,10 @@ import {
   useAppData,
 } from '../lib/store'
 import { TAGS, TAG_STYLE } from '../lib/tagging'
-import { EXPENSE_CATEGORIES, type Day, type DayItem, type ExpenseCategory, type Place, type PlaceDetails, type Tag } from '../types'
+import { EXPENSE_CATEGORIES, type Day, type DayItem, type ExpenseCategory, type Place, type PlaceDetails, type Tag, type Trip } from '../types'
 import { TagIcon, tagName } from './TagIcon'
+import { AmountInput, CostField } from './AmountInput'
+import { addExpenseIn, tripCurrency } from '../lib/convert'
 
 const enc = encodeURIComponent
 
@@ -40,8 +41,9 @@ export function categoryFor(tag: string | undefined): ExpenseCategory {
 }
 
 // Log what you spend at this place, on this day. It shows up in the Budget tab too.
-function VisitExpenses({ place, day, currency }: { place: Place; day: Day; currency: string }) {
+function VisitExpenses({ trip, place, day, currency }: { trip: Trip | undefined; place: Place; day: Day; currency: string }) {
   const { expenses } = useAppData()
+  const [cur, setCur] = useState(currency)
   const mine = expenses.filter((e) => e.placeId === place.id && e.date === day.date)
   const [amount, setAmount] = useState('')
   const [note, setNote] = useState('')
@@ -49,17 +51,14 @@ function VisitExpenses({ place, day, currency }: { place: Place; day: Day; curre
   const [error, setError] = useState('')
   const total = mine.reduce((s, e) => s + e.amount, 0)
 
-  function add() {
+  async function add() {
     const n = parseFloat(amount)
     if (!Number.isFinite(n) || n <= 0) return setError('Enter an amount greater than zero.')
-    addExpense({
-      tripId: place.tripId,
-      date: day.date,
-      title: note.trim() ? `${place.name}: ${note.trim()}` : place.name,
-      amount: n,
-      category,
-      placeId: place.id,
-    })
+    const ok = await addExpenseIn(
+      { tripId: place.tripId, date: day.date, title: note.trim() ? `${place.name}: ${note.trim()}` : place.name, category, placeId: place.id },
+      n, cur, currency,
+    )
+    if (!ok) return setError(`Couldn’t get the ${cur}→${currency} exchange rate. Try again, or enter it in ${currency}.`)
     setAmount('')
     setNote('')
     setError('')
@@ -80,10 +79,7 @@ function VisitExpenses({ place, day, currency }: { place: Place; day: Day; curre
           </div>
         ))}
         <div className="row">
-          <label>
-            Amount ({currency})
-            <input inputMode="decimal" value={amount} onChange={(e) => { setAmount(e.target.value); setError('') }} onKeyDown={(e) => e.key === 'Enter' && add()} />
-          </label>
+          <AmountInput label="Amount" trip={trip ?? {}} amount={amount} currency={cur} onChange={(a, c) => { setAmount(a); setCur(c); setError('') }} onEnter={() => void add()} />
           <label>
             Category
             <select value={category} onChange={(e) => setCategory(e.target.value as ExpenseCategory)}>
@@ -98,7 +94,7 @@ function VisitExpenses({ place, day, currency }: { place: Place; day: Day; curre
           <input value={note} placeholder="e.g. Bibimbap and a drink" onChange={(e) => setNote(e.target.value)} />
         </label>
         {error && <p className="error">{error}</p>}
-        <button className="primary wide" onClick={add}>Add expense</button>
+        <button className="primary wide" onClick={() => void add()}>Add expense</button>
       </div>
     </>
   )
@@ -292,24 +288,14 @@ export function PlaceSheet({
 
         {visit && live && (
           <>
-            <VisitExpenses place={place} day={visit.day} currency={trip?.currency ?? 'USD'} />
+            <VisitExpenses trip={trip} place={place} day={visit.day} currency={tripCurrency(trip)} />
             <h3>This visit</h3>
             <div className="card form">
               <label>
                 Time (optional)
                 <input type="time" value={live.time ?? ''} onChange={(e) => updateDayItem(visit.day.id, live.id, { time: e.target.value || undefined })} />
               </label>
-              <label>
-                Planned cost (optional){trip?.currency ? ` · ${fmtMoney(live.cost ?? 0, trip.currency)}` : ''}
-                <input
-                  inputMode="decimal"
-                  value={live.cost ?? ''}
-                  onChange={(e) => {
-                    const n = parseFloat(e.target.value)
-                    updateDayItem(visit.day.id, live.id, { cost: Number.isFinite(n) && n >= 0 ? n : undefined })
-                  }}
-                />
-              </label>
+              <CostField label="Planned cost (optional)" trip={trip ?? {}} value={live.cost} onCommit={(cost) => updateDayItem(visit.day.id, live.id, { cost })} />
               <label>
                 Note — for example the dish you want to order
                 <textarea rows={3} value={live.note} onChange={(e) => updateDayItem(visit.day.id, live.id, { note: e.target.value })} />

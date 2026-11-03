@@ -31,7 +31,7 @@ import { hoursOn, hoursWarning } from '../lib/hours'
 import { arrivalDate, journeyPositions } from '../lib/journeys'
 import { dayStays } from '../lib/stays'
 import { fmtMoney } from '../lib/money'
-import { addExpense, addToDay, moveDayItem, moveItemToDay, removeDayItem, setLegMode, sortDayByTime, updateDayItem, useAppData } from '../lib/store'
+import { addToDay, moveDayItem, moveItemToDay, removeDayItem, setLegMode, sortDayByTime, updateDayItem, useAppData } from '../lib/store'
 import { EXPENSE_CATEGORIES, type Day, type DayItem, type ExpenseCategory, type Place, type Stop, type Transfer, type Trip } from '../types'
 import { DayMap } from './DayMap'
 import { FilterChips, tagOf } from './FilterChips'
@@ -42,6 +42,8 @@ import { PlaceThumb, TagIcon } from './TagIcon'
 import { KIND_INFO, TransferSheet } from './TransferSheet'
 import { WeatherChip } from './WeatherChip'
 import { ask } from '../lib/confirm'
+import { AmountInput, CostField } from './AmountInput'
+import { addExpenseIn, tripCurrency } from '../lib/convert'
 
 // ---- Travel between places ----
 
@@ -211,33 +213,28 @@ function DayIdeas({ trip, day, route }: { trip: Trip; day: Day; route: Place[] }
 }
 
 // A small amount field right on the card, so logging a spend takes a few seconds.
-function QuickExpense({ place, day, currency, onDone }: { place: Place; day: Day; currency: string; onDone: () => void }) {
+function QuickExpense({ trip, place, day, currency, onDone }: { trip: Trip; place: Place; day: Day; currency: string; onDone: () => void }) {
   const [amount, setAmount] = useState('')
+  const [cur, setCur] = useState(currency)
   const [note, setNote] = useState('')
   const [category, setCategory] = useState<ExpenseCategory>(categoryFor(place.tag))
   const [error, setError] = useState('')
 
-  function add() {
+  async function add() {
     const n = parseFloat(amount)
     if (!Number.isFinite(n) || n <= 0) return setError('Enter an amount greater than zero.')
-    addExpense({
-      tripId: place.tripId,
-      date: day.date,
-      title: note.trim() ? `${place.name}: ${note.trim()}` : place.name,
-      amount: n,
-      category,
-      placeId: place.id,
-    })
+    const ok = await addExpenseIn(
+      { tripId: place.tripId, date: day.date, title: note.trim() ? `${place.name}: ${note.trim()}` : place.name, category, placeId: place.id },
+      n, cur, currency,
+    )
+    if (!ok) return setError(`Couldn’t get the ${cur}→${currency} exchange rate. Try again, or enter it in ${currency}.`)
     onDone()
   }
 
   return (
     <div className="quick-panel">
       <div className="row">
-        <label>
-          Amount ({currency})
-          <input autoFocus inputMode="decimal" value={amount} onChange={(e) => { setAmount(e.target.value); setError('') }} onKeyDown={(e) => e.key === 'Enter' && add()} />
-        </label>
+        <AmountInput label="Amount" trip={trip} amount={amount} currency={cur} autoFocus onChange={(a, c) => { setAmount(a); setCur(c); setError('') }} onEnter={() => void add()} />
         <label>
           Category
           <select value={category} onChange={(e) => setCategory(e.target.value as ExpenseCategory)}>
@@ -253,7 +250,7 @@ function QuickExpense({ place, day, currency, onDone }: { place: Place; day: Day
       </label>
       {error && <p className="error">{error}</p>}
       <div className="row buttons">
-        <button className="primary" onClick={add}>Add expense</button>
+        <button className="primary" onClick={() => void add()}>Add expense</button>
         <button onClick={onDone}>Cancel</button>
       </div>
     </div>
@@ -261,9 +258,9 @@ function QuickExpense({ place, day, currency, onDone }: { place: Place; day: Day
 }
 
 function ItemRow({
-  index, day, allDays, item, place, next, currency, focused, expanded, onToggle, onOpen,
+  trip, index, day, allDays, item, place, next, currency, focused, expanded, onToggle, onOpen,
 }: {
-  index: number; day: Day; allDays: Day[]; item: DayItem; place: Place | undefined; next: Place | undefined
+  trip: Trip; index: number; day: Day; allDays: Day[]; item: DayItem; place: Place | undefined; next: Place | undefined
   currency: string; focused: boolean; expanded: boolean; onToggle: () => void; onOpen: () => void
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: item.id })
@@ -334,7 +331,7 @@ function ItemRow({
               {allDays.length > 1 && <button onClick={() => setPanel(panel === 'move' ? null : 'move')}><MoveRight size={15} /> Move</button>}
               <button className="danger" onClick={() => ask(`Remove “${place.name}” from this day?`, () => removeDayItem(day.id, item.id), 'Remove')}>Remove</button>
             </div>
-            {panel === 'expense' && <QuickExpense place={place} day={day} currency={currency} onDone={() => setPanel(null)} />}
+            {panel === 'expense' && <QuickExpense trip={trip} place={place} day={day} currency={currency} onDone={() => setPanel(null)} />}
             {panel === 'book' && (
               <div className="quick-panel">
                 <div className="mode-pick wide-pick" role="group" aria-label="Booking status">
@@ -381,17 +378,9 @@ function ItemRow({
                     <input type="time" value={item.time ?? ''} onChange={(e) => updateDayItem(day.id, item.id, { time: e.target.value || undefined })} />
                   </label>
                   {place.tag !== 'Food' && place.tag !== 'Cafes' && (
-                  <label>
-                    Planned cost (tickets, tours)
-                    <input
-                      inputMode="decimal"
-                      value={item.cost ?? ''}
-                      onChange={(e) => {
-                        const n = parseFloat(e.target.value)
-                        updateDayItem(day.id, item.id, { cost: Number.isFinite(n) && n >= 0 ? n : undefined })
-                      }}
-                    />
-                  </label>
+                  <div>
+                    <CostField label="Planned cost (tickets, tours)" trip={trip} value={item.cost} onCommit={(cost) => updateDayItem(day.id, item.id, { cost })} />
+                  </div>
                   )}
                 </div>
                 <label>
@@ -661,7 +650,8 @@ export function DaysTab({ initialDate }: { initialDate?: string }) {
                       item={item}
                       place={placeById.get(item.placeId)}
                       next={placeById.get(day.items[i + 1]?.placeId ?? '') ?? (i === day.items.length - 1 ? endStay : undefined)}
-                      currency={trip.currency ?? 'USD'}
+                      trip={trip}
+                      currency={tripCurrency(trip)}
                       focused={item.placeId === focusId}
                       expanded={expandedId === item.id}
                       onToggle={() => {

@@ -14,7 +14,7 @@ export function StaysPanel({ trip }: { trip: Trip }) {
   const stays = sortedStays(trip)
   const gaps = uncoveredNights(trip)
   const firstGap = gaps[0]
-  const currency = trip.currency ?? 'USD'
+  const currency = trip.currency ?? 'GBP'
 
   return (
     <>

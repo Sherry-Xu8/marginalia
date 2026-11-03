@@ -1,6 +1,6 @@
 // Formats an amount in a currency ("USD", "KRW", …) with that currency's usual number of decimals
 // (none for won or yen, two for dollars). Falls back to "CODE 12.50" if the browser doesn't know the code.
-export function fmtMoney(amount: number, currency = 'USD'): string {
+export function fmtMoney(amount: number, currency = 'GBP'): string {
   try {
     return new Intl.NumberFormat(undefined, { style: 'currency', currency }).format(amount)
   } catch {

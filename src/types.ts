@@ -29,6 +29,7 @@ export type Transfer = {
   reference?: string // booking reference
   note?: string
   cost?: number
+  paid?: { amount: number; currency: string } // what was actually paid, if in another currency
 }
 
 // A booked place to sleep: a hotel, hostel or apartment for a run of nights.
@@ -38,6 +39,7 @@ export type Stay = {
   checkIn: string // yyyy-mm-dd
   checkOut: string // yyyy-mm-dd, the morning you leave (the last night is the night before)
   cost?: number // total for the whole stay, in the trip's currency
+  paid?: { amount: number; currency: string } // what was actually paid, if in another currency
   reference?: string // booking reference
   note?: string
 }

@@ -1,11 +1,13 @@
+import { AmountInput } from './AmountInput'
+import { addExpenseIn, homeCurrencyOf, tripCurrency } from '../lib/convert'
 import { BedDouble, Plus, ShoppingBag, Ticket, TrainFront, Utensils, Wallet, X, type LucideIcon } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { shortDate, toISO } from '../lib/days'
-import { fmtMoney, normaliseCurrency, roundToCurrency } from '../lib/money'
-import { getRate, useRate } from '../lib/rates'
-import { addExpense, deleteExpense, setBudget, setFoodPerDay, setHomeCurrency, useAppData } from '../lib/store'
+import { fmtMoney, normaliseCurrency } from '../lib/money'
+import { useRate } from '../lib/rates'
+import { deleteExpense, setBudget, setFoodPerDay, setHomeCurrency, useAppData } from '../lib/store'
 import { TAG_STYLE } from '../lib/tagging'
-import { EXPENSE_CATEGORIES, type Expense, type ExpenseCategory } from '../types'
+import { EXPENSE_CATEGORIES, type Expense, type ExpenseCategory, type Trip } from '../types'
 import { ask } from '../lib/confirm'
 
 // Each kind of spending borrows a colour and icon from the place categories, so the app looks consistent.
@@ -58,8 +60,8 @@ export function BudgetTab() {
       // not saved — fine
     }
   }
-  const local = normaliseCurrency(trip?.currency ?? '') || 'USD'
-  const home = normaliseCurrency(trip?.homeCurrency ?? '')
+  const local = tripCurrency(trip)
+  const home = homeCurrencyOf(trip)
   const hasHome = /^[A-Z]{3}$/.test(home) && home !== local
   const { rate: fxRate } = useRate(local, hasHome ? home : local)
 
@@ -259,7 +261,7 @@ export function BudgetTab() {
                       defaultValue={local}
                       key={local}
                       placeholder="KRW"
-                      onBlur={(e) => setBudget(trip.id, budget, normaliseCurrency(e.target.value) || 'USD')}
+                      onBlur={(e) => setBudget(trip.id, budget, normaliseCurrency(e.target.value) || 'GBP')}
                       aria-label="Local currency code, for example KRW"
                     />
                   </label>
@@ -267,11 +269,11 @@ export function BudgetTab() {
                     Home currency
                     <input
                       maxLength={12}
-                      defaultValue={trip.homeCurrency ?? ''}
-                      key={'h' + (trip.homeCurrency ?? '')}
-                      placeholder="USD"
+                      defaultValue={home}
+                      key={'h' + home}
+                      placeholder="GBP"
                       onBlur={(e) => setHomeCurrency(trip.id, normaliseCurrency(e.target.value))}
-                      aria-label="Your home currency code, for example USD"
+                      aria-label="Your home currency code, for example GBP"
                     />
                   </label>
                 </div>
@@ -330,17 +332,17 @@ export function BudgetTab() {
         </section>
       </div>
 
-      {adding && <AddExpenseSheet tripId={trip.id} local={local} home={hasHome ? home : ''} rate={fxRate?.rate} onClose={() => setAdding(false)} />}
+      {adding && <AddExpenseSheet trip={trip} tripId={trip.id} local={local} onClose={() => setAdding(false)} />}
     </div>
   )
 }
 
-function AddExpenseSheet({ tripId, local, home, rate, onClose }: { tripId: string; local: string; home: string; rate?: number; onClose: () => void }) {
+function AddExpenseSheet({ trip, tripId, local, onClose }: { trip: Trip; tripId: string; local: string; onClose: () => void }) {
   const [title, setTitle] = useState('')
   const [amount, setAmount] = useState('')
   const [category, setCategory] = useState<ExpenseCategory>('Food & drink')
   const [date, setDate] = useState(toISO(new Date()))
-  const [paidIn, setPaidIn] = useState<'local' | 'home'>('local')
+  const [currency, setCurrency] = useState(local)
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
 
@@ -348,16 +350,11 @@ function AddExpenseSheet({ tripId, local, home, rate, onClose }: { tripId: strin
     const n = parseFloat(amount)
     if (!title.trim()) return setError('What was it for?')
     if (!Number.isFinite(n) || n <= 0) return setError('Enter an amount greater than zero.')
-    if (paidIn === 'home' && home) {
-      // Paid in your home currency: store the local equivalent (so budgets add up) and remember what you paid.
-      setBusy(true)
-      const r = rate ? { rate } : await getRate(local, home)
-      setBusy(false)
-      if (!r) return setError(`Couldn’t get the ${home}→${local} exchange rate. Try again, or enter the amount in ${local}.`)
-      addExpense({ tripId, date, title: title.trim(), amount: roundToCurrency(n / r.rate, local), category, paid: { amount: n, currency: home } })
-    } else {
-      addExpense({ tripId, date, title: title.trim(), amount: n, category })
-    }
+    // Paid in another currency: the trip-currency equivalent is stored (so budgets add up) and what you paid is remembered.
+    setBusy(true)
+    const ok = await addExpenseIn({ tripId, date, title: title.trim(), category }, n, currency, local)
+    setBusy(false)
+    if (!ok) return setError(`Couldn’t get the ${currency}→${local} exchange rate. Try again, or enter the amount in ${local}.`)
     onClose()
   }
 
@@ -373,19 +370,7 @@ function AddExpenseSheet({ tripId, local, home, rate, onClose }: { tripId: strin
           <input autoFocus value={title} onChange={(e) => setTitle(e.target.value)} placeholder="e.g. Dinner at Gwangjang Market" />
         </label>
         <div className="row">
-          <label>
-            Amount ({paidIn === 'home' && home ? home : local})
-            <input inputMode="decimal" value={amount} onChange={(e) => { setAmount(e.target.value); setError('') }} onKeyDown={(e) => e.key === 'Enter' && add()} />
-          </label>
-          {home && (
-            <label>
-              Paid in
-              <select value={paidIn} onChange={(e) => setPaidIn(e.target.value as 'local' | 'home')}>
-                <option value="local">{local} (local)</option>
-                <option value="home">{home} (home)</option>
-              </select>
-            </label>
-          )}
+          <AmountInput label="Amount" trip={trip} amount={amount} currency={currency} onChange={(a, c) => { setAmount(a); setCurrency(c); setError('') }} onEnter={add} />
         </div>
         <div className="row">
           <label>

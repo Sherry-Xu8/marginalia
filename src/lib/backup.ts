@@ -29,7 +29,7 @@ export function buildTripShare(state: AppData, tripId: string, includeMoney: boo
   if (!trip) throw new BackupError('That trip no longer exists.')
   const shared: Trip = includeMoney
     ? trip
-    : { ...trip, budget: undefined, currency: undefined, foodPerDay: undefined, stays: (trip.stays ?? []).map((s) => ({ ...s, cost: undefined })) }
+    : { ...trip, budget: undefined, currency: undefined, foodPerDay: undefined, stays: (trip.stays ?? []).map((s) => ({ ...s, cost: undefined, paid: undefined })) }
   const days = state.days
     .filter((d) => d.tripId === tripId)
     .map((d) => (includeMoney ? d : { ...d, items: d.items.map((i) => ({ ...i, cost: undefined })) }))
@@ -79,6 +79,12 @@ export async function shareOrDownload(json: string, filename: string): Promise<'
 
 const str = (v: unknown, max = 2000): string | null => (typeof v === 'string' ? v.slice(0, max) : null)
 const num = (v: unknown): number | null => (typeof v === 'number' && Number.isFinite(v) ? v : null)
+const paidOf = (v: unknown): { amount: number; currency: string } | undefined => {
+  const p = obj(v)
+  const a = num(p?.amount)
+  const c = str(p?.currency, 4)
+  return p && a !== null && c ? { amount: a, currency: c } : undefined
+}
 const date = (v: unknown): string | null => (typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v) ? v : null)
 const arr = (v: unknown): unknown[] => (Array.isArray(v) ? v : [])
 const obj = (v: unknown): Record<string, unknown> | null => (v && typeof v === 'object' && !Array.isArray(v) ? (v as Record<string, unknown>) : null)
@@ -107,7 +113,7 @@ function cleanTrip(v: unknown): Trip | null {
     const checkIn = date(xo?.checkIn)
     const checkOut = date(xo?.checkOut)
     return xo && xid && placeId && checkIn && checkOut && checkOut > checkIn
-      ? [{ id: xid, placeId, checkIn, checkOut, cost: num(xo.cost) ?? undefined, reference: str(xo.reference, 100) ?? undefined, note: str(xo.note, 1000) ?? undefined }]
+      ? [{ id: xid, placeId, checkIn, checkOut, cost: num(xo.cost) ?? undefined, paid: paidOf(xo.paid), reference: str(xo.reference, 100) ?? undefined, note: str(xo.note, 1000) ?? undefined }]
       : []
   })
   // Files from before multiple stays kept one place per stop.
@@ -271,6 +277,7 @@ function cleanTransfer(v: unknown): Transfer | null {
     reference: str(o.reference, 100) ?? undefined,
     note: str(o.note, 1000) ?? undefined,
     cost: num(o.cost) ?? undefined,
+    paid: paidOf(o.paid),
   }
 }
 

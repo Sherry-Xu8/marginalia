@@ -1,3 +1,5 @@
+import { AmountInput } from './AmountInput'
+import { toTripAmount, tripCurrency } from '../lib/convert'
 import { BedDouble, MapPin, Search, X } from 'lucide-react'
 import { useState } from 'react'
 import { findLocation, type Located } from '../lib/findplace'
@@ -31,7 +33,9 @@ export function StaySheet({
   const [placeId, setPlaceId] = useState<string | undefined>(stay?.placeId)
   const [checkIn, setCheckIn] = useState(stay?.checkIn ?? defaults?.checkIn ?? trip.startDate)
   const [checkOut, setCheckOut] = useState(stay?.checkOut ?? defaults?.checkOut ?? trip.endDate)
-  const [cost, setCost] = useState(stay?.cost !== undefined ? String(stay.cost) : '')
+  const [cost, setCost] = useState(stay?.paid ? String(stay.paid.amount) : stay?.cost !== undefined ? String(stay.cost) : '')
+  const [costCur, setCostCur] = useState(stay?.paid?.currency ?? tripCurrency(trip))
+  const [saving, setSaving] = useState(false)
   const [reference, setReference] = useState(stay?.reference ?? '')
   const [note, setNote] = useState(stay?.note ?? '')
   const [error, setError] = useState('')
@@ -86,15 +90,23 @@ export function StaySheet({
     setPicking(false)
   }
 
-  function save() {
+  async function save() {
     if (!placeId) return setError('Choose where you’re staying first.')
     if (!checkIn || !checkOut || checkOut <= checkIn) return setError('Check-out needs to be after check-in.')
     const n = parseFloat(cost)
+    let money: { amount: number; paid?: { amount: number; currency: string } } | null = null
+    if (cost.trim() !== '' && Number.isFinite(n) && n >= 0) {
+      setSaving(true)
+      money = await toTripAmount(n, costCur, tripCurrency(trip))
+      setSaving(false)
+      if (!money) return setError(`Couldn’t get the ${costCur}→${tripCurrency(trip)} exchange rate. Try again, or enter the cost in ${tripCurrency(trip)}.`)
+    }
     const data = {
       placeId,
       checkIn,
       checkOut,
-      cost: cost.trim() !== '' && Number.isFinite(n) && n >= 0 ? n : undefined,
+      cost: money?.amount,
+      paid: money?.paid,
       reference: reference.trim() || undefined,
       note: note.trim() || undefined,
     }
@@ -131,10 +143,7 @@ export function StaySheet({
             </div>
             {nights > 0 && <p className="muted">{nights} night{nights === 1 ? '' : 's'}</p>}
             <div className="row">
-              <label>
-                Total cost ({trip.currency ?? 'USD'}, optional)
-                <input inputMode="decimal" value={cost} onChange={(e) => setCost(e.target.value)} />
-              </label>
+              <AmountInput label="Total cost (optional)" trip={trip} amount={cost} currency={costCur} onChange={(a, c) => { setCost(a); setCostCur(c); setError('') }} />
               <label>
                 Booking reference
                 <input value={reference} onChange={(e) => setReference(e.target.value)} />
@@ -145,7 +154,7 @@ export function StaySheet({
               <textarea rows={2} value={note} onChange={(e) => setNote(e.target.value)} />
             </label>
             {error && <p className="error" role="alert">{error}</p>}
-            <button className="primary wide" onClick={save}>{stay ? 'Save changes' : 'Add this stay'}</button>
+            <button className="primary wide" disabled={saving} onClick={() => void save()}>{saving ? 'Converting…' : stay ? 'Save changes' : 'Add this stay'}</button>
             {stay && (
               <button className="danger wide" onClick={() => ask('Remove this stay?', () => { deleteStay(trip.id, stay.id); onClose() }, 'Remove')}>
                 Remove this stay

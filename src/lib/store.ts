@@ -554,7 +554,7 @@ export function applySuggestion(plan: { dayId: string; placeIds: string[] }[]) {
 export function setBudget(tripId: string, budget: number | undefined, currency: string) {
   update((s) => ({
     ...s,
-    trips: s.trips.map((t) => (t.id === tripId ? { ...t, budget, currency: currency.trim().toUpperCase() || 'USD' } : t)),
+    trips: s.trips.map((t) => (t.id === tripId ? { ...t, budget, currency: currency.trim().toUpperCase() || 'GBP' } : t)),
   }))
 }
 
