@@ -993,3 +993,8 @@ button.danger-solid:hover:not(:disabled) { background: color-mix(in srgb, var(--
 .day-meals .soft-btn { justify-content: flex-start; text-align: left; gap: 8px; }
 .day-meals .soft-btn small { margin-left: auto; white-space: nowrap; }
 .toast { min-width: 220px; } .toast span { flex: 1; }
+
+/* "Best fit" suggestion under an unscheduled place: small, left-aligned, wraps naturally */
+.fit-btn { display: block; margin-top: 4px; min-height: 0; padding: 5px 10px; border-radius: 12px; background: var(--soft); color: var(--accent-dark); border: 0; font-family: var(--sans); font-size: 0.78rem; font-weight: 500; line-height: 1.35; text-align: left; cursor: pointer; }
+.fit-btn b { font-weight: 700; }
+.fit-btn:hover { background: var(--accent-soft); }

@@ -386,8 +386,8 @@ export function SuggestSheet({ trip, stop, onClose }: { trip: Trip; stop: Stop; 
                     {row(placeById.get(id))}
                     {plan.reasons?.[id] && <small className="muted"> · {plan.reasons[id]}</small>}
                     {best && (
-                      <button className="soft-btn" style={{ display: 'block', marginTop: 6 }} onClick={() => addToPlanDay(best.day.dayId, id)}>
-                        Best fit: {shortDate(best.day.date)}
+                      <button className="fit-btn" onClick={() => addToPlanDay(best.day.dayId, id)}>
+                        <b>Best fit: {shortDate(best.day.date)}</b>
                         {best.near ? ` · ${kmText(best.km)} from ${best.near.name}` : ` · quietest day (${best.count})`}
                       </button>
                     )}
