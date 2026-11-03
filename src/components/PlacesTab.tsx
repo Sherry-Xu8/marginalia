@@ -1,4 +1,4 @@
-import { ChevronDown, Info, MapPin, MoreHorizontal, Plus, Star } from 'lucide-react'
+import { Check, ChevronDown, Info, MapPin, MoreHorizontal, Plus, Star } from 'lucide-react'
 import { useEffect, useMemo, useState, useSyncExternalStore } from 'react'
 import {
   applyEnglishNames,
@@ -16,6 +16,7 @@ import {
 import { TAG_STYLE } from '../lib/tagging'
 import type { Group, ImportSummary, Place, Stop } from '../types'
 import { AddPlaceSheet } from './AddPlaceSheet'
+import { shortDate } from '../lib/days'
 import { FilterChips, tagOf } from './FilterChips'
 import { MapImport } from './MapImport'
 import { PlaceSheet } from './PlaceSheet'
@@ -44,8 +45,10 @@ function PlaceCard({
   onToggle,
   onFocus,
   onDetails,
+  plannedOn,
 }: {
   place: Place
+  plannedOn: string[]
   focused: boolean
   selectMode: boolean
   selected: boolean
@@ -63,6 +66,11 @@ function PlaceCard({
           <i className="dot" style={{ background: style.colour }} />
           {tagOf(place)}
         </small>
+        {plannedOn.length > 0 && (
+          <small className="planned-chip">
+            <Check size={12} aria-hidden /> {plannedOn.length > 2 ? `${plannedOn.length} days` : plannedOn.map((d) => shortDate(d)).join(', ')}
+          </small>
+        )}
         {place.details?.hours && <small className="muted place-hours">{place.details.hours}</small>}
       </span>
     </>
@@ -178,7 +186,8 @@ export function PlacesTab({
   setTagFilter: (v: string[]) => void
   initialPane?: 'list' | 'map'
 }) {
-  const { places, groups, trips, activeTripId } = useAppData()
+  const { places, groups, trips, activeTripId, days } = useAppData()
+  const [planFilter, setPlanFilter] = useState<'all' | 'todo' | 'planned'>('all')
   const trip = trips.find((t) => t.id === activeTripId)
   const narrow = useNarrow()
   const [query, setQuery] = useState('')
@@ -215,6 +224,15 @@ export function PlacesTab({
 
   const mine = useMemo(() => places.filter((p) => p.tripId === activeTripId), [places, activeTripId])
   const myGroups = useMemo(() => groups.filter((g) => g.tripId === activeTripId), [groups, activeTripId])
+  // The days each place is planned on, so you can see what's already in your itinerary.
+  const plannedOn = useMemo(() => {
+    const m = new Map<string, string[]>()
+    for (const d of days) {
+      if (d.tripId !== activeTripId) continue
+      for (const i of d.items) m.set(i.placeId, [...(m.get(i.placeId) ?? []), d.date].sort())
+    }
+    return m
+  }, [days, activeTripId])
   const untagged = useMemo(() => mine.filter((p) => !p.tag), [mine])
   const englishCount = useMemo(() => (activeTripId ? englishNameCandidates(activeTripId).length : 0), [mine, activeTripId])
 
@@ -224,9 +242,10 @@ export function PlacesTab({
       (p) =>
         (tagFilter.length === 0 || tagFilter.includes(tagOf(p))) &&
         (layerFilter === 'all' || p.layer === layerFilter) &&
+        (planFilter === 'all' || (planFilter === 'planned') === plannedOn.has(p.id)) &&
         (!q || (p.name + ' ' + p.description + ' ' + p.layer).toLowerCase().includes(q)),
     )
-  }, [mine, query, tagFilter, layerFilter])
+  }, [mine, query, tagFilter, layerFilter, planFilter, plannedOn])
 
   // Layers from Google My Maps: only worth showing if the map actually has more than one.
   const layerNames = useMemo(() => [...new Set(mine.map((p) => p.layer))].filter(Boolean), [mine])
@@ -276,6 +295,7 @@ export function PlacesTab({
       onToggle={() => toggle(p.id)}
       onFocus={() => pick(p.id)}
       onDetails={() => setDetailsId(p.id)}
+      plannedOn={plannedOn.get(p.id) ?? []}
     />
   )
 
@@ -334,6 +354,13 @@ export function PlacesTab({
             )}
           </div>
           <FilterChips places={mine} value={tagFilter} onChange={setTagFilter} />
+          {plannedOn.size > 0 && (
+            <div className="chips" role="group" aria-label="Itinerary">
+              {([['all', 'All'], ['todo', `Not planned (${mine.length - plannedOn.size})`], ['planned', `In my days (${plannedOn.size})`]] as const).map(([k, label]) => (
+                <button key={k} className={'chip' + (planFilter === k ? ' on' : '')} aria-pressed={planFilter === k} onClick={() => setPlanFilter(k)}>{label}</button>
+              ))}
+            </div>
+          )}
 
           {needsTidy && (
             <div className="tidy">

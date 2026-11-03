@@ -970,3 +970,5 @@ button.danger-solid:hover:not(:disabled) { background: color-mix(in srgb, var(--
 .pick.planned { opacity: 0.55; background: transparent; border-style: dashed; }
 .pick.planned b { font-weight: 500; }
 .pick-head { margin: 14px 0 4px; font-size: 0.78rem; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
+
+.planned-chip { display: inline-flex; align-items: center; gap: 4px; align-self: flex-start; margin-top: 2px; padding: 1px 8px; border-radius: 999px; background: var(--accent-soft, #dce7dd); color: var(--accent-dark, #2f5646); font-size: 0.74rem; font-weight: 600; }
