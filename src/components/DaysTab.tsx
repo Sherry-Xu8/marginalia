@@ -9,7 +9,7 @@ import {
 } from '@dnd-kit/core'
 import { SortableContext, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
-import { BedDouble, CalendarCheck, ChevronDown, ChevronUp, GripVertical, MoveRight, Pencil, Plus, Sparkles, TriangleAlert } from 'lucide-react'
+import { BedDouble, CalendarCheck, ChevronDown, ChevronUp, GripVertical, MoveRight, Pencil, Plus, RotateCcw, Sparkles, TriangleAlert } from 'lucide-react'
 import { Fragment, useEffect, useMemo, useState } from 'react'
 import {
   LONG_TRAVEL_MINUTES,
@@ -31,7 +31,7 @@ import { hoursOn, hoursWarning } from '../lib/hours'
 import { arrivalDate, freeWindow, journeyPositions } from '../lib/journeys'
 import { dayStays } from '../lib/stays'
 import { fmtMoney, fmtPaid } from '../lib/money'
-import { addToDay, moveDayItem, moveItemToDay, removeDayItem, setLegMode, sortDayByTime, updateDayItem, useAppData } from '../lib/store'
+import { addToDay, clearDay, moveDayItem, moveItemToDay, removeDayItem, setLegMode, sortDayByTime, updateDayItem, useAppData } from '../lib/store'
 import { EXPENSE_CATEGORIES, type Day, type DayItem, type ExpenseCategory, type Place, type Stop, type Transfer, type Trip } from '../types'
 import { DayMap } from './DayMap'
 import { FilterChips, tagOf } from './FilterChips'
@@ -701,6 +701,14 @@ export function DaysTab({ initialDate }: { initialDate?: string }) {
               {endStay && <StayCard label="Back to" place={endStay} onClick={() => setFocusId(endStay.id)} />}
               <DayTravel day={day} points={route} />
               {timed > 1 && <button className="wide" onClick={() => sortDayByTime(day.id)}>Sort by time</button>}
+              {done < day.items.length && (
+                <button
+                  className="wide subtle"
+                  onClick={() => deleteWithUndo(done > 0 ? `Cleared this day (kept ${done} done)` : 'Cleared this day', ['days'], () => clearDay(day.id))}
+                >
+                  <RotateCcw size={16} /> Clear day{done > 0 ? ` (keeps ${done} done)` : ''}
+                </button>
+              )}
             </>
           )}
           <div className="row buttons add-row">

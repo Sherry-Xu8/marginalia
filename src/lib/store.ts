@@ -470,6 +470,14 @@ export function removeDayItem(dayId: string, itemId: string) {
   mapDay(dayId, (d) => ({ ...d, items: d.items.filter((i) => i.id !== itemId) }))
 }
 
+// Empties a day's plan but keeps anything already ticked as done. Returns how many places were removed.
+export function clearDay(dayId: string): number {
+  const day = state.days.find((d) => d.id === dayId)
+  const removed = day ? day.items.filter((i) => !i.done).length : 0
+  if (removed > 0) mapDay(dayId, (d) => ({ ...d, items: d.items.filter((i) => i.done) }))
+  return removed
+}
+
 // Moves a planned place to the end of another day.
 export function moveItemToDay(fromDayId: string, itemId: string, toDayId: string) {
   if (fromDayId === toDayId) return
