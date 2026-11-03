@@ -4,9 +4,10 @@ import { stopsOn } from '../lib/days'
 import { expandAirport, flightLinks, flightTitle, getFlightService, lookupFlight, parseFlightNumber } from '../lib/flights'
 import { addTransfer, deleteTransfer, updateTransfer } from '../lib/store'
 import { TRANSFER_KINDS, type Transfer, type TransferKind, type Trip } from '../types'
-import { ask } from '../lib/confirm'
+import { deleteWithUndo } from '../lib/toast'
 import { AmountInput } from './AmountInput'
-import { toTripAmount, tripCurrency } from '../lib/convert'
+import { FormError } from './FormError'
+import { entryCurrency, toTripAmount, tripCurrency } from '../lib/convert'
 import { shortDate, fromISO, toISO } from '../lib/days'
 import { toMinutes } from '../lib/journeys'
 
@@ -51,7 +52,7 @@ export function TransferSheet({
   const [arriveOn, setArriveOn] = useState(transfer?.arriveDate ?? '')
   const [reference, setReference] = useState(transfer?.reference ?? '')
   const [cost, setCost] = useState(transfer?.paid ? String(transfer.paid.amount) : transfer?.cost !== undefined ? String(transfer.cost) : '')
-  const [costCur, setCostCur] = useState(transfer?.paid?.currency ?? tripCurrency(trip))
+  const [costCur, setCostCur] = useState(transfer ? (transfer.paid?.currency ?? tripCurrency(trip)) : entryCurrency(trip))
   const [saving, setSaving] = useState(false)
   const [note, setNote] = useState(transfer?.note ?? '')
   const [error, setError] = useState('')
@@ -193,7 +194,7 @@ export function TransferSheet({
           <label>To<input value={to} onChange={(e) => setTo(e.target.value)} onBlur={() => kind === 'flight' && setTo(expandAirport(to))} placeholder={kind === 'flight' ? 'e.g. PUS' : 'Busan Station'} /></label>
         </div>
         <div className="row">
-          <label>Leaves on<input type="date" value={when} min={trip.startDate} onChange={(e) => setWhen(e.target.value)} /></label>
+          <label>Leaves on<input type="date" value={when} onChange={(e) => setWhen(e.target.value)} /></label>
           <label>Departs<input type="time" value={depart} onChange={(e) => setDepart(e.target.value)} /></label>
         </div>
         <div className="row">
@@ -207,11 +208,11 @@ export function TransferSheet({
           <AmountInput label="Cost" trip={trip} amount={cost} currency={costCur} onChange={(a, c) => { setCost(a); setCostCur(c) }} />
         </div>
         <label>Notes<textarea rows={2} value={note} onChange={(e) => setNote(e.target.value)} placeholder="Platform, seat, terminal…" /></label>
-        {error && <p className="error">{error}</p>}
+        <FormError message={error} />
         <div className="row buttons">
           <button className="primary" disabled={saving} onClick={() => void save()}>{saving ? 'Converting…' : 'Save'}</button>
           {transfer && (
-            <button className="danger" onClick={() => ask('Delete this journey?', () => { deleteTransfer(transfer.id); onClose() })}>Delete</button>
+            <button className="danger" onClick={() => { deleteWithUndo('Journey deleted', ['transfers'], () => deleteTransfer(transfer.id)); onClose() }}>Delete</button>
           )}
         </div>
       </div>

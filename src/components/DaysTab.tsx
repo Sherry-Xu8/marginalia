@@ -28,22 +28,22 @@ import {
 import { fromISO, shortDate, stopLabel, stopsOn, toISO } from '../lib/days'
 import { distanceKm } from '../lib/geo'
 import { hoursOn, hoursWarning } from '../lib/hours'
-import { arrivalDate, journeyPositions } from '../lib/journeys'
+import { arrivalDate, freeWindow, journeyPositions } from '../lib/journeys'
 import { dayStays } from '../lib/stays'
-import { fmtMoney } from '../lib/money'
+import { fmtMoney, fmtPaid } from '../lib/money'
 import { addToDay, moveDayItem, moveItemToDay, removeDayItem, setLegMode, sortDayByTime, updateDayItem, useAppData } from '../lib/store'
 import { EXPENSE_CATEGORIES, type Day, type DayItem, type ExpenseCategory, type Place, type Stop, type Transfer, type Trip } from '../types'
 import { DayMap } from './DayMap'
 import { FilterChips, tagOf } from './FilterChips'
 import { PlaceSheet, categoryFor } from './PlaceSheet'
 import { StaySheet } from './StaySheet'
-import { SuggestSheet } from './SuggestSheet'
+import { SuggestSheet, loadPrefs } from './SuggestSheet'
 import { PlaceThumb, TagIcon } from './TagIcon'
 import { KIND_INFO, TransferSheet } from './TransferSheet'
 import { WeatherChip } from './WeatherChip'
-import { ask } from '../lib/confirm'
+import { deleteWithUndo } from '../lib/toast'
 import { AmountInput, CostField } from './AmountInput'
-import { addExpenseIn, tripCurrency } from '../lib/convert'
+import { addExpenseIn, entryCurrency, tripCurrency } from '../lib/convert'
 
 // ---- Travel between places ----
 
@@ -156,7 +156,7 @@ function StayCard({ label, place, onClick }: { label: string; place: Place; onCl
   )
 }
 
-function TransferCard({ t, day, onEdit }: { t: Transfer; day: string; onEdit: () => void }) {
+function TransferCard({ t, day, currency, onEdit }: { t: Transfer; day: string; currency: string; onEdit: () => void }) {
   const { Icon, label } = KIND_INFO[t.kind]
   const end = arrivalDate(t)
   const times =
@@ -172,7 +172,7 @@ function TransferCard({ t, day, onEdit }: { t: Transfer; day: string; onEdit: ()
       <div className="item-main static">
         <strong className="serif">{t.title}</strong>
         <span className="muted">
-          {[label, t.from && t.to ? `${t.from} → ${t.to}` : '', times, t.reference ? `Ref ${t.reference}` : ''].filter(Boolean).join(' · ')}
+          {[label, t.from && t.to ? `${t.from} → ${t.to}` : '', times, t.reference ? `Ref ${t.reference}` : '', t.cost !== undefined ? fmtPaid(t.cost, currency, t.paid) : ''].filter(Boolean).join(' · ')}
         </span>
         {t.note && <span className="muted">{t.note}</span>}
       </div>
@@ -212,10 +212,41 @@ function DayIdeas({ trip, day, route }: { trip: Trip; day: Day; route: Place[] }
   )
 }
 
+// When you've asked for meals each day and this day has fewer, offers the nearest restaurants not planned yet.
+function DayMeals({ trip, day, route, transfers }: { trip: Trip; day: Day; route: Place[]; transfers: Transfer[] }) {
+  const { places, groups, days } = useAppData()
+  const w = freeWindow(transfers, day.date)
+  const len = w.busy.length > 0 ? w.end - w.start : 720
+  const wanted = Math.min(loadPrefs().meals, len >= 480 ? 3 : len >= 150 ? 1 : 0)
+  const byId = new Map(places.map((p) => [p.id, p]))
+  const have = day.items.filter((i) => byId.get(i.placeId)?.tag === 'Food').length
+  if (wanted === 0 || day.items.length === 0 || have >= wanted) return null
+  const stopIds = new Set(stopsOn(trip, day.date).map((s) => s.id))
+  const areaIds = new Set(groups.filter((g) => g.tripId === trip.id && g.stopId && stopIds.has(g.stopId)).map((g) => g.id))
+  const planned = new Set(days.filter((d) => d.tripId === trip.id).flatMap((d) => d.items.map((i) => i.placeId)))
+  const options = places
+    .filter((p) => p.tripId === trip.id && p.tag === 'Food' && p.groupId && areaIds.has(p.groupId) && !planned.has(p.id) && hoursOn(p.details?.hours, day.date).status !== 'closed')
+    .map((p) => ({ p, km: route.length ? Math.min(...route.map((r) => distanceKm(p, r))) : 0 }))
+    .sort((a, b) => a.km - b.km)
+    .slice(0, 2)
+  if (options.length === 0) return null
+  return (
+    <div className="card day-ideas day-meals">
+      <strong>{have === 0 ? 'No meals planned yet' : `${have} of ${wanted} meals planned`}</strong>
+      {options.map(({ p, km }) => (
+        <button key={p.id} className="soft-btn" onClick={() => addToDay(day.id, p.id)}>
+          <Plus size={16} /> {p.name}
+          <small className="muted">{km < 1 ? `${Math.max(50, Math.round(km * 10) * 100)} m` : `${km.toFixed(1)} km`} away</small>
+        </button>
+      ))}
+    </div>
+  )
+}
+
 // A small amount field right on the card, so logging a spend takes a few seconds.
 function QuickExpense({ trip, place, day, currency, onDone }: { trip: Trip; place: Place; day: Day; currency: string; onDone: () => void }) {
   const [amount, setAmount] = useState('')
-  const [cur, setCur] = useState(currency)
+  const [cur, setCur] = useState(entryCurrency(trip))
   const [note, setNote] = useState('')
   const [category, setCategory] = useState<ExpenseCategory>(categoryFor(place.tag))
   const [error, setError] = useState('')
@@ -329,7 +360,7 @@ function ItemRow({
               <button onClick={() => setPanel(panel === 'edit' ? null : 'edit')}>Time and note</button>
               <button onClick={() => setPanel(panel === 'book' ? null : 'book')}><CalendarCheck size={15} /> Booking</button>
               {allDays.length > 1 && <button onClick={() => setPanel(panel === 'move' ? null : 'move')}><MoveRight size={15} /> Move</button>}
-              <button className="danger" onClick={() => ask(`Remove “${place.name}” from this day?`, () => removeDayItem(day.id, item.id), 'Remove')}>Remove</button>
+              <button className="danger" onClick={() => deleteWithUndo(`Removed “${place.name}” from this day`, ['days'], () => removeDayItem(day.id, item.id))}>Remove</button>
             </div>
             {panel === 'expense' && <QuickExpense trip={trip} place={place} day={day} currency={currency} onDone={() => setPanel(null)} />}
             {panel === 'book' && (
@@ -565,7 +596,7 @@ export function DaysTab({ initialDate }: { initialDate?: string }) {
     route[0] ?? places.find((p) => p.tripId === trip.id && p.groupId && groups.some((g) => g.id === p.groupId && g.stopId === arriving?.id))
   const jpos = journeyPositions(day.items, dayTransfers, day.date)
   const journeysAt = (i: number) => dayTransfers.filter((t) => jpos.get(t.id) === i)
-  const journeyCard = (t: Transfer) => <TransferCard key={t.id} t={t} day={day.date} onEdit={() => setTransferSheet({ transfer: t })} />
+  const journeyCard = (t: Transfer) => <TransferCard key={t.id} t={t} day={day.date} currency={tripCurrency(trip)} onEdit={() => setTransferSheet({ transfer: t })} />
   const sheetItem = openItem ? day.items.find((i) => i.id === openItem) : undefined
 
   function onDragEnd(e: DragEndEvent) {
@@ -598,6 +629,7 @@ export function DaysTab({ initialDate }: { initialDate?: string }) {
           >
             <small>{fromISO(d.date).toLocaleDateString(undefined, { weekday: 'short' })}</small>
             <b>{fromISO(d.date).toLocaleDateString(undefined, { day: 'numeric', month: 'short' })}</b>
+            <span className="pill-dots" aria-hidden>{Array.from({ length: Math.min(d.items.length, 5) }, (_, i) => <i key={i} />)}</span>
           </button>
         ))}
       </div>
@@ -679,6 +711,7 @@ export function DaysTab({ initialDate }: { initialDate?: string }) {
               <Plus size={18} /> Add journey
             </button>
           </div>
+          <DayMeals trip={trip} day={day} route={route} transfers={dayTransfers} />
           <DayIdeas trip={trip} day={day} route={route} />
         </div>
       </div>

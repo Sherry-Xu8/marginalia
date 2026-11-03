@@ -143,6 +143,7 @@ export type Place = {
   photos?: string[] // your own photos (small, saved inside the app)
   lookup?: 'found' | 'partial' | 'none' // result of the automatic online lookup
   lookedUpAt?: string
+  tagCheck?: number // which version of the category guessing last looked at this place
   originalName?: string // set once you rename a place, so you can undo
   description: string
   lat: number

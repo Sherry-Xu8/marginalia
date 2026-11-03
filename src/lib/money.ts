@@ -8,6 +8,11 @@ export function fmtMoney(amount: number, currency = 'GBP'): string {
   }
 }
 
+// "£12.40", or "£12.40 (₩21,000)" when it was paid in another currency.
+export function fmtPaid(amount: number, currency: string, paid?: { amount: number; currency: string }): string {
+  return paid && paid.currency !== currency ? `${fmtMoney(amount, currency)} (${fmtMoney(paid.amount, paid.currency)})` : fmtMoney(amount, currency)
+}
+
 // Rounds to the smallest unit the currency uses (whole won, whole yen, cents for dollars).
 export function roundToCurrency(amount: number, currency: string): number {
   try {

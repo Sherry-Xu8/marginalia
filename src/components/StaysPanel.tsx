@@ -1,7 +1,7 @@
 import { BedDouble, Plus } from 'lucide-react'
 import { useState } from 'react'
 import { shortDate } from '../lib/days'
-import { fmtMoney } from '../lib/money'
+import { fmtPaid } from '../lib/money'
 import { nightsOf, sortedStays, uncoveredNights } from '../lib/stays'
 import { useAppData } from '../lib/store'
 import type { Stay, Trip } from '../types'
@@ -32,7 +32,7 @@ export function StaysPanel({ trip }: { trip: Trip }) {
               </span>
               {(s.cost !== undefined || s.reference) && (
                 <span className="muted" style={{ display: 'block' }}>
-                  {[s.cost !== undefined ? fmtMoney(s.cost, currency) : '', s.reference ? `Ref ${s.reference}` : ''].filter(Boolean).join(' · ')}
+                  {[s.cost !== undefined ? fmtPaid(s.cost, currency, s.paid) : '', s.reference ? `Ref ${s.reference}` : ''].filter(Boolean).join(' · ')}
                 </span>
               )}
             </span>

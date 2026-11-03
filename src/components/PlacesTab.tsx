@@ -5,6 +5,7 @@ import {
   clearPlaces,
   englishNameCandidates,
   mergeGroups,
+  recheckUntagged,
   movePlaces,
   renameGroup,
   restoreOriginalNames,
@@ -24,6 +25,8 @@ import { PlacesMap } from './PlacesMap'
 import { QuickTag } from './QuickTag'
 import { PlaceThumb } from './TagIcon'
 import { ask } from '../lib/confirm'
+import { runAutoLookup } from '../lib/autolookup'
+import { toast } from '../lib/toast'
 
 // True on phones and small tablets, where the list and the map take turns instead of sitting side by side.
 function useNarrow(): boolean {
@@ -366,6 +369,17 @@ export function PlacesTab({
             <div className="tidy">
               <strong>Tidy up</strong>
               {untagged.length > 0 && <button onClick={() => setQuickTag(true)}>Tag {untagged.length} untagged</button>}
+              {untagged.length > 0 && (
+                <button
+                  onClick={() => {
+                    const n = recheckUntagged()
+                    void runAutoLookup()
+                    toast(`Looking again at ${n} untagged place${n === 1 ? '' : 's'}. Categories fill in as they’re found.`)
+                  }}
+                >
+                  Guess categories again
+                </button>
+              )}
               {englishCount > 0 && <button onClick={() => applyEnglishNames(trip.id)}>Use English names ({englishCount})</button>}
               {anyRenamed && <button onClick={() => restoreOriginalNames(trip.id)}>Restore original names</button>}
               {failedNames && !waitingForNames && <button onClick={retryNaming}>Name areas again</button>}

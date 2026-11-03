@@ -1,5 +1,5 @@
 import { AmountInput } from './AmountInput'
-import { addExpenseIn, homeCurrencyOf, tripCurrency } from '../lib/convert'
+import { addExpenseIn, entryCurrency, homeCurrencyOf, tripCurrency } from '../lib/convert'
 import { BedDouble, Plus, ShoppingBag, Ticket, TrainFront, Utensils, Wallet, X, type LucideIcon } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { shortDate, toISO } from '../lib/days'
@@ -8,7 +8,8 @@ import { useRate } from '../lib/rates'
 import { deleteExpense, setBudget, setFoodPerDay, setHomeCurrency, useAppData } from '../lib/store'
 import { TAG_STYLE } from '../lib/tagging'
 import { EXPENSE_CATEGORIES, type Expense, type ExpenseCategory, type Trip } from '../types'
-import { ask } from '../lib/confirm'
+import { deleteWithUndo } from '../lib/toast'
+import { FormError } from './FormError'
 
 // Each kind of spending borrows a colour and icon from the place categories, so the app looks consistent.
 const CAT: Record<ExpenseCategory, { Icon: LucideIcon; style: keyof typeof TAG_STYLE }> = {
@@ -137,6 +138,15 @@ export function BudgetTab() {
           </button>
         </div>
       </header>
+
+      {!trip.currency && (mine.length > 0 || trip.budget !== undefined) && (
+        <div className="card currency-notice">
+          <p>
+            This trip had no currency set, so its amounts now show in pounds, £ (older versions showed dollars). If you spend in something else, change “Local currency” below.
+          </p>
+          <button onClick={() => setBudget(trip.id, trip.budget, 'GBP')}>Keep pounds</button>
+        </div>
+      )}
 
       <section className="money-hero">
         <div className="money-hero-main">
@@ -321,7 +331,7 @@ export function BudgetTab() {
                       {money(e.amount)}
                       <Fx n={e.amount} />
                     </strong>
-                    <button className="icon-btn" aria-label={`Delete ${e.title}`} onClick={() => ask(`Delete “${e.title}”?`, () => deleteExpense(e.id))}>
+                    <button className="icon-btn" aria-label={`Delete ${e.title}`} onClick={() => deleteWithUndo(`Deleted “${e.title}”`, ['expenses'], () => deleteExpense(e.id))}>
                       <X size={16} />
                     </button>
                   </div>
@@ -342,7 +352,7 @@ function AddExpenseSheet({ trip, tripId, local, onClose }: { trip: Trip; tripId:
   const [amount, setAmount] = useState('')
   const [category, setCategory] = useState<ExpenseCategory>('Food & drink')
   const [date, setDate] = useState(toISO(new Date()))
-  const [currency, setCurrency] = useState(local)
+  const [currency, setCurrency] = useState(entryCurrency(trip))
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
 
@@ -386,7 +396,7 @@ function AddExpenseSheet({ trip, tripId, local, onClose }: { trip: Trip; tripId:
             <input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
           </label>
         </div>
-        {error && <p className="error">{error}</p>}
+        <FormError message={error} />
         <button className="primary wide" disabled={busy} onClick={add}>{busy ? 'Converting…' : 'Add expense'}</button>
       </div>
     </div>

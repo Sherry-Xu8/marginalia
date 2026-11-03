@@ -1,5 +1,5 @@
 import { AmountInput } from './AmountInput'
-import { toTripAmount, tripCurrency } from '../lib/convert'
+import { entryCurrency, toTripAmount, tripCurrency } from '../lib/convert'
 import { BedDouble, MapPin, Search, X } from 'lucide-react'
 import { useState } from 'react'
 import { findLocation, type Located } from '../lib/findplace'
@@ -8,7 +8,8 @@ import { nightsOf } from '../lib/stays'
 import type { Stay, Trip } from '../types'
 import { PinPicker } from './PinPicker'
 import { tagName } from './TagIcon'
-import { ask } from '../lib/confirm'
+import { deleteWithUndo } from '../lib/toast'
+import { FormError } from './FormError'
 
 const PRECISION_NOTE: Record<Located['precision'], string> = {
   exact: '',
@@ -34,7 +35,7 @@ export function StaySheet({
   const [checkIn, setCheckIn] = useState(stay?.checkIn ?? defaults?.checkIn ?? trip.startDate)
   const [checkOut, setCheckOut] = useState(stay?.checkOut ?? defaults?.checkOut ?? trip.endDate)
   const [cost, setCost] = useState(stay?.paid ? String(stay.paid.amount) : stay?.cost !== undefined ? String(stay.cost) : '')
-  const [costCur, setCostCur] = useState(stay?.paid?.currency ?? tripCurrency(trip))
+  const [costCur, setCostCur] = useState(stay ? (stay.paid?.currency ?? tripCurrency(trip)) : entryCurrency(trip))
   const [saving, setSaving] = useState(false)
   const [reference, setReference] = useState(stay?.reference ?? '')
   const [note, setNote] = useState(stay?.note ?? '')
@@ -153,10 +154,10 @@ export function StaySheet({
               Note (check-in time, address in the local language…)
               <textarea rows={2} value={note} onChange={(e) => setNote(e.target.value)} />
             </label>
-            {error && <p className="error" role="alert">{error}</p>}
+            <FormError message={error} />
             <button className="primary wide" disabled={saving} onClick={() => void save()}>{saving ? 'Converting…' : stay ? 'Save changes' : 'Add this stay'}</button>
             {stay && (
-              <button className="danger wide" onClick={() => ask('Remove this stay?', () => { deleteStay(trip.id, stay.id); onClose() }, 'Remove')}>
+              <button className="danger wide" onClick={() => { deleteWithUndo('Stay removed', ['trips'], () => deleteStay(trip.id, stay.id)); onClose() }}>
                 Remove this stay
               </button>
             )}

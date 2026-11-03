@@ -5,6 +5,7 @@ import { DaysTab } from './components/DaysTab'
 import { LogoMark, Wordmark } from './components/Logo'
 import { PlacesTab } from './components/PlacesTab'
 import { ConfirmHost } from './components/ConfirmHost'
+import { ToastHost } from './components/ToastHost'
 import { SettingsPage } from './components/SettingsPage'
 import { SharedView } from './components/SharedView'
 import { TripHero } from './components/TripHero'
@@ -180,6 +181,7 @@ export default function App() {
     <>
       <AppView />
       <ConfirmHost />
+      <ToastHost />
     </>
   )
 }

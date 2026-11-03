@@ -1,6 +1,6 @@
 import { useSyncExternalStore } from 'react'
 import { POOR_IMAGE, cityImage, lookupMany } from './lookup'
-import { COVER_LOOKUP_VERSION, applyLookups, getState, setStopCover, setTripCover } from './store'
+import { COVER_LOOKUP_VERSION, TAG_CHECK_VERSION, applyLookups, getState, setStopCover, setTripCover } from './store'
 import type { Place } from '../types'
 
 // Fetches photos, descriptions and opening hours for your places in the background, a few at a
@@ -27,6 +27,8 @@ export function setAutoLookup(on: boolean) {
 const DAY = 86_400_000
 function needsLookup(p: Place, now: number): boolean {
   if (!p.lookup) return true
+  // A place with no category gets one more look, now that the category guesses are better.
+  if (!p.tag && p.tagSource !== 'user' && p.tagCheck !== TAG_CHECK_VERSION) return true
   const age = now - new Date(p.lookedUpAt ?? 0).getTime()
   if (p.lookup === 'none') return age > 30 * DAY
   if (p.lookup === 'partial') return age > 3_600_000

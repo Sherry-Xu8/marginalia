@@ -21,6 +21,8 @@ let saveTimer: ReturnType<typeof setTimeout> | undefined
 
 // Bump this when the photo lookup gets better: places that found nothing before are tried again once.
 export const COVER_LOOKUP_VERSION = 2
+// Bump this when the category guesses from OpenStreetMap get better: untagged places are looked up once more.
+export const TAG_CHECK_VERSION = 1
 
 // Older saves kept one hotel per stop (stayPlaceId on the stop). Those become stays covering the stop's nights.
 export function migrateStays(t: Trip): Trip {
@@ -69,6 +71,11 @@ function update(fn: (s: AppData) => AppData) {
   saveTimer = setTimeout(() => {
     set(KEY, state).catch(() => {})
   }, 200)
+}
+
+// Puts back some parts of an earlier copy of the data (used by Undo after a delete).
+export function restoreParts(before: AppData, parts: (keyof AppData)[]) {
+  update((s) => ({ ...s, ...Object.fromEntries(parts.map((k) => [k, before[k]])) }))
 }
 
 // Lets other code (like sync) hear about every change.
@@ -399,6 +406,18 @@ export function setPlaceTag(placeId: string, tag: Tag | undefined) {
       p.id === placeId ? { ...p, tag, tagSource: tag ? 'user' : undefined } : p,
     ),
   }))
+}
+
+// Looks again (online) at places that still have no category, then the name taggers have another go.
+export function recheckUntagged(): number {
+  const n = state.places.filter((p) => !p.tag && p.tagSource !== 'user').length
+  if (n === 0) return 0
+  update((s) => ({
+    ...s,
+    places: s.places.map((p) => (!p.tag && p.tagSource !== 'user' ? { ...p, tagCheck: undefined, lookup: p.lookup === 'none' ? undefined : p.lookup } : p)),
+  }))
+  void tagUntagged()
+  return n
 }
 
 // Runs the taggers over places that have no tag yet. Never touches tags you set yourself.
@@ -831,7 +850,7 @@ export function applyLookups(
       const details = u.details ? { ...found, ...mine } : p.details
       // A place the name couldn't place gets its category from what OpenStreetMap calls it. Your own choice always stays.
       const tagged = !p.tag && p.tagSource !== 'user' && suggestedTag ? { tag: suggestedTag, tagSource: 'rule' as const } : {}
-      return { ...p, ...tagged, details, lookup: u.lookup, lookedUpAt: now }
+      return { ...p, ...tagged, details, lookup: u.lookup, lookedUpAt: now, tagCheck: TAG_CHECK_VERSION }
     }),
   }))
 }

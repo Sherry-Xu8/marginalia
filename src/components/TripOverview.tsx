@@ -5,7 +5,8 @@ import { shortDate, toISO } from '../lib/days'
 import { arrivalDate } from '../lib/journeys'
 import { stopDays } from '../lib/itinerary'
 import { nightsOf, staysForStop } from '../lib/stays'
-import { fmtMoney } from '../lib/money'
+import { tripCurrency } from '../lib/convert'
+import { fmtMoney, fmtPaid } from '../lib/money'
 import { go } from '../lib/route'
 import { addStop, deleteStop, deleteTrip, moveStop, updateStop, useAppData } from '../lib/store'
 import type { Stop, Transfer, Trip } from '../types'
@@ -291,7 +292,7 @@ export function TripOverview({ trip }: { trip: Trip }) {
               <span style={{ textAlign: 'left' }}>
                 <strong>{t.title}</strong>
                 <span className="muted" style={{ display: 'block' }}>
-                  {shortDate(t.date)}{t.from && t.to ? ` · ${t.from} → ${t.to}` : ''}{t.departTime ? ` · ${t.departTime}` : ''}{arrivalDate(t) !== t.date ? ` → ${shortDate(arrivalDate(t))}${t.arriveTime ? ' ' + t.arriveTime : ''}` : ''}
+                  {shortDate(t.date)}{t.from && t.to ? ` · ${t.from} → ${t.to}` : ''}{t.departTime ? ` · ${t.departTime}` : ''}{arrivalDate(t) !== t.date ? ` → ${shortDate(arrivalDate(t))}${t.arriveTime ? ' ' + t.arriveTime : ''}` : ''}{t.cost !== undefined ? ` · ${fmtPaid(t.cost, tripCurrency(trip), t.paid)}` : ''}
                 </span>
               </span>
             </button>

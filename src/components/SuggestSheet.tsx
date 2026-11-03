@@ -34,7 +34,7 @@ const MEALS: { id: Prefs['meals']; label: string; hint: string }[] = [
   { id: 0, label: 'I’ll sort my own', hint: 'no meals planned' },
 ]
 const PREFS_KEY = 'plan-prefs'
-function loadPrefs(): Prefs {
+export function loadPrefs(): Prefs {
   try {
     const o = JSON.parse(localStorage.getItem(PREFS_KEY) ?? '{}')
     return { meals: o.meals === 0 || o.meals === 2 || o.meals === 3 ? o.meals : DEFAULT_PREFS.meals, cafe: typeof o.cafe === 'boolean' ? o.cafe : DEFAULT_PREFS.cafe }

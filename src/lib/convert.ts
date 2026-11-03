@@ -14,6 +14,22 @@ export const tripCurrency = (t?: Pick<Trip, 'currency'>): string => normaliseCur
 // Your own currency, for showing equivalents. Pounds unless you choose another.
 export const homeCurrencyOf = (t?: Pick<Trip, 'homeCurrency'>): string => normaliseCurrency(t?.homeCurrency ?? '') || DEFAULT_CURRENCY
 
+// The currency you used last for a new cost on this trip (so ten expenses in a row don't need ten choices).
+export function entryCurrency(t?: Pick<Trip, 'id' | 'currency'>): string {
+  try {
+    return normaliseCurrency(localStorage.getItem(`entry-currency:${t?.id}`) ?? '') || tripCurrency(t)
+  } catch {
+    return tripCurrency(t)
+  }
+}
+export function rememberCurrency(tripId: string | undefined, code: string) {
+  try {
+    if (tripId) localStorage.setItem(`entry-currency:${tripId}`, code)
+  } catch {
+    // not saved — fine
+  }
+}
+
 // The currencies offered when entering an amount: the trip's, your home one, then the usual ones.
 export function currencyChoices(t?: Pick<Trip, 'currency' | 'homeCurrency'>, current?: string): string[] {
   return [...new Set([tripCurrency(t), homeCurrencyOf(t), ...(current ? [current] : []), ...COMMON_CURRENCIES])]

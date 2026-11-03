@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { currencyChoices, tripCurrency } from '../lib/convert'
+import { currencyChoices, rememberCurrency, tripCurrency } from '../lib/convert'
 import { fmtMoney, normaliseCurrency } from '../lib/money'
 import { toTripAmount } from '../lib/convert'
 import { useRate } from '../lib/rates'
@@ -19,7 +19,7 @@ export function AmountInput({
   autoFocus,
 }: {
   label: string
-  trip: Pick<Trip, 'currency' | 'homeCurrency'>
+  trip: Pick<Trip, 'currency' | 'homeCurrency'> & { id?: string }
   amount: string
   currency: string
   onChange: (amount: string, currency: string) => void
@@ -30,6 +30,10 @@ export function AmountInput({
   const target = tripCurrency(trip)
   const [custom, setCustom] = useState(false)
   const n = parseFloat(amount)
+  const change = (a: string, c: string) => {
+    if (c !== currency) rememberCurrency(trip.id, c)
+    onChange(a, c)
+  }
   const { rate } = useRate(currency, target)
   const hint =
     currency !== target && Number.isFinite(n) && n > 0 && rate ? `≈ ${fmtMoney(n * rate.rate, target)}${rate.stale ? ' (older rate)' : ''}` : ''
@@ -41,7 +45,7 @@ export function AmountInput({
           autoFocus={autoFocus}
           inputMode="decimal"
           value={amount}
-          onChange={(e) => onChange(e.target.value, currency)}
+          onChange={(e) => change(e.target.value, currency)}
           onKeyDown={(e) => e.key === 'Enter' && onEnter?.()}
           onBlur={onBlur}
         />
@@ -54,7 +58,7 @@ export function AmountInput({
             autoFocus
             onBlur={(e) => {
               const c = normaliseCurrency(e.target.value)
-              if (c) onChange(amount, c)
+              if (c) change(amount, c)
               setCustom(false)
             }}
           />
@@ -63,7 +67,7 @@ export function AmountInput({
             className="cur-select"
             aria-label="Currency"
             value={currency}
-            onChange={(e) => (e.target.value === OTHER ? setCustom(true) : onChange(amount, e.target.value))}
+            onChange={(e) => (e.target.value === OTHER ? setCustom(true) : change(amount, e.target.value))}
           >
             {currencyChoices(trip, currency).map((c) => (
               <option key={c}>{c}</option>

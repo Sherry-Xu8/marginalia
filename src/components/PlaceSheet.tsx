@@ -21,7 +21,7 @@ import { TAGS, TAG_STYLE } from '../lib/tagging'
 import { EXPENSE_CATEGORIES, type Day, type DayItem, type ExpenseCategory, type Place, type PlaceDetails, type Tag, type Trip } from '../types'
 import { TagIcon, tagName } from './TagIcon'
 import { AmountInput, CostField } from './AmountInput'
-import { addExpenseIn, tripCurrency } from '../lib/convert'
+import { addExpenseIn, entryCurrency, tripCurrency } from '../lib/convert'
 
 const enc = encodeURIComponent
 
@@ -43,7 +43,7 @@ export function categoryFor(tag: string | undefined): ExpenseCategory {
 // Log what you spend at this place, on this day. It shows up in the Budget tab too.
 function VisitExpenses({ trip, place, day, currency }: { trip: Trip | undefined; place: Place; day: Day; currency: string }) {
   const { expenses } = useAppData()
-  const [cur, setCur] = useState(currency)
+  const [cur, setCur] = useState(entryCurrency(trip))
   const mine = expenses.filter((e) => e.placeId === place.id && e.date === day.date)
   const [amount, setAmount] = useState('')
   const [note, setNote] = useState('')
