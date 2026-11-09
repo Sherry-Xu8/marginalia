@@ -75,12 +75,12 @@ function cost(places: Place[], opts: { labels?: Record<string, string>; date: st
 
 export type Improvement = { order: string[]; fixed: number; savedKm: number }
 
-// Tries moving each stop to every other position and keeps whatever helps. Returns null unless the result
-// is clearly better: it clears an opening-time clash, or saves a real stretch of travel.
-export function improveOrder(opts: { places: Place[]; labels?: Record<string, string>; date: string; start: number; anchor?: Place }): Improvement | null {
+type DayOpts = { places: Place[]; labels?: Record<string, string>; date: string; start: number; anchor?: Place }
+
+// Tries moving each stop to every other position and keeps whatever helps, until nothing does.
+export function arrangeDay(opts: DayOpts): Place[] {
   const { places } = opts
-  if (places.length < 2 || places.length > 14) return null
-  const before = checkDay(opts)
+  if (places.length < 2 || places.length > 14) return places
   let best = places
   let bestCost = cost(places, opts)
   for (let pass = 0; pass < 12; pass++) {
@@ -102,6 +102,15 @@ export function improveOrder(opts: { places: Place[]; labels?: Record<string, st
     best = next
     bestCost = nextCost
   }
+  return best
+}
+
+// Returns null unless a different order is clearly better: it clears a clash (a closed place, a meal out of
+// order), or saves a real stretch of travel.
+export function improveOrder(opts: DayOpts): Improvement | null {
+  const { places } = opts
+  const before = checkDay(opts)
+  const best = arrangeDay(opts)
   const after = checkDay({ ...opts, places: best })
   const fixed = before.problems.length - after.problems.length
   const savedKm = before.km - after.km

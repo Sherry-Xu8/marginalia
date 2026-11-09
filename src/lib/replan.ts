@@ -1,0 +1,183 @@
+import type { Place } from '../types'
+import { arrangeDay } from './daycheck'
+import { distanceKm } from './geo'
+import { DAY_START } from './journeys'
+import { quotaFor, suggestItinerary, type MealName, type Pace, type Prefs, type Suggestion, type SuggestedDay } from './itinerary'
+
+// "Re-plan around my choices". Places you've pinned (for example the café you chose for lunch) stay on
+// their day. The rest of the day is then rebuilt around them: nearby places fill whatever the day still
+// needs (sights, meals, a café), and the day is put in a sensible order for the clock and the opening hours.
+// A whole-trip re-plan does that for each pinned day, then lets the normal planner lay out the other days.
+
+export type ReplanCtx = {
+  placeById: Map<string, Place>
+  pins: Set<string>
+  pace: Pace
+  prefs: Prefs
+  windowOf: (date: string) => { start: number; end: number } | undefined
+  closedOn: (place: Place, date: string) => string | null
+  stay?: Place
+  variant: number
+}
+
+type Kind = 'meal' | 'cafe' | 'sight'
+const kindOf = (p: Place): Kind => (p.tag === 'Food' ? 'meal' : p.tag === 'Cafes' ? 'cafe' : 'sight')
+const NEARBY_KM = 3 // nothing further than this from the rest of the day is pulled in
+
+const minDist = (p: Place, among: Place[]) => (among.length ? Math.min(...among.map((r) => distanceKm(p, r))) : Infinity)
+
+// Fills a day around its pinned places from a pool of candidates, then orders it. Returns the day and what it used.
+function fillDay(day: SuggestedDay, pinned: Place[], pool: Place[], ctx: ReplanCtx): { day: SuggestedDay; used: Set<string> } {
+  const w = ctx.windowOf(day.date)
+  const q = quotaFor(ctx.pace, day.mode, ctx.prefs, w)
+  const have: Record<Kind, number> = { sight: 0, meal: 0, cafe: 0 }
+  for (const p of pinned) have[kindOf(p)]++
+  const need: Record<Kind, number> = {
+    sight: Math.max(0, q.sights - have.sight),
+    meal: Math.max(0, q.meals - have.meal),
+    cafe: Math.max(0, q.cafes - have.cafe),
+  }
+  const left = pool.filter((p) => !ctx.closedOn(p, day.date))
+  const reference = [...pinned]
+  const chosen: Place[] = []
+  while (need.sight + need.meal + need.cafe > 0) {
+    let best: Place | undefined
+    let bestScore = Infinity
+    for (const p of left) {
+      if (need[kindOf(p)] <= 0) continue
+      const d = minDist(p, reference)
+      if (d > NEARBY_KM) continue
+      const score = d - (p.must ? 0.5 : 0) // must-dos are preferred when two are about as close
+      if (score < bestScore) {
+        bestScore = score
+        best = p
+      }
+    }
+    if (!best) break
+    chosen.push(best)
+    reference.push(best)
+    need[kindOf(best)]--
+    left.splice(left.indexOf(best), 1)
+  }
+
+  // Which meal each food place is: the ones you labelled keep their label, the rest take the meals still free.
+  const places = [...pinned, ...chosen]
+  const all: MealName[] = ['Breakfast', 'Lunch', 'Dinner']
+  const names: MealName[] = q.mealNames ?? (ctx.prefs.meals === 3 ? all : ctx.prefs.meals === 2 ? (['Lunch', 'Dinner'] as MealName[]) : []).slice(q.meals ? -q.meals : 99)
+  const labels: Record<string, string> = {}
+  for (const p of pinned) if (day.labels?.[p.id]) labels[p.id] = day.labels[p.id]
+  const free = names.filter((n) => !Object.values(labels).includes(n))
+  for (const p of places) {
+    if (labels[p.id]) continue
+    if (kindOf(p) === 'cafe') labels[p.id] = 'Café'
+    else if (kindOf(p) === 'meal' && free.length > 0) labels[p.id] = free.shift()!
+  }
+
+  // A first draft of the order (breakfast first, lunch in the middle, dinner last), then the clock and opening hours tidy it.
+  const anchor = day.anchorId ? ctx.placeById.get(day.anchorId) : ctx.stay
+  const byLabel = (l: string) => places.filter((p) => labels[p.id] === l)
+  const rest = places.filter((p) => !['Breakfast', 'Lunch', 'Dinner', 'Café'].includes(labels[p.id] ?? ''))
+  const route: Place[] = []
+  const from = anchor ?? rest[0]
+  const todo = [...rest]
+  let cur: Place | undefined = from
+  while (todo.length) {
+    const next = todo.reduce((a, b) => (distanceKm(b, cur ?? b) < distanceKm(a, cur ?? a) ? b : a))
+    route.push(next)
+    todo.splice(todo.indexOf(next), 1)
+    cur = next
+  }
+  const half = Math.ceil(route.length / 2)
+  const draft = [...byLabel('Breakfast'), ...route.slice(0, half), ...byLabel('Lunch'), ...byLabel('Café'), ...route.slice(half), ...byLabel('Dinner')]
+  const ordered = arrangeDay({ places: draft, labels, date: day.date, start: w?.start ?? DAY_START, anchor })
+  const sorted = ordered.map((p) => p.id)
+  return { day: { ...day, placeIds: sorted, labels, anchorId: anchor?.id ?? day.anchorId }, used: new Set(chosen.map((p) => p.id)) }
+}
+
+export type Replanned = { plan: Suggestion; pulled: number; setAside: number }
+
+// Rebuild one day around its pinned places, drawing on unscheduled places and on places on other days
+// that are close to what's pinned here.
+export function replanDay(plan: Suggestion, dayId: string, ctx: ReplanCtx): Replanned {
+  const day = plan.days.find((d) => d.dayId === dayId)
+  if (!day || day.mode === 'off') return { plan, pulled: 0, setAside: 0 }
+  const pinned = day.placeIds.map((id) => ctx.placeById.get(id)).filter((p): p is Place => !!p && ctx.pins.has(p.id))
+  if (pinned.length === 0) return { plan, pulled: 0, setAside: 0 }
+
+  const pool: Place[] = []
+  const add = (id: string) => {
+    const p = ctx.placeById.get(id)
+    if (p && !ctx.pins.has(id)) pool.push(p)
+  }
+  day.placeIds.forEach(add)
+  plan.unscheduled.forEach(add)
+  for (const other of plan.days) {
+    if (other.dayId === dayId) continue
+    for (const id of other.placeIds) {
+      const p = ctx.placeById.get(id)
+      if (p && !ctx.pins.has(id) && minDist(p, pinned) <= NEARBY_KM) pool.push(p)
+    }
+  }
+
+  const { day: filled, used } = fillDay(day, pinned, pool, ctx)
+  const keep = new Set(filled.placeIds)
+  const displaced = day.placeIds.filter((id) => !keep.has(id))
+  const fresh = filled.placeIds.filter((id) => !day.placeIds.includes(id)).length
+  return {
+    pulled: fresh,
+    setAside: displaced.length,
+    plan: {
+    ...plan,
+    days: plan.days.map((d) => {
+      if (d.dayId === dayId) return filled
+      if (!d.placeIds.some((id) => used.has(id))) return d
+      const placeIds = d.placeIds.filter((id) => !used.has(id))
+      const labels = Object.fromEntries(Object.entries(d.labels ?? {}).filter(([id]) => !used.has(id)))
+      return { ...d, placeIds, labels }
+    }),
+    unscheduled: [...plan.unscheduled.filter((id) => !keep.has(id)), ...displaced],
+    },
+  }
+}
+
+// Rebuild every day that has pinned places, then plan the remaining days from whatever is left.
+export function replanAll(plan: Suggestion, ctx: ReplanCtx): Suggestion {
+  const pinnedDays = plan.days.filter((d) => d.mode !== 'off' && d.placeIds.some((id) => ctx.pins.has(id)))
+  if (pinnedDays.length === 0) return plan
+
+  const pool = new Map<string, Place>()
+  const add = (id: string) => {
+    const p = ctx.placeById.get(id)
+    if (p && !ctx.pins.has(id)) pool.set(id, p)
+  }
+  plan.days.forEach((d) => d.placeIds.forEach(add))
+  plan.unscheduled.forEach(add)
+
+  const done = new Map<string, SuggestedDay>()
+  for (const day of pinnedDays) {
+    const pinned = day.placeIds.map((id) => ctx.placeById.get(id)).filter((p): p is Place => !!p && ctx.pins.has(p.id))
+    const { day: filled, used } = fillDay(day, pinned, [...pool.values()], ctx)
+    used.forEach((id) => pool.delete(id))
+    done.set(day.dayId, filled)
+  }
+
+  const restSlots = plan.days
+    .filter((d) => d.mode !== 'off' && !done.has(d.dayId))
+    .map((d) => ({ dayId: d.dayId, date: d.date, mode: d.mode, free: ctx.windowOf(d.date) }))
+  const rest = suggestItinerary({
+    places: [...pool.values()],
+    slots: restSlots,
+    pace: ctx.pace,
+    prefs: ctx.prefs,
+    variant: ctx.variant,
+    closedOn: ctx.closedOn,
+    stay: ctx.stay,
+  })
+  const restById = new Map(rest.days.map((d) => [d.dayId, d]))
+  return {
+    days: plan.days.map((d) => done.get(d.dayId) ?? (d.mode === 'off' ? d : restById.get(d.dayId) ?? { ...d, placeIds: [], labels: {} })),
+    unscheduled: rest.unscheduled,
+    reasons: rest.reasons,
+  }
+}
+

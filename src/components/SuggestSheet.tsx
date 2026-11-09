@@ -1,8 +1,9 @@
 import { DndContext, KeyboardSensor, PointerSensor, closestCenter, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core'
 import { SortableContext, arrayMove, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
-import { GripVertical, Star, TriangleAlert } from 'lucide-react'
+import { GripVertical, Pin, Star, TriangleAlert } from 'lucide-react'
 import { checkDay, clockText, improveOrder } from '../lib/daycheck'
+import { replanAll, replanDay, type ReplanCtx } from '../lib/replan'
 import { distanceKm } from '../lib/geo'
 import { useEffect, useMemo, useState } from 'react'
 import { shortDate } from '../lib/days'
@@ -82,10 +83,10 @@ const LABELS = ['Breakfast', 'Lunch', 'Dinner', 'Café'] as const
 
 // One place in a drafted day: drag the handle to reorder, pick which meal it is, or set it aside.
 function DraftRow({
-  id, index, time, label, problem, canLabel, onLabel, onRemove, children,
+  id, index, time, label, problem, canLabel, pinned, onPin, onLabel, onRemove, children,
 }: {
-  id: string; index: number; time?: number; label?: string; problem?: string; canLabel: boolean
-  onLabel: (label: string) => void; onRemove: () => void; children: React.ReactNode
+  id: string; index: number; time?: number; label?: string; problem?: string; canLabel: boolean; pinned: boolean
+  onPin: () => void; onLabel: (label: string) => void; onRemove: () => void; children: React.ReactNode
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id })
   return (
@@ -103,6 +104,9 @@ function DraftRow({
               {LABELS.map((l) => <option key={l} value={l}>{l}</option>)}
             </select>
           )}
+          <button className={'pin-btn' + (pinned ? ' on' : '')} aria-pressed={pinned} aria-label={pinned ? 'Unpin' : 'Pin to this day'} title={pinned ? 'Pinned: re-planning keeps it on this day' : 'Pin so re-planning keeps it on this day'} onClick={onPin}>
+            <Pin size={14} fill={pinned ? 'currentColor' : 'none'} /> {pinned ? 'Pinned' : 'Pin'}
+          </button>
         </span>
         {problem && <span className="rsv warn"><TriangleAlert size={13} aria-hidden /> {problem}</span>}
       </span>
@@ -147,13 +151,23 @@ export function SuggestSheet({ trip, stop, onClose }: { trip: Trip; stop: Stop; 
   const [replace, setReplace] = useState<Record<string, boolean>>({})
   const [variant, setVariant] = useState(0)
   const [plan, setPlan] = useState<Suggestion | null>(null)
+  const [pins, setPins] = useState<Set<string>>(new Set())
+  const [undoPlan, setUndoPlan] = useState<Suggestion | null>(null)
+  const [notice, setNotice] = useState('')
+  const togglePin = (id: string) =>
+    setPins((cur) => {
+      const next = new Set(cur)
+      if (!next.delete(id)) next.add(id)
+      return next
+    })
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
   )
   const setDayIds = (dayId: string, placeIds: string[]) =>
     setPlan((p) => p && { ...p, days: p.days.map((d) => (d.dayId === dayId ? { ...d, placeIds } : d)) })
-  const setLabel = (dayId: string, placeId: string, label: string) =>
+  const setLabel = (dayId: string, placeId: string, label: string) => {
+    if (label) setPins((cur) => new Set(cur).add(placeId)) // choosing a meal for a place is a decision to keep
     setPlan((p) => {
       if (!p) return p
       return {
@@ -165,6 +179,7 @@ export function SuggestSheet({ trip, stop, onClose }: { trip: Trip; stop: Stop; 
         }),
       }
     })
+  }
 
   const areaIds = new Set(groups.filter((g) => g.stopId === stop.id).map((g) => g.id))
   const stopPlaces = places.filter((p) => p.tripId === trip.id && p.groupId && areaIds.has(p.groupId))
@@ -235,9 +250,47 @@ export function SuggestSheet({ trip, stop, onClose }: { trip: Trip; stop: Stop; 
     })
     setVariant(v)
     setPlan(result)
+    setPins(new Set())
+    setUndoPlan(null)
+    setNotice('')
   }
 
-  const removeFromDay = (dayId: string, placeId: string) =>
+  // Re-plan around the places you've pinned (one day, or every day that has a pin).
+  const replanCtx = (): ReplanCtx => ({
+    placeById,
+    pins,
+    pace,
+    prefs,
+    variant,
+    windowOf: (date) => {
+      const w = windowOf(date)
+      return w ? { start: w.start, end: w.end } : undefined
+    },
+    closedOn: (p, date) =>
+      hoursOn(p.details?.hours, date).status === 'closed' ? `Closed on ${fromISO(date).toLocaleDateString(undefined, { weekday: 'long' })}s` : null,
+    stay: places.find((p) => p.id === stayForStop(trip, stop)?.placeId),
+  })
+  function replanOneDay(dayId: string) {
+    if (!plan) return
+    const day = plan.days.find((d) => d.dayId === dayId)
+    const r = replanDay(plan, dayId, replanCtx())
+    setUndoPlan(plan)
+    setPlan(r.plan)
+    setNotice(`Re-planned ${day ? shortDate(day.date) : 'the day'} around your pinned places${r.pulled ? `, brought in ${r.pulled} nearby` : ''}${r.setAside ? `, set ${r.setAside} aside (see Unscheduled)` : ''}.`)
+  }
+  function replanEverything() {
+    if (!plan) return
+    setUndoPlan(plan)
+    setPlan(replanAll(plan, replanCtx()))
+    setNotice('Re-planned every day around your pinned places, and laid out the other days again from what was left.')
+  }
+
+  const removeFromDay = (dayId: string, placeId: string) => {
+    setPins((cur) => {
+      const next = new Set(cur)
+      next.delete(placeId)
+      return next
+    })
     setPlan((p) =>
       p && {
         ...p,
@@ -245,6 +298,7 @@ export function SuggestSheet({ trip, stop, onClose }: { trip: Trip; stop: Stop; 
         unscheduled: [...p.unscheduled, placeId],
       },
     )
+  }
   const addToPlanDay = (dayId: string, placeId: string) =>
     setPlan((p) =>
       p && {
@@ -394,6 +448,30 @@ export function SuggestSheet({ trip, stop, onClose }: { trip: Trip; stop: Stop; 
             <p className="muted">
               Here’s a draft. Nothing is saved until you press Accept. Drag the handle to reorder, choose which meal a place is, or tap × to set one aside. Times are rough estimates.
             </p>
+            {pins.size > 0 && (
+              <div className="card replan-card">
+                <strong>{pins.size} pinned</strong>
+                <p className="muted">Pinned places stay on their day. Re-plan to rebuild the rest of a day around them, so you’re not travelling off track for one meal.</p>
+                <button className="primary wide" onClick={replanEverything}>Re-plan the whole trip around my pins</button>
+              </div>
+            )}
+            {notice && (
+              <p className="note" role="status">
+                {notice}{' '}
+                {undoPlan && (
+                  <button
+                    className="link-btn"
+                    onClick={() => {
+                      setPlan(undoPlan)
+                      setUndoPlan(null)
+                      setNotice('Back to how it was.')
+                    }}
+                  >
+                    Undo
+                  </button>
+                )}
+              </p>
+            )}
             {plan.days.map((d) => {
               const anchor = d.anchorId ? placeById.get(d.anchorId) : undefined
               const ordered = d.placeIds.map((id) => placeById.get(id)).filter((x): x is Place => !!x)
@@ -443,6 +521,8 @@ export function SuggestSheet({ trip, stop, onClose }: { trip: Trip; stop: Stop; 
                             label={d.labels?.[id]}
                             problem={check?.problems.filter((x) => x.id === id).map((x) => x.text).join(' · ') || undefined}
                             canLabel={pl?.tag === 'Food' || pl?.tag === 'Cafes'}
+                            pinned={pins.has(id)}
+                            onPin={() => togglePin(id)}
                             onLabel={(l) => setLabel(d.dayId, id, l)}
                             onRemove={() => removeFromDay(d.dayId, id)}
                           >
@@ -460,6 +540,11 @@ export function SuggestSheet({ trip, stop, onClose }: { trip: Trip; stop: Stop; 
                       </span>
                       <button className="soft-btn" onClick={() => setDayIds(d.dayId, better.order)}>Use it</button>
                     </div>
+                  )}
+                  {d.placeIds.some((id) => pins.has(id)) && (
+                    <button className="soft-btn replan-btn" onClick={() => replanOneDay(d.dayId)}>
+                      Re-plan this day around my pins
+                    </button>
                   )}
                   {check && check.problems.length > 0 && !better && (
                     <p className="muted">Reordering won’t fix {check.problems.length === 1 ? 'that' : 'those'}. Consider setting {check.problems.length === 1 ? 'it' : 'them'} aside and adding {check.problems.length === 1 ? 'it' : 'them'} to another day.</p>
