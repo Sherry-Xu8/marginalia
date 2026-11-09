@@ -302,7 +302,7 @@ function dayShape(idx: number[], cands: Place[], names: MealName[] = ['Breakfast
   const chosen: MealName[] = nMeal >= names.length ? names : nMeal === 1 ? [names.includes('Lunch') ? 'Lunch' : names[0]] : names.slice(names.length - nMeal)
   const meals: [number, string][] = (nMeal === 0 ? [] : chosen).map((n) => [MEAL_T[n], n])
   const slots: DaySlot[] = meals.map(([t, label]) => ({ kind: 'meal', t, label }))
-  if (count('cafe') >= 1) slots.push({ kind: 'cafe', t: 0.7, label: 'Coffee' })
+  if (count('cafe') >= 1) slots.push({ kind: 'cafe', t: 0.7, label: 'Café' })
   const free = idx.length - slots.length
   for (let k = 0; k < free; k++) slots.push({ kind: 'free', t: 0.1 + (0.8 * (k + 0.5)) / free })
   return slots.sort((a, b) => a.t - b.t)

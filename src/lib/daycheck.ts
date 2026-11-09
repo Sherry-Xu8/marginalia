@@ -7,7 +7,7 @@ import { hoursOn } from './hours'
 // other orders and offer one that fits opening hours better or saves walking. These are estimates: they
 // only ever raise a warning when the place's opening hours are clear, never on a guess.
 
-export type MealLabel = 'Breakfast' | 'Lunch' | 'Dinner' | 'Coffee'
+export type MealLabel = 'Breakfast' | 'Lunch' | 'Dinner' | 'Café'
 export type Problem = { id: string; kind: 'closed' | 'late' | 'early'; text: string }
 export type DayCheck = { arrive: Record<string, number>; problems: Problem[]; km: number; end: number }
 
@@ -22,7 +22,7 @@ function stayMinutes(p: Place, label?: string): number {
   if (label === 'Breakfast') return 45
   if (label === 'Lunch') return 60
   if (label === 'Dinner') return 75
-  if (label === 'Coffee' || p.tag === 'Cafes') return 30
+  if (label === 'Café' || p.tag === 'Cafes') return 30
   if (p.tag === 'Food') return 60
   if (p.tag === 'Shopping') return 60
   return 75

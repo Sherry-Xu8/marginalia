@@ -78,7 +78,7 @@ function AreaPicker({ trip, stop }: { trip: Trip; stop: Stop }) {
   )
 }
 
-const LABELS = ['Breakfast', 'Lunch', 'Dinner', 'Coffee'] as const
+const LABELS = ['Breakfast', 'Lunch', 'Dinner', 'Café'] as const
 
 // One place in a drafted day: drag the handle to reorder, pick which meal it is, or set it aside.
 function DraftRow({
@@ -321,7 +321,7 @@ export function SuggestSheet({ trip, stop, onClose }: { trip: Trip; stop: Stop; 
             </div>
 
             <h3>How do you like to travel?</h3>
-            <p className="muted">Meals and coffee are added around your sights, so days don’t turn into back-to-back restaurants.</p>
+            <p className="muted">Meals and café stops are added around your sights, so days don’t turn into back-to-back restaurants.</p>
             <div className="tag-grid three">
               {MEALS.map((o) => (
                 <button key={o.id} className={prefs.meals === o.id ? 'chip on' : 'chip'} onClick={() => setPrefs({ ...prefs, meals: o.id })}>
@@ -332,7 +332,7 @@ export function SuggestSheet({ trip, stop, onClose }: { trip: Trip; stop: Stop; 
             </div>
             <label className="check">
               <input type="checkbox" checked={prefs.cafe} onChange={(e) => setPrefs({ ...prefs, cafe: e.target.checked })} />
-              <span>A coffee stop every day <small className="muted">· explore local cafés (uses places tagged Cafes)</small></span>
+              <span>A café stop every day <small className="muted">· coffee, tea or dessert (uses places tagged Cafes)</small></span>
             </label>
             {stopPlaces.length > 0 && !stopPlaces.some((p) => p.tag !== 'Food' && p.tag !== 'Cafes' && p.tag !== 'Accommodation' && p.tag !== 'Transport') && (
               <p className="muted">Heads up: these places are all food and cafés, so days will be mostly meals. Add sights to the map for a fuller mix.</p>
