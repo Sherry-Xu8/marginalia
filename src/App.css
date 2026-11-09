@@ -998,3 +998,14 @@ button.danger-solid:hover:not(:disabled) { background: color-mix(in srgb, var(--
 .fit-btn { display: block; margin-top: 4px; min-height: 0; padding: 5px 10px; border-radius: 12px; background: var(--soft); color: var(--accent-dark); border: 0; font-family: var(--sans); font-size: 0.78rem; font-weight: 500; line-height: 1.35; text-align: left; cursor: pointer; }
 .fit-btn b { font-weight: 700; }
 .fit-btn:hover { background: var(--accent-soft); }
+
+/* Suggest draft: draggable rows, meal choice, timing hints */
+.draft-row { display: flex; align-items: flex-start; gap: 6px; padding: 8px 0; border-top: 1px solid var(--line); background: var(--card); }
+.draft-row:first-of-type { border-top: 0; }
+.draft-row .handle { min-width: 28px; padding-top: 4px; }
+.draft-main { flex: 1; display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.draft-sub { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.meal-select { width: auto; min-height: 0; padding: 2px 8px; font-size: 0.78rem; border-radius: 10px; }
+.fit-tip { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 8px; padding: 10px 12px; border-radius: 14px; background: var(--accent-soft); font-size: 0.85rem; }
+.fit-tip .soft-btn { margin: 0; min-height: 0; padding: 6px 14px; flex: none; }
+.draft-row > button:last-child { min-height: 36px; min-width: 36px; padding: 0 10px; border-radius: 12px; flex: none; }

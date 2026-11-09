@@ -1,9 +1,13 @@
-import { Star } from 'lucide-react'
+import { DndContext, KeyboardSensor, PointerSensor, closestCenter, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core'
+import { SortableContext, arrayMove, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable'
+import { CSS } from '@dnd-kit/utilities'
+import { GripVertical, Star, TriangleAlert } from 'lucide-react'
+import { checkDay, clockText, improveOrder } from '../lib/daycheck'
 import { distanceKm } from '../lib/geo'
 import { useEffect, useMemo, useState } from 'react'
 import { shortDate } from '../lib/days'
 import { stayForStop } from '../lib/stays'
-import { clock, describeTransfer, freeWindow } from '../lib/journeys'
+import { DAY_START, clock, describeTransfer, freeWindow } from '../lib/journeys'
 import { hoursOn } from '../lib/hours'
 import { fromISO } from '../lib/days'
 import {
@@ -74,6 +78,39 @@ function AreaPicker({ trip, stop }: { trip: Trip; stop: Stop }) {
   )
 }
 
+const LABELS = ['Breakfast', 'Lunch', 'Dinner', 'Coffee'] as const
+
+// One place in a drafted day: drag the handle to reorder, pick which meal it is, or set it aside.
+function DraftRow({
+  id, index, time, label, problem, canLabel, onLabel, onRemove, children,
+}: {
+  id: string; index: number; time?: number; label?: string; problem?: string; canLabel: boolean
+  onLabel: (label: string) => void; onRemove: () => void; children: React.ReactNode
+}) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id })
+  return (
+    <div ref={setNodeRef} style={{ transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.6 : 1 }} className="draft-row">
+      <button className="handle" aria-label="Drag to reorder" {...attributes} {...listeners}>
+        <GripVertical size={18} />
+      </button>
+      <span className="draft-main">
+        <span>{index + 1}. {children}</span>
+        <span className="draft-sub">
+          {time !== undefined && <small className="muted">about {clockText(time)}</small>}
+          {canLabel && (
+            <select className="meal-select" aria-label="Which meal is this?" value={label ?? ''} onChange={(e) => onLabel(e.target.value)}>
+              <option value="">Not a set meal</option>
+              {LABELS.map((l) => <option key={l} value={l}>{l}</option>)}
+            </select>
+          )}
+        </span>
+        {problem && <span className="rsv warn"><TriangleAlert size={13} aria-hidden /> {problem}</span>}
+      </span>
+      <button aria-label="Set aside" onClick={onRemove}>×</button>
+    </div>
+  )
+}
+
 export function SuggestSheet({ trip, stop, onClose }: { trip: Trip; stop: Stop; onClose: () => void }) {
   const { days, places, groups, transfers } = useAppData()
   const [pace, setPace] = useState<Pace>('standard')
@@ -110,6 +147,24 @@ export function SuggestSheet({ trip, stop, onClose }: { trip: Trip; stop: Stop; 
   const [replace, setReplace] = useState<Record<string, boolean>>({})
   const [variant, setVariant] = useState(0)
   const [plan, setPlan] = useState<Suggestion | null>(null)
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
+  )
+  const setDayIds = (dayId: string, placeIds: string[]) =>
+    setPlan((p) => p && { ...p, days: p.days.map((d) => (d.dayId === dayId ? { ...d, placeIds } : d)) })
+  const setLabel = (dayId: string, placeId: string, label: string) =>
+    setPlan((p) => {
+      if (!p) return p
+      return {
+        ...p,
+        days: p.days.map((d) => {
+          if (d.dayId !== dayId) return d
+          const { [placeId]: _old, ...rest } = d.labels ?? {}
+          return { ...d, labels: label ? { ...rest, [placeId]: label } : rest }
+        }),
+      }
+    })
 
   const areaIds = new Set(groups.filter((g) => g.stopId === stop.id).map((g) => g.id))
   const stopPlaces = places.filter((p) => p.tripId === trip.id && p.groupId && areaIds.has(p.groupId))
@@ -337,10 +392,14 @@ export function SuggestSheet({ trip, stop, onClose }: { trip: Trip; stop: Stop; 
         ) : (
           <>
             <p className="muted">
-              Here’s a draft. Nothing is saved until you press Accept. Tap × to set a place aside.
+              Here’s a draft. Nothing is saved until you press Accept. Drag the handle to reorder, choose which meal a place is, or tap × to set one aside. Times are rough estimates.
             </p>
             {plan.days.map((d) => {
               const anchor = d.anchorId ? placeById.get(d.anchorId) : undefined
+              const ordered = d.placeIds.map((id) => placeById.get(id)).filter((x): x is Place => !!x)
+              const timing = { places: ordered, labels: d.labels, date: d.date, start: windowOf(d.date)?.start ?? DAY_START, anchor }
+              const check = d.mode !== 'off' && ordered.length > 0 ? checkDay(timing) : undefined
+              const better = check ? improveOrder(timing) : null
               return (
                 <div key={d.dayId} className="card">
                   <strong>{shortDate(d.date)}</strong>
@@ -362,15 +421,49 @@ export function SuggestSheet({ trip, stop, onClose }: { trip: Trip; stop: Stop; 
                       })}
                     </div>
                   )}
-                  {d.placeIds.map((id, n) => (
-                    <div key={id} className="check">
-                      <span style={{ flex: 1 }}>
-                        {n + 1}. {row(placeById.get(id))}
-                        {d.labels?.[id] && <small className="muted"> · {d.labels[id]}</small>}
+                  <DndContext
+                    sensors={sensors}
+                    collisionDetection={closestCenter}
+                    onDragEnd={(e: DragEndEvent) => {
+                      if (!e.over || e.active.id === e.over.id) return
+                      const from = d.placeIds.indexOf(String(e.active.id))
+                      const to = d.placeIds.indexOf(String(e.over.id))
+                      if (from >= 0 && to >= 0) setDayIds(d.dayId, arrayMove(d.placeIds, from, to))
+                    }}
+                  >
+                    <SortableContext items={d.placeIds} strategy={verticalListSortingStrategy}>
+                      {d.placeIds.map((id, n) => {
+                        const pl = placeById.get(id)
+                        return (
+                          <DraftRow
+                            key={id}
+                            id={id}
+                            index={n}
+                            time={check?.arrive[id]}
+                            label={d.labels?.[id]}
+                            problem={check?.problems.find((x) => x.id === id)?.text}
+                            canLabel={pl?.tag === 'Food' || pl?.tag === 'Cafes'}
+                            onLabel={(l) => setLabel(d.dayId, id, l)}
+                            onRemove={() => removeFromDay(d.dayId, id)}
+                          >
+                            {row(pl)}
+                          </DraftRow>
+                        )
+                      })}
+                    </SortableContext>
+                  </DndContext>
+                  {better && (
+                    <div className="fit-tip">
+                      <span>
+                        <b>A better order:</b>{' '}
+                        {[better.fixed > 0 ? `fits the opening hours of ${better.fixed} place${better.fixed === 1 ? '' : 's'}` : '', better.savedKm >= 0.5 ? `saves about ${better.savedKm.toFixed(1)} km of travel` : ''].filter(Boolean).join(' and ')}.
                       </span>
-                      <button aria-label="Set aside" onClick={() => removeFromDay(d.dayId, id)}>×</button>
+                      <button className="soft-btn" onClick={() => setDayIds(d.dayId, better.order)}>Use it</button>
                     </div>
-                  ))}
+                  )}
+                  {check && check.problems.length > 0 && !better && (
+                    <p className="muted">Reordering won’t fix {check.problems.length === 1 ? 'that' : 'those'}. Consider setting {check.problems.length === 1 ? 'it' : 'them'} aside and adding {check.problems.length === 1 ? 'it' : 'them'} to another day.</p>
+                  )}
                 </div>
               )
             })}
