@@ -8,7 +8,7 @@ import { hoursOn } from './hours'
 // only ever raise a warning when the place's opening hours are clear, never on a guess.
 
 export type MealLabel = 'Breakfast' | 'Lunch' | 'Dinner' | 'Café'
-export type Problem = { id: string; kind: 'closed' | 'late' | 'early'; text: string }
+export type Problem = { id: string; kind: 'closed' | 'late' | 'early' | 'order'; text: string }
 export type DayCheck = { arrive: Record<string, number>; problems: Problem[]; km: number; end: number }
 
 // A meal isn't eaten before its usual time, so a stop labelled Dinner is reached no earlier than 18:00.
@@ -43,6 +43,10 @@ export function checkDay(opts: { places: Place[]; labels?: Record<string, string
     km += hop
     t += prev ? travelMinutes(hop) : 0
     const label = labels[p.id]
+    // A meal planned after a later one (lunch after dinner) is a clash in its own right.
+    const rank = RANK[label ?? '']
+    const clash = rank === undefined ? undefined : places.slice(0, places.indexOf(p)).map((q) => labels[q.id]).find((l) => (RANK[l ?? ''] ?? -1) > rank)
+    if (clash) problems.push({ id: p.id, kind: 'order', text: `${label} is after ${clash.toLowerCase()}, so it would be about ${clockText(Math.max(t, EARLIEST[label as MealLabel] ?? 0))}` })
     const earliest = label ? EARLIEST[label as MealLabel] : undefined
     if (earliest !== undefined && t < earliest) t = earliest
     arrive[p.id] = t
@@ -66,10 +70,7 @@ export function checkDay(opts: { places: Place[]; labels?: Record<string, string
 // Lower is better: a place that's shut when you arrive matters most, then meals out of order, then walking.
 function cost(places: Place[], opts: { labels?: Record<string, string>; date: string; start: number; anchor?: Place }): number {
   const c = checkDay({ ...opts, places })
-  const ranks = places.map((p) => RANK[opts.labels?.[p.id] ?? '']).filter((r): r is number => r !== undefined)
-  let inversions = 0
-  for (let i = 0; i < ranks.length; i++) for (let j = i + 1; j < ranks.length; j++) if (ranks[i] > ranks[j]) inversions++
-  return 1000 * c.problems.length + 1000 * inversions + 10 * c.km + 2 * Math.max(0, c.end - 21 * 60) / 10
+  return 1000 * c.problems.length + 10 * c.km + 2 * Math.max(0, c.end - 21 * 60) / 10
 }
 
 export type Improvement = { order: string[]; fixed: number; savedKm: number }

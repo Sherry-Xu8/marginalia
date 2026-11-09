@@ -441,7 +441,7 @@ export function SuggestSheet({ trip, stop, onClose }: { trip: Trip; stop: Stop; 
                             index={n}
                             time={check?.arrive[id]}
                             label={d.labels?.[id]}
-                            problem={check?.problems.find((x) => x.id === id)?.text}
+                            problem={check?.problems.filter((x) => x.id === id).map((x) => x.text).join(' · ') || undefined}
                             canLabel={pl?.tag === 'Food' || pl?.tag === 'Cafes'}
                             onLabel={(l) => setLabel(d.dayId, id, l)}
                             onRemove={() => removeFromDay(d.dayId, id)}
