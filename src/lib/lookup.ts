@@ -1,5 +1,7 @@
 import type { Place, PlaceDetails, Tag } from '../types'
 import { englishPart } from './names'
+import { osmKindNear } from './geocode'
+import { keywordTag } from './tagging'
 
 // Looks a place up in free, open sources — no account or key needed:
 //   • OpenStreetMap (via Overpass): opening hours, website, phone, cuisine, a short description
@@ -86,6 +88,16 @@ export function tagFromOsm(t: Tags): Tag | undefined {
   return undefined
 }
 
+// The same, for what Nominatim reports (a class and a type, like tourism / attraction, or place / suburb).
+export function tagFromNominatim(cls: string, type: string): Tag | undefined {
+  const direct = tagFromOsm({ [cls]: type })
+  if (direct) return direct
+  if (cls === 'place' || cls === 'highway') return 'Sightseeing' // districts and named streets people go to see
+  if (cls === 'building' && /temple|mosque|church|cathedral|shrine|chapel|synagogue|castle|fort|palace|civic|government|monastery|museum/.test(type)) return 'Sightseeing'
+  if (cls === 'building' && /hotel|hostel|dormitory/.test(type)) return 'Accommodation'
+  return undefined
+}
+
 function detailsFromTags(t: Tags): { details: PlaceDetails; wiki?: string } {
   const details: PlaceDetails = {
     summary: t['description:en'] ?? t.description,
@@ -123,10 +135,10 @@ async function overpassNear(places: Place[]): Promise<Element[] | null> {
   return null
 }
 
-type WikiSummary = { extract?: string; thumbnail?: { source?: string } }
+type WikiSummary = { extract?: string; description?: string; thumbnail?: { source?: string } }
 
 // A Wikipedia article about this place (for well-known places): a description and a photo.
-async function fromWikipedia(place: Place, taggedArticle?: string): Promise<{ summary?: string; imageUrl?: string } | null | undefined> {
+async function fromWikipedia(place: Place, taggedArticle?: string): Promise<{ summary?: string; imageUrl?: string; kind?: string } | null | undefined> {
   let lang = 'en'
   let title: string | undefined
   const tagged = taggedArticle?.match(/^([a-z-]+):(.+)$/)
@@ -151,7 +163,9 @@ async function fromWikipedia(place: Place, taggedArticle?: string): Promise<{ su
   )
   if (!w?.extract && !w?.thumbnail?.source) return null
   // The article's picture comes as a small thumbnail; ask for a larger standard size.
-  return { summary: w.extract, imageUrl: w.thumbnail?.source?.replace(/\/\d+px-/, '/500px-') }
+  // What the article says it is ("Fort in George Town", "X is a Hindu temple…"), used to tag the place.
+  const kind = [w.description, w.extract?.split(/(?<=\.)\s/)[0]].filter(Boolean).join('. ')
+  return { summary: w.extract, imageUrl: w.thumbnail?.source?.replace(/\/\d+px-/, '/500px-'), kind }
 }
 
 // Looks up several places, kindly: OpenStreetMap a few at a time, Wikipedia four at a time. Wikipedia
@@ -197,6 +211,14 @@ export async function lookupMany(places: Place[]): Promise<Map<string, LookupRes
       merged.summary = merged.summary ?? wiki.summary
       merged.imageUrl = merged.imageUrl ?? wiki.imageUrl
     }
+    // Still no category? Read it from the Wikipedia article, then ask OpenStreetMap what's at that spot.
+    if (!place.tag && !merged.suggestedTag) {
+      if (wiki?.kind) merged.suggestedTag = keywordTag({ name: '', description: wiki.kind, layer: '' }) ?? undefined
+      if (!merged.suggestedTag) {
+        const kind = await osmKindNear(englishPart(place.name) ?? place.name, place.lat, place.lon)
+        if (kind) merged.suggestedTag = tagFromNominatim(kind.class, kind.type)
+      }
+    }
     merged.source = details && wiki ? 'OpenStreetMap and Wikipedia' : wiki ? 'Wikipedia' : details ? 'OpenStreetMap' : undefined
     const useful = merged.suggestedTag || merged.summary || merged.website || merged.hours || merged.phone || merged.cuisine || merged.imageUrl
     if (useful) out.set(place.id, { status: 'found', details: merged, complete: !!elements && wikiAnswered })
@@ -240,6 +262,20 @@ export async function cityImage(name: string): Promise<string | null | undefined
   for (const c of candidates) {
     const found = (await thumb(c)) ?? (await thumb(`Tourism in ${c}`))
     if (found) return found
+  }
+  // Some places' own article only has a flag or a map (Penang, for one). Their search results often have a real photo:
+  // the best-matching related article (the main city, a famous hill or bay) that has a usable picture.
+  for (const c of candidates) {
+    const r = await getJson<{ query?: { pages?: Record<string, { title: string; index?: number; thumbnail?: { source?: string } }> } }>(
+      `https://en.wikipedia.org/w/api.php?action=query&generator=search&gsrsearch=${encodeURIComponent(c)}&gsrnamespace=0&gsrlimit=8&prop=pageimages&piprop=thumbnail&pithumbsize=960&format=json&origin=*`,
+      undefined,
+      8000,
+    )
+    if (r) answered = true
+    const hit = Object.values(r?.query?.pages ?? {})
+      .sort((a, b) => (a.index ?? 99) - (b.index ?? 99))
+      .find((pg) => pg.thumbnail?.source && !POOR_IMAGE.test(pg.thumbnail.source) && pg.title.toLowerCase().includes(c.toLowerCase().split(' ')[0]))
+    if (hit?.thumbnail?.source) return hit.thumbnail.source
   }
   return answered ? null : undefined
 }

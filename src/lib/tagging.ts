@@ -30,12 +30,12 @@ const KEYWORDS: Record<Exclude<Tag, 'Other'>, string[]> = {
     'mee', 'laksa', 'popiah', 'prawn', 'satay', 'nasi', 'roti', 'prata', 'kway', 'char kway teow', 'hawker', 'kopitiam',
     'food centre', 'food court', 'bak kut teh', 'dim sum', 'wonton', 'congee', 'biryani', 'dosa', 'murtabak', 'rojak',
     'chicken rice', 'curry rice', 'claypot', 'roast', 'steamboat', 'hotpot', 'hot pot', 'banana leaf', 'mamak', 'warung',
-    'taco', 'taqueria', 'pasta', 'trattoria', 'osteria', 'steakhouse', 'canteen', 'cookhouse', 'dim sum',
+    'samosa', 'omakase', 'makase', 'meals', 'breakfast', 'taco', 'taqueria', 'pasta', 'trattoria', 'osteria', 'steakhouse', 'canteen', 'cookhouse', 'dim sum',
     '식당', '국밥', '죽', '곱창', '족발', '떡볶이', '맛집',
   ],
   Cafes: [
     'cafe', 'café', 'coffee', 'bakery', 'bakeries', 'bread', 'bagel', 'dessert', 'tea', 'donut', 'pastry', 'toast',
-    'bingsu', 'kaya', 'cendol', 'confectionery', 'chocolate', 'boba', 'bubble tea', 'creamery', '甜品', '糖水', 'ice cream', 'gelato', 'patisserie', 'roastery', 'espresso', 'latte', '카페', '커피', '베이커리',
+    'bingsu', 'kaya', 'cendol', 'chendol', 'chendul', 'confectionery', 'chocolate', 'boba', 'bubble tea', 'creamery', '甜品', '糖水', 'ice cream', 'gelato', 'patisserie', 'roastery', 'espresso', 'latte', '카페', '커피', '베이커리',
   ],
   Sightseeing: [
     'museum', 'temple', 'palace', 'tower', 'gallery', 'monument', 'castle', 'shrine', 'cathedral',
@@ -44,10 +44,12 @@ const KEYWORDS: Record<Exclude<Tag, 'Other'>, string[]> = {
     'mosque', 'synagogue', 'pagoda', 'statue', 'sculpture', 'bridge', 'merlion', 'supertree', 'skypark', 'lane', 'alley',
     'district', 'quarter', 'old town', 'chinatown', 'little india', 'kampong', 'kampung', 'house of', 'square', 'plaza',
     'arch', 'gate', 'ruins', 'bay sands', 'night safari', 'sentosa', 'universal studios', 'esplanade', 'twin towers',
+    'masjid', 'bangunan', 'menara', 'wat', 'kongsi', 'jetty', 'jetties', 'fort', 'quay', 'tunnel', 'stadthuys', 'famosa',
     'petronas', 'batu caves', 'mansion', 'clock tower', 'lighthouse', 'canal', 'waterfront', 'promenade', 'street art', 'mural',
   ],
   Accommodation: [
     'hotel', 'hostel', 'guesthouse', 'guest house', 'motel', 'resort', 'inn', 'airbnb', 'apartment',
+    'mercure', 'novotel', 'ibis', 'hilton', 'hyatt', 'marriott', 'sheraton', 'westin', 'fairmont', 'intercontinental', 'holiday inn', 'radisson', 'pullman', 'sofitel', 'swissotel', 'crowne plaza', 'doubletree', 'shangri-la', 'four seasons', 'homestay', 'capsule', 'residences',
     'lodge', 'ryokan', 'b&b', 'suites', 'accommodation', 'hotels', '호텔', '모텔', '게스트하우스',
   ],
   Shopping: [

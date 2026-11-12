@@ -53,6 +53,55 @@ export async function reverseGeocodeName(lat: number, lon: number): Promise<stri
   }
 }
 
+// ---- What is this place? (used to tag places the name alone can't place) ----
+// Asks Nominatim for the named place within a few hundred metres and reports what OpenStreetMap calls it
+// (for example class "tourism", type "attraction"). Same rules as above, and every answer is remembered.
+
+let queue: Promise<unknown> = Promise.resolve()
+const inLine = <T>(fn: () => Promise<T>): Promise<T> => {
+  const run = queue.then(fn, fn)
+  queue = run.then(() => undefined, () => undefined)
+  return run
+}
+
+export type OsmKind = { class: string; type: string }
+
+// undefined = couldn't ask (try again later); null = asked, nothing there.
+export function osmKindNear(name: string, lat: number, lon: number): Promise<OsmKind | null | undefined> {
+  const key = `osmkind:${name.toLowerCase()}|${lat.toFixed(4)},${lon.toFixed(4)}`
+  return inLine(async () => {
+    try {
+      const cached = await get<OsmKind | 'none'>(key)
+      if (cached) return cached === 'none' ? null : cached
+    } catch {
+      // no cache available — carry on
+    }
+    const wait = lastRequestAt + MIN_GAP_MS - Date.now()
+    if (wait > 0) await sleep(wait)
+    lastRequestAt = Date.now()
+    const d = 0.004 // about 450 m each way
+    const url =
+      'https://nominatim.openstreetmap.org/search?format=jsonv2&limit=5&accept-language=en&bounded=1' +
+      `&viewbox=${(lon - d).toFixed(5)},${(lat + d).toFixed(5)},${(lon + d).toFixed(5)},${(lat - d).toFixed(5)}` +
+      `&q=${encodeURIComponent(name)}`
+    const ctrl = new AbortController()
+    const timer = setTimeout(() => ctrl.abort(), TIMEOUT_MS)
+    try {
+      const res = await fetch(url, { signal: ctrl.signal, headers: { Accept: 'application/json' } })
+      if (!res.ok) return undefined
+      const rows = (await res.json()) as { lat: string; lon: string; category?: string; class?: string; type?: string }[]
+      const hit = rows.find((r) => (r.category ?? r.class) && r.type && Math.hypot((+r.lat - lat) * 111000, (+r.lon - lon) * 111000 * Math.cos((lat * Math.PI) / 180)) <= 300)
+      const kind = hit ? { class: (hit.category ?? hit.class)!, type: hit.type! } : null
+      set(key, kind ?? 'none').catch(() => {})
+      return kind
+    } catch {
+      return undefined
+    } finally {
+      clearTimeout(timer)
+    }
+  })
+}
+
 // ---- Searching for a place by name (used to add a hotel) ----
 // Same rules as above: one request per second, and only when you press Search.
 

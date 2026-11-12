@@ -20,9 +20,9 @@ const listeners = new Set<() => void>()
 let saveTimer: ReturnType<typeof setTimeout> | undefined
 
 // Bump this when the photo lookup gets better: places that found nothing before are tried again once.
-export const COVER_LOOKUP_VERSION = 2
+export const COVER_LOOKUP_VERSION = 3
 // Bump this when the category guesses from OpenStreetMap get better: untagged places are looked up once more.
-export const TAG_CHECK_VERSION = 1
+export const TAG_CHECK_VERSION = 2
 
 // Older saves kept one hotel per stop (stayPlaceId on the stop). Those become stays covering the stop's nights.
 export function migrateStays(t: Trip): Trip {
