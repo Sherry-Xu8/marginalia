@@ -1,6 +1,6 @@
 import { useSyncExternalStore } from 'react'
-import { POOR_IMAGE, cityImage, lookupMany } from './lookup'
-import { COVER_LOOKUP_VERSION, TAG_CHECK_VERSION, applyLookups, getState, setStopCover, setTripCover } from './store'
+import { POOR_IMAGE, cityImage, lookupMany, resetLookupBackoff } from './lookup'
+import { COVER_LOOKUP_VERSION, TAG_CHECK_VERSION, applyLookups, getState, recheckUntagged, setStopCover, setTripCover } from './store'
 import type { Place } from '../types'
 
 // Fetches photos, descriptions and opening hours for your places in the background, a few at a
@@ -121,4 +121,23 @@ export async function runAutoLookup() {
     running = false
     setProgress({ running: false, done: 0, total: 0 })
   }
+}
+
+// For the "Guess categories again" button: looks again at every untagged place and keeps going until they're all
+// settled (a busy service is waited out and retried, rather than needing another press). Returns how many it tagged.
+export async function guessCategories(): Promise<{ tagged: number; left: number }> {
+  const untagged = () => getState().places.filter((p) => !p.tag && p.tagSource !== 'user').length
+  const start = untagged()
+  for (let pass = 0; pass < 3 && untagged() > 0; pass++) {
+    const before = untagged()
+    resetLookupBackoff()
+    retryAt = 0
+    recheckUntagged()
+    while (running) await sleep(500) // a lookup already in progress finishes first
+    await runAutoLookup()
+    while (running) await sleep(500)
+    if (untagged() === 0 || (pass > 0 && untagged() === before)) break // done, or a second try got nowhere
+    await sleep(4000) // give a busy service a moment before the next try
+  }
+  return { tagged: start - untagged(), left: untagged() }
 }

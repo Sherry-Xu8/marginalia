@@ -98,6 +98,15 @@ export function tagFromNominatim(cls: string, type: string): Tag | undefined {
   return undefined
 }
 
+// A category from what Wikipedia says a place is ("Hill resort in Penang. Penang Hill is a hill resort…").
+// The short description's main noun comes first: a "hill resort" is somewhere outdoors, not a place to stay.
+export function tagFromWikiKind(kind: string): Tag | undefined {
+  const head = kind.split('. ')[0].toLowerCase().split(/ (?:in|on|at|near|of|by) /)[0]
+  if (/\b(hill|hills|mountain|peak|volcano|beach|bay|island|waterfall|lake|river|forest|national park|nature reserve|cave|cliff|valley)\b/.test(head)) return 'Nature & outdoors'
+  if (/\b(hotel|hostel|resort|guesthouse|inn|lodge|motel)\b/.test(head)) return 'Accommodation'
+  return keywordTag({ name: '', description: kind, layer: '' }) ?? undefined
+}
+
 function detailsFromTags(t: Tags): { details: PlaceDetails; wiki?: string } {
   const details: PlaceDetails = {
     summary: t['description:en'] ?? t.description,
@@ -116,6 +125,10 @@ function detailsFromTags(t: Tags): { details: PlaceDetails; wiki?: string } {
 // OpenStreetMap's public servers are often slow or busy. When they don't answer, they're left
 // alone for a few minutes so photos and descriptions from Wikipedia aren't held up.
 let overpassDownUntil = 0
+// Pressing a button yourself shouldn't have to wait out the "busy" pause.
+export const resetLookupBackoff = () => {
+  overpassDownUntil = 0
+}
 
 // One Overpass request for a few places at once: everything named within 60 m of any of them.
 // Returns null if no server answered.
@@ -154,6 +167,19 @@ async function fromWikipedia(place: Place, taggedArticle?: string): Promise<{ su
     if (!geo) return undefined // the service didn't answer (different from "no article")
     const mine = new Set([...words(place.name), ...words(englishPart(place.name) ?? '')])
     title = geo.query?.geosearch?.find((g) => words(g.title).some((w) => mine.has(w)))?.title
+    // Big places (a hill, a district) sit far from the article's own point, so also try the exact name, if that article is nearby.
+    if (!title) {
+      const exact = (englishPart(place.name) ?? place.name).trim().replace(/ /g, '_')
+      const w = await getJson<WikiSummary & { type?: string; coordinates?: { lat: number; lon: number } }>(
+        `https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(exact)}`,
+        undefined,
+        8000,
+      )
+      if (w && w.type === 'standard' && w.coordinates && distMetres(place, w.coordinates) <= 5000 && (w.extract || w.thumbnail?.source)) {
+        const kind = [w.description, w.extract?.split(/(?<=\.)\s/)[0]].filter(Boolean).join('. ')
+        return { summary: w.extract, imageUrl: w.thumbnail?.source?.replace(/\/\d+px-/, '/500px-'), kind }
+      }
+    }
   }
   if (!title) return null
   const w = await getJson<WikiSummary>(
@@ -211,19 +237,24 @@ export async function lookupMany(places: Place[]): Promise<Map<string, LookupRes
       merged.summary = merged.summary ?? wiki.summary
       merged.imageUrl = merged.imageUrl ?? wiki.imageUrl
     }
-    // Still no category? Read it from the Wikipedia article, then ask OpenStreetMap what's at that spot.
+    // Still no category? Read it from the Wikipedia article, then ask OpenStreetMap what's at that spot
+    // (by the English part of the name, then by the full name). If it couldn't be asked, this counts as unfinished so it's tried again.
+    let askedAll = true
     if (!place.tag && !merged.suggestedTag) {
-      if (wiki?.kind) merged.suggestedTag = keywordTag({ name: '', description: wiki.kind, layer: '' }) ?? undefined
-      if (!merged.suggestedTag) {
-        const kind = await osmKindNear(englishPart(place.name) ?? place.name, place.lat, place.lon)
-        if (kind) merged.suggestedTag = tagFromNominatim(kind.class, kind.type)
+      if (wiki?.kind) merged.suggestedTag = tagFromWikiKind(wiki.kind)
+      const names = [...new Set([englishPart(place.name), place.name].filter((n): n is string => !!n))]
+      for (const n of names) {
+        if (merged.suggestedTag) break
+        const kind = await osmKindNear(n, place.lat, place.lon)
+        if (kind === undefined) askedAll = false
+        else if (kind) merged.suggestedTag = tagFromNominatim(kind.class, kind.type)
       }
     }
     merged.source = details && wiki ? 'OpenStreetMap and Wikipedia' : wiki ? 'Wikipedia' : details ? 'OpenStreetMap' : undefined
     const useful = merged.suggestedTag || merged.summary || merged.website || merged.hours || merged.phone || merged.cuisine || merged.imageUrl
-    if (useful) out.set(place.id, { status: 'found', details: merged, complete: !!elements && wikiAnswered })
+    if (useful) out.set(place.id, { status: 'found', details: merged, complete: !!elements && wikiAnswered && (askedAll || !!merged.suggestedTag) })
     else if (!wikiAnswered && !elements) out.set(place.id, { status: 'unavailable' })
-    else out.set(place.id, { status: 'none', complete: !!elements && wikiAnswered })
+    else out.set(place.id, { status: 'none', complete: !!elements && wikiAnswered && askedAll })
   })
 
   const queue = [...work]

@@ -5,7 +5,6 @@ import {
   clearPlaces,
   englishNameCandidates,
   mergeGroups,
-  recheckUntagged,
   movePlaces,
   renameGroup,
   restoreOriginalNames,
@@ -25,7 +24,7 @@ import { PlacesMap } from './PlacesMap'
 import { QuickTag } from './QuickTag'
 import { PlaceThumb } from './TagIcon'
 import { ask } from '../lib/confirm'
-import { runAutoLookup } from '../lib/autolookup'
+import { guessCategories } from '../lib/autolookup'
 import { toast } from '../lib/toast'
 
 // True on phones and small tablets, where the list and the map take turns instead of sitting side by side.
@@ -213,6 +212,7 @@ export function PlacesTab({
   const [query, setQuery] = useState('')
   const [layerFilter, setLayerFilter] = useState('all') // only offered when the map has several named layers
   const [quickTag, setQuickTag] = useState(false)
+  const [guessing, setGuessing] = useState(false)
   const [selectMode, setSelectMode] = useState(false)
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [detailsId, setDetailsId] = useState<string | null>(null)
@@ -388,13 +388,17 @@ export function PlacesTab({
               {untagged.length > 0 && <button onClick={() => setQuickTag(true)}>Tag {untagged.length} untagged</button>}
               {untagged.length > 0 && (
                 <button
+                  disabled={guessing}
                   onClick={() => {
-                    const n = recheckUntagged()
-                    void runAutoLookup()
-                    toast(`Looking again at ${n} untagged place${n === 1 ? '' : 's'}. Categories fill in as they’re found.`)
+                    setGuessing(true)
+                    toast(`Looking up ${untagged.length} untagged place${untagged.length === 1 ? '' : 's'} online. This can take a minute or two.`, { ms: 8000 })
+                    void guessCategories().then(({ tagged, left }) => {
+                      setGuessing(false)
+                      toast(left === 0 ? `Done: all ${tagged} are tagged now.` : `Tagged ${tagged}. ${left} couldn’t be worked out online, so use “Tag ${left} untagged” to do those by hand.`, { ms: 10000 })
+                    })
                   }}
                 >
-                  Guess categories again
+                  {guessing ? 'Guessing…' : 'Guess categories again'}
                 </button>
               )}
               {englishCount > 0 && <button onClick={() => applyEnglishNames(trip.id)}>Use English names ({englishCount})</button>}
