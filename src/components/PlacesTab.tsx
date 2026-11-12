@@ -1,5 +1,5 @@
 import { Check, ChevronDown, Info, MapPin, MoreHorizontal, Plus, Star } from 'lucide-react'
-import { useEffect, useMemo, useState, useSyncExternalStore } from 'react'
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import {
   applyEnglishNames,
   clearPlaces,
@@ -127,6 +127,21 @@ function GroupSection({
   children: React.ReactNode
 }) {
   const stop = stops.find((s) => s.id === group.stopId)
+  // The options menu closes when you click anywhere else (or press Escape), and after you choose something.
+  const more = useRef<HTMLDetailsElement>(null)
+  const closeMore = () => more.current?.removeAttribute('open')
+  useEffect(() => {
+    const away = (e: Event) => {
+      if (more.current?.open && !more.current.contains(e.target as Node)) closeMore()
+    }
+    const esc = (e: KeyboardEvent) => e.key === 'Escape' && closeMore()
+    document.addEventListener('pointerdown', away)
+    document.addEventListener('keydown', esc)
+    return () => {
+      document.removeEventListener('pointerdown', away)
+      document.removeEventListener('keydown', esc)
+    }
+  }, [])
   return (
     <section className={'group' + (collapsed ? ' collapsed' : '')}>
       <header className="group-head">
@@ -138,11 +153,12 @@ function GroupSection({
         </h2>
         <span className="tag-pill">{count === total ? `${total} places` : `${count} of ${total}`}</span>
         {stop && <span className="tag-pill warm">Stop: {stop.name}</span>}
-        <details className="group-more">
+        <details className="group-more" ref={more}>
           <summary aria-label={`Options for ${group.name}`}><MoreHorizontal size={20} /></summary>
           <div className="manage">
             <button
               onClick={() => {
+                closeMore()
                 const name = prompt('New name for this area:', group.name)?.trim()
                 if (name) renameGroup(group.id, name)
               }}
@@ -150,7 +166,7 @@ function GroupSection({
               Rename
             </button>
             {stops.length > 0 && (
-              <select aria-label="Trip stop" value={group.stopId ?? ''} onChange={(e) => setGroupStop(group.id, e.target.value || undefined)}>
+              <select aria-label="Trip stop" value={group.stopId ?? ''} onChange={(e) => { setGroupStop(group.id, e.target.value || undefined); closeMore() }}>
                 <option value="">No trip stop</option>
                 {stops.map((s) => (
                   <option key={s.id} value={s.id}>Stop: {s.name}</option>
@@ -163,6 +179,7 @@ function GroupSection({
                 value=""
                 onChange={(e) => {
                   const into = otherGroups.find((g) => g.id === e.target.value)
+                  closeMore()
                   if (into) ask(`Merge “${group.name}” into “${into.name}”?`, () => mergeGroups(group.id, into.id), 'Merge')
                 }}
               >
