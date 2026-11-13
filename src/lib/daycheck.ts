@@ -8,11 +8,14 @@ import { hoursOn } from './hours'
 // only ever raise a warning when the place's opening hours are clear, never on a guess.
 
 export type MealLabel = 'Breakfast' | 'Lunch' | 'Dinner' | 'Café'
-export type Problem = { id: string; kind: 'closed' | 'late' | 'early' | 'order'; text: string }
+export type Problem = { id: string; kind: 'closed' | 'late' | 'early' | 'order' | 'meal-late' | 'meal-gap'; text: string }
 export type DayCheck = { arrive: Record<string, number>; problems: Problem[]; km: number; end: number }
 
 // A meal isn't eaten before its usual time, so a stop labelled Dinner is reached no earlier than 18:00.
 const EARLIEST: Partial<Record<MealLabel, number>> = { Breakfast: 8 * 60, Lunch: 12 * 60, Dinner: 18 * 60 }
+// And the latest they still make sense: a "lunch" at 16:25 isn't lunch, and most kitchens have stopped serving by then.
+const LATEST: Partial<Record<MealLabel, number>> = { Breakfast: 11 * 60, Lunch: 15 * 60, Dinner: 22 * 60 }
+const MEAL_GAP = 150 // you don't eat two meals within two and a half hours of each other
 const RANK: Partial<Record<string, number>> = { Breakfast: 0, Lunch: 1, Dinner: 2 }
 const LAST_VISIT = 30 // you need at least this long before closing for it to be worth going
 
@@ -37,6 +40,7 @@ export function checkDay(opts: { places: Place[]; labels?: Record<string, string
   const problems: Problem[] = []
   let t = start
   let km = 0
+  let lastMeal: { at: number; name: string } | undefined
   let prev: Place | undefined = anchor
   for (const p of places) {
     const hop = prev ? distanceKm(prev, p) : 0
@@ -59,6 +63,14 @@ export function checkDay(opts: { places: Place[]; labels?: Record<string, string
       const r = ranges.find(([, close]) => t <= close - LAST_VISIT)
       if (!r) problems.push({ id: p.id, kind: 'late', text: `Closes ${clockText(ranges[ranges.length - 1][1])}, you’d get there about ${clockText(t)}` })
       else if (t < r[0]) problems.push({ id: p.id, kind: 'early', text: `Opens ${clockText(r[0])}, you’d get there about ${clockText(t)}` })
+    }
+    // A meal at the wrong time of day, or right on top of the one before it.
+    const meal = label as MealLabel | undefined
+    if (meal && RANK[meal] !== undefined) {
+      const latest = LATEST[meal]
+      if (latest !== undefined && t > latest) problems.push({ id: p.id, kind: 'meal-late', text: `${clockText(t)} is late for ${meal.toLowerCase()} — most places stop serving by ${clockText(latest)}` })
+      if (lastMeal && t - lastMeal.at < MEAL_GAP) problems.push({ id: p.id, kind: 'meal-gap', text: `only ${Math.round((t - lastMeal.at) / 15) * 15} minutes after ${lastMeal.name.toLowerCase()}` })
+      lastMeal = { at: t, name: meal }
     }
     t += stayMinutes(p, label)
     prev = p
