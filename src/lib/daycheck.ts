@@ -16,7 +16,7 @@ export type DayCheck = { arrive: Record<string, number>; problems: Problem[]; km
 const EARLIEST: Partial<Record<MealLabel, number>> = { Breakfast: 8 * 60, Lunch: 12 * 60, Dinner: 18 * 60 }
 // And the latest they still make sense: a "lunch" at 16:25 isn't lunch, and most kitchens have stopped serving by then.
 const LATEST: Partial<Record<MealLabel, number>> = { Breakfast: 11 * 60, Lunch: 15 * 60, Dinner: 22 * 60 }
-const MEAL_GAP = 150 // you don't eat two meals within two and a half hours of each other
+const MEAL_GAP = 120 // two meals inside two hours of each other is one too many
 
 // A meal is a restaurant, or any place you've said is breakfast, lunch or dinner. A café on its own isn't
 // (coffee or dessert after dinner is fine), so only meals need something to do between them.
@@ -26,14 +26,40 @@ const LAST_VISIT = 30 // you need at least this long before closing for it to be
 
 export const clockText = (m: number) => `${String(Math.floor(m / 60) % 24).padStart(2, '0')}:${String(Math.round(m) % 60).padStart(2, '0')}`
 
-function stayMinutes(p: Place, label?: string): number {
+// How long a place takes says more about what it is than its category does: "Haji Lane" is a stroll past the
+// shopfronts, "National Museum" is most of an afternoon. The first rule that matches the name (or what the lookup
+// found out about it) wins; anything unrecognised falls back to its category. Only places you go and look at are
+// matched this way — somewhere you eat is timed by the meal.
+const VISIT_RULES: { minutes: number; re: RegExp }[] = [
+  { minutes: 180, re: /\b(national park|day trip|hiking trail)\b/ },
+  { minutes: 150, re: /\b(theme park|universal studios|disney\w*|safari|hike|hiking|summit|water park)\b/ },
+  { minutes: 90, re: /\b(museum|palace|zoo|aquarium|botanic\w*|science cent(re|er)|observatory)\b/ },
+  { minutes: 70, re: /\b(gallery|fort|fortress|castle|mall|shopping cent(re|er)|department store|beach|cable car|sky ?park|garden|gardens|reservoir|island)\b/ },
+  { minutes: 45, re: /\b(market|bazaar|hawker|food cent(re|er)|park|cathedral|basilica|library|aviary|conservatory)\b/ },
+  { minutes: 30, re: /\b(temple|mosque|masjid|church|shrine|chapel|synagogue|pagoda|wat|kongsi|memorial|monument)\b/ },
+  { minutes: 20, re: /\b(lane|alley|street art|mural|statue|sculpture|fountain|viewpoint|lookout|gate|arch|bridge|quay|pier|jetty|jetties|promenade|waterfront|clock tower|square|plaza|merlion)\b/ },
+]
+
+// What the rules read: the name, plus anything the online lookup worked out about the place.
+const describe = (p: Place) => `${p.name} ${p.details?.summary ?? ''} ${p.details?.cuisine ?? ''}`.toLowerCase()
+
+export function stayMinutes(p: Place, label?: string): number {
   if (label === 'Breakfast') return 45
   if (label === 'Lunch') return 60
   if (label === 'Dinner') return 75
   if (label === 'Café' || p.tag === 'Cafes') return 30
   if (p.tag === 'Food') return 60
-  if (p.tag === 'Shopping') return 60
-  return 75
+  const text = describe(p)
+  for (const r of VISIT_RULES) if (r.re.test(text)) return r.minutes
+  if (p.tag === 'Shopping') return 45
+  if (p.tag === 'Nature & outdoors') return 70
+  return 50
+}
+
+// Places a few doors apart are a wander, not separate outings, so each takes a bit less than it would alone.
+const CLOSE_KM = 0.4
+export function clusteredStay(minutes: number, nearestNeighbourKm: number): number {
+  return nearestNeighbourKm <= CLOSE_KM ? Math.max(15, Math.round((minutes * 0.65) / 5) * 5) : minutes
 }
 
 // Walking for short hops, otherwise a bus or train.
@@ -97,7 +123,10 @@ export function checkDay(opts: DayOpts): DayCheck {
       if (lastMeal && t - lastMeal.at < MEAL_GAP) problems.push({ id: p.id, kind: 'meal-gap', text: `only ${Math.round((t - lastMeal.at) / 15) * 15} minutes after ${lastMeal.name.toLowerCase()}` })
       lastMeal = { at: t, name: meal }
     }
-    t += stayMinutes(p, label)
+    const i = places.indexOf(p)
+    const gaps = [i > 0 ? distanceKm(places[i - 1], p) : Infinity, i < places.length - 1 ? distanceKm(p, places[i + 1]) : Infinity]
+    const mins = stayMinutes(p, label)
+    t += isMeal(p, label) ? mins : clusteredStay(mins, Math.min(...gaps))
     prev = p
   }
   if (prev && anchor) {
