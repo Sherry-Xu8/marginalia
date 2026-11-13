@@ -70,7 +70,7 @@ export function stopDays(trip: Trip, stop: Stop, transfers: Transfer[] = []): { 
   }))
 }
 
-export type SuggestedDay = { dayId: string; date: string; mode: DayMode; placeIds: string[]; anchorId?: string; labels?: Record<string, string> }
+export type SuggestedDay = { dayId: string; date: string; mode: DayMode; placeIds: string[]; anchorId?: string; labels?: Record<string, string>; times?: Record<string, string> }
 export type Suggestion = { days: SuggestedDay[]; unscheduled: string[]; reasons?: Record<string, string> }
 export type Slot = { dayId: string; date: string; mode: DayMode; free?: FreeWindow }
 

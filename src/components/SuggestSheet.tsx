@@ -1,8 +1,10 @@
 import { DndContext, KeyboardSensor, PointerSensor, closestCenter, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core'
 import { SortableContext, arrayMove, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
-import { GripVertical, Pin, Star, TriangleAlert } from 'lucide-react'
+import { Clock, GripVertical, Pin, Star, TriangleAlert } from 'lucide-react'
 import { checkDay, clockText, improveOrder } from '../lib/daycheck'
+import { fmtMinutes, LONG_TRAVEL_MINUTES } from '../lib/commute'
+import { WeatherChip } from './WeatherChip'
 import { DraftMap, dayColour } from './DraftMap'
 import { AddPlaceSheet } from './AddPlaceSheet'
 import { createPortal } from 'react-dom'
@@ -87,10 +89,10 @@ const LABELS = ['Breakfast', 'Lunch', 'Dinner', 'Café'] as const
 
 // One place in a drafted day: drag the handle to reorder, pick which meal it is, or set it aside.
 function DraftRow({
-  id, index, time, label, problem, canLabel, pinned, onPin, onLabel, onRemove, children,
+  id, index, time, fixed, label, problem, canLabel, pinned, onPin, onFix, onLabel, onRemove, children,
 }: {
-  id: string; index: number; time?: number; label?: string; problem?: string; canLabel: boolean; pinned: boolean
-  onPin: () => void; onLabel: (label: string) => void; onRemove: () => void; children: React.ReactNode
+  id: string; index: number; time?: number; fixed?: string; label?: string; problem?: string; canLabel: boolean; pinned: boolean
+  onPin: () => void; onFix: (time: string) => void; onLabel: (label: string) => void; onRemove: () => void; children: React.ReactNode
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id })
   return (
@@ -101,7 +103,19 @@ function DraftRow({
       <span className="draft-main">
         <span>{index + 1}. {children}</span>
         <span className="draft-sub">
-          {time !== undefined && <small className="muted">about {clockText(time)}</small>}
+          {fixed ? (
+            <span className="fixed-time" title="A time you've fixed — a booking, a tour, a train">
+              <Clock size={12} aria-hidden />
+              <input type="time" value={fixed} aria-label="Booked time" onChange={(e) => onFix(e.target.value)} />
+              <button aria-label="Clear the fixed time" onClick={() => onFix('')}>×</button>
+            </span>
+          ) : (
+            time !== undefined && (
+              <button className="time-btn" title="Tap to fix this time (a booking, a tour, a train)" onClick={() => onFix(clockText(time))}>
+                about {clockText(time)}
+              </button>
+            )
+          )}
           {canLabel && (
             <select className="meal-select" aria-label="Which meal is this?" value={label ?? ''} onChange={(e) => onLabel(e.target.value)}>
               <option value="">Not a set meal</option>
@@ -173,6 +187,22 @@ export function SuggestSheet({ trip, stop, onClose }: { trip: Trip; stop: Stop; 
   )
   const setDayIds = (dayId: string, placeIds: string[]) =>
     setPlan((p) => p && { ...p, days: p.days.map((d) => (d.dayId === dayId ? { ...d, placeIds } : d)) })
+  // A time you fix yourself (a booking, a tour, a train). It is kept when you accept the draft.
+  const setFixedTime = (dayId: string, placeId: string, time: string) => {
+    if (time) setPins((cur) => new Set(cur).add(placeId)) // a booking is a decision, so it stays on this day
+    setPlan((p) => {
+      if (!p) return p
+      return {
+        ...p,
+        days: p.days.map((x) => {
+          if (x.dayId !== dayId) return x
+          const { [placeId]: _old, ...rest } = x.times ?? {}
+          return { ...x, times: time ? { ...rest, [placeId]: time } : rest }
+        }),
+      }
+    })
+  }
+
   const setLabel = (dayId: string, placeId: string, label: string) => {
     if (label) setPins((cur) => new Set(cur).add(placeId)) // choosing a meal for a place is a decision to keep
     setPlan((p) => {
@@ -512,7 +542,7 @@ export function SuggestSheet({ trip, stop, onClose }: { trip: Trip; stop: Stop; 
             {plan.days.map((d) => {
               const anchor = d.anchorId ? placeById.get(d.anchorId) : undefined
               const ordered = d.placeIds.map((id) => placeById.get(id)).filter((x): x is Place => !!x)
-              const timing = { places: ordered, labels: d.labels, date: d.date, start: windowOf(d.date)?.start ?? DAY_START, anchor }
+              const timing = { places: ordered, labels: d.labels, times: d.times, date: d.date, start: windowOf(d.date)?.start ?? DAY_START, anchor }
               const check = d.mode !== 'off' && ordered.length > 0 ? checkDay(timing) : undefined
               const better = check ? improveOrder(timing) : null
               return (
@@ -522,7 +552,14 @@ export function SuggestSheet({ trip, stop, onClose }: { trip: Trip; stop: Stop; 
                   )}
                   <strong>{shortDate(d.date)}</strong>
                   <span className="muted"> · {MODE_LABEL[d.mode]}</span>
+                  {d.mode !== 'off' && <WeatherChip point={ordered[0] ?? anchor} date={d.date} />}
                   {anchor && <p className="muted">Starts and ends at {anchor.name}</p>}
+                  {check && ordered.length > 1 && (
+                    <p className={'muted draft-travel' + (check.travel > LONG_TRAVEL_MINUTES ? ' warn' : '')}>
+                      {fmtMinutes(check.travel)} of travel · ends about {clockText(check.end)}
+                      {check.travel > LONG_TRAVEL_MINUTES && ' — that’s a lot of getting about; consider moving something to another day'}
+                    </p>
+                  )}
                   {d.mode === 'off' && <p className="muted">Day off</p>}
                   {d.mode !== 'off' && d.placeIds.length === 0 && <p className="muted">Nothing scheduled</p>}
                   {missingMeals(d).length > 0 && (
@@ -561,6 +598,8 @@ export function SuggestSheet({ trip, stop, onClose }: { trip: Trip; stop: Stop; 
                             label={d.labels?.[id]}
                             problem={check?.problems.filter((x) => x.id === id).map((x) => x.text).join(' · ') || undefined}
                             canLabel={pl?.tag === 'Food' || pl?.tag === 'Cafes'}
+                            fixed={d.times?.[id]}
+                            onFix={(t) => setFixedTime(d.dayId, id, t)}
                             pinned={pins.has(id)}
                             onPin={() => togglePin(id)}
                             onLabel={(l) => setLabel(d.dayId, id, l)}
@@ -613,7 +652,10 @@ export function SuggestSheet({ trip, stop, onClose }: { trip: Trip; stop: Stop; 
                 const p = placeById.get(id)
                 return (
                   <div key={id} className="unsched-row">
-                    <span className="unsched-name" title={[p?.name, plan.reasons?.[id]].filter(Boolean).join(' — ')}>{row(p)}</span>
+                    <span className="unsched-name" title={`${p?.name ?? ''} — ${plan.reasons?.[id] ?? 'no room left on any day'}`}>
+                      {row(p)}
+                      <small className="muted why">{plan.reasons?.[id] ?? 'no room'}</small>
+                    </span>
                     {best && (
                       <button className="fit-btn" title={best.near ? `${kmText(best.km)} from ${best.near.name}` : `quietest day (${best.count} planned)`} onClick={() => addToPlanDay(best.day.dayId, id)}>
                         + {shortDate(best.day.date)}
@@ -684,7 +726,7 @@ export function SuggestSheet({ trip, stop, onClose }: { trip: Trip; stop: Stop; 
               <button
                 className="primary"
                 onClick={() => {
-                  applySuggestion(plan.days.filter((d) => d.mode !== 'off').map((d) => ({ dayId: d.dayId, placeIds: d.placeIds })))
+                  applySuggestion(plan.days.filter((d) => d.mode !== 'off').map((d) => ({ dayId: d.dayId, placeIds: d.placeIds, times: d.times })))
                   onClose()
                 }}
               >

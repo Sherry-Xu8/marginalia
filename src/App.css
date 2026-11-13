@@ -1066,3 +1066,13 @@ button.danger-solid:hover:not(:disabled) { background: color-mix(in srgb, var(--
 .day-key-chip.on { border-color: var(--accent); background: var(--accent-soft); font-weight: 650; }
 .day-key-chip i { width: 10px; height: 10px; border-radius: 50%; flex: none; }
 .day-dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 7px; vertical-align: 1px; }
+
+/* A time you've fixed in the draft (a booking, a tour, a train) */
+.time-btn { min-height: 0; padding: 1px 6px; border-radius: 8px; background: transparent; border: 1px dashed transparent; color: var(--muted); font-size: 0.78rem; cursor: pointer; }
+.time-btn:hover { border-color: var(--line); color: var(--accent-dark); }
+.fixed-time { display: inline-flex; align-items: center; gap: 3px; padding: 1px 4px 1px 7px; border-radius: 10px; background: var(--accent-soft); color: var(--accent-dark); font-size: 0.78rem; font-weight: 600; }
+.fixed-time input { min-height: 0; width: auto; padding: 0 2px; border: 0; background: transparent; color: inherit; font-size: 0.78rem; font-weight: 600; }
+.fixed-time button { min-height: 0; padding: 0 4px; background: transparent; border: 0; color: inherit; cursor: pointer; }
+.draft-travel { margin: 4px 0 0; font-size: 0.8rem; }
+.draft-travel.warn { color: var(--danger); }
+.unsched-name .why { margin-left: 6px; flex: none; font-size: 0.72rem; }

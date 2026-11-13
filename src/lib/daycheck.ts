@@ -1,6 +1,7 @@
 import type { Place } from '../types'
 import { distanceKm } from './geo'
 import { hoursOn } from './hours'
+import { toMinutes } from './journeys'
 
 // Looks at one planned day as a timeline: roughly when you'd reach each place (from the order, how long
 // each stop takes and how far apart they are), and whether the place would be open then. It can also try
@@ -8,8 +9,8 @@ import { hoursOn } from './hours'
 // only ever raise a warning when the place's opening hours are clear, never on a guess.
 
 export type MealLabel = 'Breakfast' | 'Lunch' | 'Dinner' | 'Café'
-export type Problem = { id: string; kind: 'closed' | 'late' | 'early' | 'order' | 'meal-late' | 'meal-gap' | 'meal-run'; text: string }
-export type DayCheck = { arrive: Record<string, number>; problems: Problem[]; km: number; end: number }
+export type Problem = { id: string; kind: 'closed' | 'late' | 'early' | 'order' | 'meal-late' | 'meal-gap' | 'meal-run' | 'booked'; text: string }
+export type DayCheck = { arrive: Record<string, number>; problems: Problem[]; km: number; travel: number; end: number }
 
 // A meal isn't eaten before its usual time, so a stop labelled Dinner is reached no earlier than 18:00.
 const EARLIEST: Partial<Record<MealLabel, number>> = { Breakfast: 8 * 60, Lunch: 12 * 60, Dinner: 18 * 60 }
@@ -38,12 +39,15 @@ function stayMinutes(p: Place, label?: string): number {
 // Walking for short hops, otherwise a bus or train.
 const travelMinutes = (km: number) => (km < 1.2 ? km * 13 : 8 + km * 3.5)
 
-export function checkDay(opts: { places: Place[]; labels?: Record<string, string>; date: string; start: number; anchor?: Place }): DayCheck {
-  const { places, labels = {}, date, start, anchor } = opts
+type DayOpts = { places: Place[]; labels?: Record<string, string>; times?: Record<string, string>; date: string; start: number; anchor?: Place }
+
+export function checkDay(opts: DayOpts): DayCheck {
+  const { places, labels = {}, times = {}, date, start, anchor } = opts
   const arrive: Record<string, number> = {}
   const problems: Problem[] = []
   let t = start
   let km = 0
+  let travel = 0
   let lastMeal: { at: number; name: string } | undefined
   let prevMeal: string | undefined
   // With more meals than other things to do, some have to sit together, so leave it alone.
@@ -52,7 +56,9 @@ export function checkDay(opts: { places: Place[]; labels?: Record<string, string
   for (const p of places) {
     const hop = prev ? distanceKm(prev, p) : 0
     km += hop
-    t += prev ? travelMinutes(hop) : 0
+    const hopMins = prev ? travelMinutes(hop) : 0
+    travel += hopMins
+    t += hopMins
     const label = labels[p.id]
     // A meal planned after a later one (lunch after dinner) is a clash in its own right.
     const rank = RANK[label ?? '']
@@ -60,6 +66,12 @@ export function checkDay(opts: { places: Place[]; labels?: Record<string, string
     if (clash) problems.push({ id: p.id, kind: 'order', text: `${label} is after ${clash.toLowerCase()}, so it would be about ${clockText(Math.max(t, EARLIEST[label as MealLabel] ?? 0))}` })
     const earliest = label ? EARLIEST[label as MealLabel] : undefined
     if (earliest !== undefined && t < earliest) t = earliest
+    // A time you've fixed yourself (a booking, a tour, a train): you wait if you're early, and it's a clash if you'd be late.
+    const booked = toMinutes(times[p.id])
+    if (booked !== undefined) {
+      if (t > booked + 10) problems.push({ id: p.id, kind: 'booked', text: `booked for ${clockText(booked)}, but you'd get here about ${clockText(t)}` })
+      t = Math.max(t, booked)
+    }
     arrive[p.id] = t
 
     const h = hoursOn(p.details?.hours, date)
@@ -88,8 +100,12 @@ export function checkDay(opts: { places: Place[]; labels?: Record<string, string
     t += stayMinutes(p, label)
     prev = p
   }
-  if (prev && anchor) km += distanceKm(prev, anchor)
-  return { arrive, problems, km, end: t }
+  if (prev && anchor) {
+    const back = distanceKm(prev, anchor)
+    km += back
+    travel += travelMinutes(back)
+  }
+  return { arrive, problems, km, travel: Math.round(travel), end: t }
 }
 
 // Lower is better: a place that's shut when you arrive matters most, then meals out of order, then walking.
@@ -100,7 +116,6 @@ function cost(places: Place[], opts: { labels?: Record<string, string>; date: st
 
 export type Improvement = { order: string[]; fixed: number; savedKm: number }
 
-type DayOpts = { places: Place[]; labels?: Record<string, string>; date: string; start: number; anchor?: Place }
 
 // Tries moving each stop to every other position and keeps whatever helps, until nothing does.
 export function arrangeDay(opts: DayOpts): Place[] {
