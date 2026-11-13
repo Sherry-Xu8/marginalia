@@ -19,7 +19,7 @@ export type Prefs = { meals: 0 | 2 | 3; cafe: boolean }
 export const DEFAULT_PREFS: Prefs = { meals: 3, cafe: false }
 
 // Sights (things to see and do) in a full day. Meals and a coffee stop are added on top of these.
-export const PACE_COUNT: Record<Pace, number> = { relaxed: 2, standard: 3, packed: 5 }
+export const PACE_COUNT: Record<Pace, number> = { relaxed: 2, standard: 3, packed: 6 }
 
 export type MealName = 'Breakfast' | 'Lunch' | 'Dinner'
 export type Quota = { sights: number; meals: number; cafes: number; mealNames?: MealName[] }
