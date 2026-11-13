@@ -106,8 +106,14 @@ function DraftRow({
           {fixed ? (
             <span className="fixed-time" title="A time you've fixed — a booking, a tour, a train">
               <Clock size={12} aria-hidden />
-              <input type="time" value={fixed} aria-label="Booked time" onChange={(e) => onFix(e.target.value)} />
-              <button aria-label="Clear the fixed time" onClick={() => onFix('')}>×</button>
+              <input
+                type="time"
+                value={fixed}
+                aria-label="Booked time"
+                onChange={(e) => onFix(e.target.value)}
+                onKeyDown={(e) => e.key === 'Escape' && (e.currentTarget as HTMLInputElement).blur()}
+              />
+              <button aria-label="Clear the fixed time, back to an estimate" title="Back to an estimated time" onClick={() => onFix('')}>×</button>
             </span>
           ) : (
             time !== undefined && (
