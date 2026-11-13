@@ -443,7 +443,7 @@ export function SuggestSheet({ trip, stop, onClose }: { trip: Trip; stop: Stop; 
               {PACES.map((p) => (
                 <button key={p.id} className={pace === p.id ? 'chip on' : 'chip'} onClick={() => setPace(p.id)}>
                   {p.label}
-                  <small>~{PACE_COUNT[p.id]} sights a day</small>
+                  <small>~{PACE_COUNT[p.id]} sights, {PACE_COUNT[p.id] + prefs.meals + (prefs.cafe ? 1 : 0)} stops a day</small>
                 </button>
               ))}
             </div>

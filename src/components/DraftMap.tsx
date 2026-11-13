@@ -1,6 +1,6 @@
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { attachBaseLayer, getMapLabels } from '../lib/tiles'
 import type { Place } from '../types'
 
@@ -28,6 +28,8 @@ export function DraftMap({
   onAdd: (placeId: string) => void
   onPickDay: (dayId: string) => void
 }) {
+  // "Day" zooms to the day you're on; "Whole trip" pulls back so every day's pins fit.
+  const [fit, setFit] = useState<'day' | 'trip'>('day')
   const el = useRef<HTMLDivElement>(null)
   const map = useRef<L.Map | null>(null)
   const layer = useRef<L.LayerGroup | null>(null)
@@ -48,7 +50,7 @@ export function DraftMap({
     }
   }, [])
 
-  const key = [days.map((d) => `${d.dayId}:${d.places.map((p) => p.id).join('.')}`).join('|'), activeId, spare.map((p) => p.id).join(','), anchor?.id].join('#')
+  const key = [days.map((d) => `${d.dayId}:${d.places.map((p) => p.id).join('.')}`).join('|'), activeId, spare.map((p) => p.id).join(','), anchor?.id, fit].join('#')
   useEffect(() => {
     const g = layer.current
     const m = map.current
@@ -98,12 +100,22 @@ export function DraftMap({
 
     // Fit to the day you're looking at (and what you could add to it), not the whole trip, or a city's worth
     // of places leaves everything in one unreadable clump. The other days stay drawn around it.
+    const everything = [...days.flatMap((d) => d.places), ...spare, ...(anchor ? [anchor] : [])]
     const focus = [...(active?.places ?? []), ...spare, ...(anchor ? [anchor] : [])]
-    const pts = (focus.length > 0 ? focus : days.flatMap((d) => d.places)).map((p) => [p.lat, p.lon] as [number, number])
+    const chosen = fit === 'trip' ? everything : focus.length > 0 ? focus : everything
+    const pts = chosen.map((p) => [p.lat, p.lon] as [number, number])
     m.invalidateSize()
-    if (pts.length > 0) m.fitBounds(L.latLngBounds(pts), { padding: [34, 34], maxZoom: 16 })
+    if (pts.length > 0) m.fitBounds(L.latLngBounds(pts), { padding: [34, 34], maxZoom: fit === 'trip' ? 15 : 16 })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [key])
 
-  return <div ref={el} className="draft-map" role="region" aria-label="Map of the drafted days" />
+  return (
+    <div className="draft-map-wrap">
+      <div ref={el} className="draft-map" role="region" aria-label="Map of the drafted days" />
+      <div className="fit-pick" role="group" aria-label="What the map shows">
+        <button className={fit === 'day' ? 'on' : ''} aria-pressed={fit === 'day'} onClick={() => setFit('day')}>This day</button>
+        <button className={fit === 'trip' ? 'on' : ''} aria-pressed={fit === 'trip'} onClick={() => setFit('trip')}>Whole trip</button>
+      </div>
+    </div>
+  )
 }

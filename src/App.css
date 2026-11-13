@@ -1100,3 +1100,9 @@ button.danger-solid:hover:not(:disabled) { background: color-mix(in srgb, var(--
 .draft-days .meal-gaps .soft-btn { min-height: 34px; padding: 0 14px; font-size: 0.8rem; margin-top: 6px; }
 .near-lead { flex-basis: 100%; font-size: 0.74rem; margin-bottom: -1px; }
 .near-chip small { font-weight: 400; }
+
+/* Switch the map between the day you're on and the whole trip */
+.draft-map-wrap { position: relative; }
+.fit-pick { position: absolute; right: 10px; top: 10px; z-index: 500; display: flex; gap: 2px; padding: 2px; border-radius: 11px; background: var(--card); box-shadow: 0 2px 6px rgba(31, 28, 25, 0.25); }
+.fit-pick button { min-height: 26px; padding: 0 9px; border-radius: 9px; border: 0; background: transparent; color: var(--muted); font-size: 0.74rem; font-weight: 600; cursor: pointer; }
+.fit-pick button.on { background: var(--accent); color: var(--accent-text); }
