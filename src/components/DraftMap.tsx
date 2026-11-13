@@ -96,9 +96,12 @@ export function DraftMap({
         .on('click', () => cb.current.onAdd(p.id))
     }
 
-    const pts = [...days.flatMap((d) => d.places), ...spare, ...(anchor ? [anchor] : [])].map((p) => [p.lat, p.lon] as [number, number])
+    // Fit to the day you're looking at (and what you could add to it), not the whole trip, or a city's worth
+    // of places leaves everything in one unreadable clump. The other days stay drawn around it.
+    const focus = [...(active?.places ?? []), ...spare, ...(anchor ? [anchor] : [])]
+    const pts = (focus.length > 0 ? focus : days.flatMap((d) => d.places)).map((p) => [p.lat, p.lon] as [number, number])
     m.invalidateSize()
-    if (pts.length > 0) m.fitBounds(L.latLngBounds(pts), { padding: [30, 30], maxZoom: 15 })
+    if (pts.length > 0) m.fitBounds(L.latLngBounds(pts), { padding: [34, 34], maxZoom: 16 })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [key])
 
