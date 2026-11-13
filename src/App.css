@@ -901,7 +901,7 @@ i.spent.over { background: #c2582f; }
 .tcard-body .open-btn { margin-top: 10px; min-height: 40px; font-size: 0.9rem; }
 
 /* The whole trip card opens the trip; the ⋯ menu sits above it */
-.tcard { cursor: pointer; transition: transform 0.15s, box-shadow 0.15s; }
+.tcard { position: relative; cursor: pointer; transition: box-shadow 0.15s; }
 .tcard:hover { box-shadow: 0 2px 4px rgba(31, 28, 25, 0.06), 0 16px 36px -16px rgba(31, 28, 25, 0.3); }
 .tcard-link { position: absolute; inset: 0; z-index: 1; border-radius: 28px; }
 .tcard-link:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
