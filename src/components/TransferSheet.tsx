@@ -6,8 +6,7 @@ import { addTransfer, deleteTransfer, updateTransfer } from '../lib/store'
 import { TRANSFER_KINDS, type Transfer, type TransferKind, type Trip } from '../types'
 import { deleteWithUndo } from '../lib/toast'
 import { AmountInput } from './AmountInput'
-import { PlaceLink, mapQueryFor, placeFor } from './PlaceLink'
-import type { Located } from '../lib/findplace'
+import { PlaceLink, placeFor, type Guess } from './PlaceLink'
 import { FormError } from './FormError'
 import { entryCurrency, toTripAmount, tripCurrency } from '../lib/convert'
 import { shortDate, fromISO, toISO } from '../lib/days'
@@ -50,8 +49,8 @@ export function TransferSheet({
   const [to, setTo] = useState(transfer?.to ?? (between.length > 1 ? between[between.length - 1].name : ''))
   const [fromPlaceId, setFromPlaceId] = useState(transfer?.fromPlaceId)
   const [toPlaceId, setToPlaceId] = useState(transfer?.toPlaceId)
-  const [fromGuess, setFromGuess] = useState<Located | null>(null)
-  const [toGuess, setToGuess] = useState<Located | null>(null)
+  const [fromGuess, setFromGuess] = useState<Guess | null>(null)
+  const [toGuess, setToGuess] = useState<Guess | null>(null)
   const [when, setWhen] = useState(transfer?.date ?? date)
   const [depart, setDepart] = useState(transfer?.departTime ?? '')
   const [arrive, setArrive] = useState(transfer?.arriveTime ?? '')
@@ -141,8 +140,8 @@ export function TransferSheet({
       from: from.trim(),
       to: to.trim(),
       // What the app found on the map for From and To is linked now, unless you chose something else.
-      fromPlaceId: from.trim() ? (fromPlaceId ?? (fromGuess ? placeFor(trip.id, fromGuess, mapQueryFor(from, kind)) : undefined)) : undefined,
-      toPlaceId: to.trim() ? (toPlaceId ?? (toGuess ? placeFor(trip.id, toGuess, mapQueryFor(to, kind)) : undefined)) : undefined,
+      fromPlaceId: from.trim() ? (fromPlaceId ?? (fromGuess ? placeFor(trip.id, fromGuess, fromGuess.label) : undefined)) : undefined,
+      toPlaceId: to.trim() ? (toPlaceId ?? (toGuess ? placeFor(trip.id, toGuess, toGuess.label) : undefined)) : undefined,
       departTime: depart || undefined,
       arriveTime: arrive || undefined,
       arriveDate: endDate > when ? endDate : undefined,

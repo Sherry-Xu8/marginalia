@@ -1020,3 +1020,6 @@ button.danger-solid:hover:not(:disabled) { background: color-mix(in srgb, var(--
 .link-panel { display: flex; flex-direction: column; gap: 6px; }
 .link-panel .soft-btn { justify-content: flex-start; text-align: left; margin-top: 0; min-height: 40px; }
 .link-panel p { margin: 0; }
+.link-panel .search-row { display: flex; gap: 8px; }
+.link-panel .search-row input { flex: 1; min-width: 0; }
+.link-panel .search-row button { flex: none; margin: 0; }

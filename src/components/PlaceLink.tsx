@@ -1,46 +1,55 @@
-import { MapPin } from 'lucide-react'
+import { MapPin, Search } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { distanceKm } from '../lib/geo'
 import { findLocation, type Located } from '../lib/findplace'
 import { addCustomPlace, getState, useAppData } from '../lib/store'
 import type { TransferKind } from '../types'
 import { tagOf } from './FilterChips'
+import { PinPicker } from './PinPicker'
 
-// What to look for on the map: "Heathrow (LHR), London" on a flight is "Heathrow Airport", "Busan" on a train is
-// "Busan station"; anything that already says what it is is searched as typed.
-export function mapQueryFor(text: string, kind: TransferKind): string {
+// A spot found on the map for a journey's From or To, with the name it will be saved under.
+export type Guess = Located & { label: string }
+
+// The searches to try, in order, for what you typed. What you typed always comes first, except that a flight's
+// "Heathrow (LHR), London" is searched as "Heathrow Airport" and a train's "Ipoh" as "Ipoh station" (a town's name
+// alone finds the town). For buses and ferries the stop could be anywhere (a mall, a pier), so "… bus terminal" is
+// only a last try.
+export function searchesFor(text: string, kind: TransferKind): string[] {
   const t = text.trim()
-  if (t.length < 3) return ''
+  if (t.length < 3) return []
+  const out: string[] = []
   if (kind === 'flight') {
     const named = t.match(/^(.+?)\s*\(([A-Z]{3})\)/)
-    if (named) return /airport/i.test(named[1]) ? named[1] : `${named[1]} Airport`
-    if (/^[A-Z]{3}$/.test(t)) return `${t} airport`
+    if (named) out.push(/airport/i.test(named[1]) ? named[1] : `${named[1]} Airport`)
+    else if (/^[A-Z]{3}$/.test(t)) out.push(`${t} airport`)
   }
-  if (kind === 'train' && !/station|sentral|central|terminal|stesen|stazione|bahnhof|gare|역|駅|站/i.test(t)) return `${t} station`
-  if (kind === 'bus' && !/station|terminal|stop|bus|역|站/i.test(t)) return `${t} bus terminal`
-  if (kind === 'ferry' && !/terminal|pier|port|jetty|ferry|harbour|harbor/i.test(t)) return `${t} ferry terminal`
-  return t
+  if (kind === 'train' && !/station|sentral|central|terminal|stesen|stazione|bahnhof|gare|역|駅|站/i.test(t)) out.push(`${t} station`)
+  out.push(t)
+  if (kind === 'bus' && !/station|terminal|stop|bus|역|站/i.test(t)) out.push(`${t} bus terminal`)
+  if (kind === 'ferry' && !/terminal|pier|port|jetty|ferry|harbour|harbor/i.test(t)) out.push(`${t} ferry terminal`)
+  return [...new Set(out)]
 }
 
-// A name for a spot found on the map. The map's own name is used unless it's too vague ("Airport"), in which case
-// what you searched for is ("Shenzhen Bao'an Airport").
-export function nameFor(found: Located, query: string): string {
-  const name = found.name.toLowerCase()
-  const first = query.toLowerCase().split(/[^a-z0-9']+/).find((w) => w.length >= 3)
-  const kindWord = query.match(/\b(airport|station|terminal)$/i)?.[1].toLowerCase() // added by mapQueryFor
-  return query && ((first && !name.includes(first)) || (kindWord && !name.includes(kindWord))) ? query : found.name
+// The name to save a found spot under: the map's own name when it matches what you typed; otherwise what you typed
+// (a flight uses "Heathrow Airport" rather than "Heathrow (LHR), London"). A town found for a train becomes "… station".
+function labelFor(found: Located, typed: string, via: string, kind: TransferKind): string {
+  const name = found.name
+  const words = typed.toLowerCase().split(/[^\p{L}\p{N}']+/u).filter((w) => w.length >= 3)
+  if (words.some((w) => name.toLowerCase().includes(w))) {
+    return kind === 'train' && / station$/.test(via) && !/station|sentral|central|terminal/i.test(name) ? `${name} station` : name
+  }
+  return kind === 'flight' && via !== typed.trim() ? via : typed.trim() || name
 }
 
-// The saved place for a spot found on the map: one already there (same name, close by), or a new one.
-export function placeFor(tripId: string, found: Located, query = ''): string {
-  const name = nameFor(found, query)
-  const near = getState().places.find((p) => p.tripId === tripId && p.name === name && distanceKm(p, found) < 0.5)
-  return near?.id ?? addCustomPlace({ tripId, name, lat: found.lat, lon: found.lon, tag: 'Transport' })
+// The saved place for a spot: one already there (same name, close by), or a new one.
+export function placeFor(tripId: string, spot: { lat: number; lon: number }, name: string): string {
+  const near = getState().places.find((p) => p.tripId === tripId && p.name === name && distanceKm(p, spot) < 0.5)
+  return near?.id ?? addCustomPlace({ tripId, name, lat: spot.lat, lon: spot.lon, tag: 'Transport' })
 }
 
-// Under a journey's "From" or "To". The app looks what you've typed up on the map by itself ("Heathrow (LHR)" →
-// Heathrow Airport) and links it when you save, so the day can show how you get there and the planner can allow
-// for it. If it found the wrong spot, "Not right?" lets you pick a saved place or search again.
+// Under a journey's "From" or "To". The app looks up what you've typed on the map by itself and links it when you
+// save, so the day can show how you get there and the planner can allow for it. If it found the wrong spot (or
+// nothing), you can search for it yourself, pick a saved place, or drop a pin on the map.
 export function PlaceLink({
   label,
   tripId,
@@ -56,19 +65,22 @@ export function PlaceLink({
   kind: TransferKind
   text: string
   placeId?: string
-  guess: Located | null // what the automatic search found (linked when you save)
-  onGuess: (found: Located | null) => void
+  guess: Guess | null // what the automatic search found (linked when you save)
+  onGuess: (found: Guess | null) => void
   onLink: (placeId: string | undefined, name?: string) => void
 }) {
   const { places } = useAppData()
   const mine = places.filter((p) => p.tripId === tripId)
   const linked = mine.find((p) => p.id === placeId)
   const [open, setOpen] = useState(false)
+  const [q, setQ] = useState('')
   const [results, setResults] = useState<Located[] | null>(null)
   const [busy, setBusy] = useState(false)
   const [message, setMessage] = useState('')
   const [looking, setLooking] = useState(false)
-  const query = mapQueryFor(text, kind)
+  const [pinning, setPinning] = useState(false)
+  const tries = searchesFor(text, kind)
+  const key = tries.join('|')
   // Trains, buses and ferries are looked for near your trip's places first (there are many "Central Stations").
   const near =
     kind === 'flight' || mine.length === 0
@@ -77,18 +89,24 @@ export function PlaceLink({
 
   // Look it up a moment after you stop typing (or as soon as a flight lookup fills it in).
   useEffect(() => {
-    if (placeId || !query) {
+    if (placeId || tries.length === 0) {
       onGuess(null)
       return
     }
     let live = true
     setLooking(true)
     const timer = setTimeout(async () => {
-      let found = await findLocation(query, near)
-      if (live && found?.length === 0 && query !== text.trim()) found = await findLocation(text.trim(), near) // try it exactly as typed
-      if (!live) return
+      for (const via of tries) {
+        const found = await findLocation(via, near)
+        if (!live) return
+        if (found && found.length > 0) {
+          setLooking(false)
+          onGuess({ ...found[0], label: labelFor(found[0], text, via, kind) })
+          return
+        }
+      }
       setLooking(false)
-      onGuess(found?.[0] ?? null)
+      onGuess(null)
     }, 900)
     return () => {
       live = false
@@ -96,13 +114,20 @@ export function PlaceLink({
       setLooking(false)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [query, placeId])
+  }, [key, placeId])
+
+  function openPanel() {
+    setQ(text.trim())
+    setResults(null)
+    setMessage('')
+    setOpen(true)
+  }
 
   if (linked && !open) {
     return (
       <p className="muted link-row">
         <MapPin size={14} aria-hidden /> {label} is on the map: <strong>{linked.name}</strong>{' '}
-        <button className="link-btn" onClick={() => onLink(undefined)}>Unlink</button>
+        <button className="link-btn" onClick={() => onLink(undefined)}>Change</button>
       </p>
     )
   }
@@ -111,63 +136,88 @@ export function PlaceLink({
       const area = guess.address.split(',').slice(1, 3).join(',').trim()
       return (
         <p className="muted link-row">
-          <MapPin size={14} aria-hidden /> {label}: <strong>{nameFor(guess, query)}</strong>
+          <MapPin size={14} aria-hidden /> {label}: <strong>{guess.label}</strong>
           {area && <small> · {area}</small>}{' '}
-          <button className="link-btn" onClick={() => setOpen(true)}>Not right?</button>
+          <button className="link-btn" onClick={openPanel}>Not right?</button>
         </p>
       )
     }
     if (looking) return <p className="muted link-row"><MapPin size={14} aria-hidden /> Finding “{text.trim()}” on the map…</p>
     if (!text.trim()) return null
     return (
-      <button className="link-btn link-row" onClick={() => setOpen(true)}>
-        <MapPin size={14} aria-hidden /> Couldn’t find “{text.trim()}” on the map. Choose it
+      <button className="link-btn link-row" onClick={openPanel}>
+        <MapPin size={14} aria-hidden /> Couldn’t find “{text.trim()}” on the map. Find it
       </button>
     )
   }
 
-  const words = text.toLowerCase().split(/[^a-z0-9]+/).filter((w) => w.length > 2)
-  const own = mine
-    .filter((p) => {
-      const tag = tagOf(p)
-      const name = p.name.toLowerCase()
-      return (tag === 'Transport' || tag === 'Accommodation') && words.some((w) => name.includes(w))
-    })
-    .sort((a, b) => Number(words.some((w) => b.name.toLowerCase().includes(w))) - Number(words.some((w) => a.name.toLowerCase().includes(w))))
-    .slice(0, 6)
+  const words = q.toLowerCase().split(/[^\p{L}\p{N}]+/u).filter((w) => w.length > 2)
+  const own = mine.filter((p) => words.some((w) => p.name.toLowerCase().includes(w)) || (tagOf(p) === 'Transport' && words.length === 0)).slice(0, 5)
 
   async function search() {
-    if (!text.trim()) return setMessage('Type where it leaves from or arrives at first, for example “Changi Airport”.')
+    if (!q.trim()) return setMessage('Type a name, an address, or paste a Google Maps link.')
     setBusy(true)
     setMessage('')
-    const found = await findLocation(query || text.trim(), near)
+    const found = await findLocation(q.trim(), near)
     setBusy(false)
     setResults(found ?? [])
     if (!found) setMessage('The search service couldn’t be reached. Check your connection and try again.')
-    else if (found.length === 0) setMessage('Nothing found. Try a simpler name, like “Changi Airport” or “KL Sentral”.')
+    else if (found.length === 0) setMessage('Nothing found. Try fewer words (just “Prangin Mall”), add the city, or drop a pin on the map.')
   }
 
   function pick(id: string, name: string) {
     onLink(id, name)
     setOpen(false)
     setResults(null)
+    setPinning(false)
+  }
+
+  if (pinning) {
+    return (
+      <div className="card link-panel">
+        <strong>Tap the map where “{text.trim() || label.toLowerCase()}” is</strong>
+        <PinPicker
+          center={guess ?? near ?? mine[0]}
+          onCancel={() => setPinning(false)}
+          onPick={(lat, lon) => pick(placeFor(tripId, { lat, lon }, text.trim() || `${label} point`), text.trim())}
+        />
+      </div>
+    )
   }
 
   return (
     <div className="card link-panel">
-      <strong>Link “{text.trim() || label.toLowerCase()}” to a place</strong>
-      {own.length > 0 && <p className="muted">From your saved places:</p>}
+      <strong>Find “{text.trim() || label.toLowerCase()}” on the map</strong>
+      <div className="search-row">
+        <input
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
+          onKeyDown={(e) => e.key === 'Enter' && void search()}
+          placeholder="A name, an address or a Google Maps link"
+          aria-label={`Search for the ${label.toLowerCase()} place`}
+          autoFocus
+        />
+        <button className="primary" disabled={busy} onClick={() => void search()}>
+          <Search size={16} /> {busy ? 'Searching…' : 'Search'}
+        </button>
+      </div>
+      {message && <p className="muted" role="status">{message}</p>}
+      {results?.map((r, i) => {
+        const name = labelFor(r, q, q, kind)
+        return (
+          <button key={i} className="soft-btn wide" onClick={() => pick(placeFor(tripId, r, name), name)}>
+            {r.name} <small className="muted">· {r.address.split(',').slice(1, 3).join(',').trim()}</small>
+          </button>
+        )
+      })}
+      {own.length > 0 && <p className="muted">Or one of your saved places:</p>}
       {own.map((p) => (
         <button key={p.id} className="soft-btn wide" onClick={() => pick(p.id, p.name)}>{p.name}</button>
       ))}
-      <button className="soft-btn wide" disabled={busy} onClick={() => void search()}>{busy ? 'Searching…' : `Search the map for “${query || text.trim() || '…'}”`}</button>
-      {message && <p className="muted" role="status">{message}</p>}
-      {results?.map((r, i) => (
-        <button key={i} className="soft-btn wide" onClick={() => pick(placeFor(tripId, r, query), nameFor(r, query))}>
-          {nameFor(r, query)} <small className="muted">· {r.address.split(',').slice(1, 3).join(',').trim()}</small>
-        </button>
-      ))}
-      <button className="link-btn" onClick={() => setOpen(false)}>Cancel</button>
+      <div className="row buttons">
+        <button className="link-btn" onClick={() => setPinning(true)}>Drop a pin on the map instead</button>
+        <button className="link-btn" onClick={() => setOpen(false)}>Cancel</button>
+      </div>
     </div>
   )
 }
