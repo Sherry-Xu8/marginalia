@@ -78,9 +78,16 @@ export function freeWindow(transfers: Transfer[], date: string, side?: 'arriving
   }
   if (DAY_END - cursor > best.end - best.start) best = { start: cursor, end: DAY_END }
   if (busy.length === 0) best = { start: DAY_START, end: DAY_END }
-  // On the day you move between two places, the new place gets the time after you arrive, the old one the time before you leave.
-  else if (side === 'arriving') best = { start: Math.min(DAY_END, Math.max(DAY_START, ...busy.map((b) => b.to))), end: DAY_END }
-  else if (side === 'departing') best = { start: DAY_START, end: Math.max(DAY_START, Math.min(DAY_END, ...busy.map((b) => b.from))) }
+  // On the day you move between two places, the new place gets the time after you land, the old one the time before you
+  // set off. Only journeys that actually land (or set off) on this date count: an overnight bus that leaves tonight
+  // and lands tomorrow doesn't take today away from the place you're arriving at.
+  else if (side === 'arriving') {
+    const lands = busy.filter((b) => arrivalDate(b.transfer) === date).map((b) => b.to)
+    if (lands.length > 0) best = { start: Math.min(DAY_END, Math.max(DAY_START, ...lands)), end: DAY_END }
+  } else if (side === 'departing') {
+    const leaves = busy.filter((b) => b.transfer.date === date).map((b) => b.from)
+    if (leaves.length > 0) best = { start: DAY_START, end: Math.max(DAY_START, Math.min(DAY_END, ...leaves)) }
+  }
   return { ...best, busy }
 }
 
