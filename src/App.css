@@ -1079,3 +1079,21 @@ button.danger-solid:hover:not(:disabled) { background: color-mix(in srgb, var(--
 .draft-travel { margin: 4px 0 0; font-size: 0.8rem; }
 .draft-travel.warn { color: var(--danger); }
 .unsched-name .why { margin-left: 6px; flex: none; font-size: 0.72rem; }
+
+/* One height for everything on a draft row's second line, and a lighter remove button */
+.draft-row .handle { min-height: 28px; align-self: center; }
+.draft-row > button:last-child { min-height: 30px; min-width: 30px; padding: 0; border-radius: 10px; background: transparent; color: var(--muted); font-size: 0.95rem; align-self: center; }
+.draft-row > button:last-child:hover { background: var(--soft); color: var(--danger); }
+.draft-sub { gap: 6px; }
+.draft-sub .time-btn,
+.draft-sub .fixed-time,
+.draft-sub .meal-select,
+.draft-sub .pin-btn { height: 28px; min-height: 28px; box-sizing: border-box; border-radius: 9px; font-size: 0.76rem; }
+.draft-sub .time-btn { padding: 0 8px; }
+.draft-sub .meal-select { width: 108px; padding: 0 6px; }
+.draft-sub .pin-btn { padding: 0 9px; }
+.fixed-time { padding: 0 1px 0 7px; }
+.fixed-time button { min-height: 26px; min-width: 26px; }
+/* the weather sits beside the day's name, and the meal prompts match the other chips */
+.draft-days .card > .wx { margin-left: 8px; }
+.draft-days .meal-gaps .soft-btn { min-height: 34px; padding: 0 14px; font-size: 0.8rem; margin-top: 6px; }
