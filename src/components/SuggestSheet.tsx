@@ -3,7 +3,7 @@ import { SortableContext, arrayMove, sortableKeyboardCoordinates, useSortable, v
 import { CSS } from '@dnd-kit/utilities'
 import { GripVertical, Pin, Star, TriangleAlert } from 'lucide-react'
 import { checkDay, clockText, improveOrder } from '../lib/daycheck'
-import { DraftMap } from './DraftMap'
+import { DraftMap, dayColour } from './DraftMap'
 import { AddPlaceSheet } from './AddPlaceSheet'
 import { createPortal } from 'react-dom'
 import { replanAll, replanDay, type ReplanCtx } from '../lib/replan'
@@ -338,6 +338,15 @@ export function SuggestSheet({ trip, stop, onClose }: { trip: Trip; stop: Stop; 
     plan?.days.find((d) => d.mode !== 'off' && d.placeIds.length > 0) ??
     plan?.days.find((d) => d.mode !== 'off')
 
+  // Every planned day, in order, for the map and its colour key.
+  const mapDays = (plan?.days ?? [])
+    .filter((d) => d.mode !== 'off')
+    .map((d) => ({
+      dayId: d.dayId,
+      label: shortDate(d.date),
+      places: d.placeIds.map((id) => placeById.get(id)).filter((x): x is Place => !!x),
+    }))
+
   // The places that didn't fit, nearest to what this day already has (or to the hotel on an empty day), closest first.
   function spareFor(d: Suggestion['days'][number], limit: number) {
     if (!plan) return []
@@ -508,6 +517,9 @@ export function SuggestSheet({ trip, stop, onClose }: { trip: Trip; stop: Stop; 
               const better = check ? improveOrder(timing) : null
               return (
                 <div key={d.dayId} className={'card' + (d.dayId === activeDay?.dayId ? ' on-map' : '')} onClick={() => setMapDayId(d.dayId)}>
+                  {mapDays.findIndex((m) => m.dayId === d.dayId) >= 0 && (
+                    <i className="day-dot" style={{ background: dayColour(mapDays.findIndex((m) => m.dayId === d.dayId)) }} aria-hidden />
+                  )}
                   <strong>{shortDate(d.date)}</strong>
                   <span className="muted"> · {MODE_LABEL[d.mode]}</span>
                   {anchor && <p className="muted">Starts and ends at {anchor.name}</p>}
@@ -630,11 +642,26 @@ export function SuggestSheet({ trip, stop, onClose }: { trip: Trip; stop: Stop; 
                   <>
                     <p className="muted draft-side-head"><strong>{shortDate(activeDay.date)}</strong> · tap a <span className="spare-dot">+</span> pin to add it to this day</p>
                     <DraftMap
-                      places={activeDay.placeIds.map((id) => placeById.get(id)).filter((x): x is Place => !!x)}
+                      days={mapDays}
+                      activeId={activeDay.dayId}
                       spare={spareFor(activeDay, 12).map((x) => x.place)}
                       anchor={activeDay.anchorId ? placeById.get(activeDay.anchorId) : undefined}
                       onAdd={(id) => addToPlanDay(activeDay.dayId, id)}
+                      onPickDay={setMapDayId}
                     />
+                    <div className="day-key">
+                      {mapDays.map((d, i) => (
+                        <button
+                          key={d.dayId}
+                          className={'day-key-chip' + (d.dayId === activeDay.dayId ? ' on' : '')}
+                          onClick={() => setMapDayId(d.dayId)}
+                          aria-pressed={d.dayId === activeDay.dayId}
+                        >
+                          <i style={{ background: dayColour(i) }} aria-hidden /> {d.label}
+                          <small className="muted">{d.places.length}</small>
+                        </button>
+                      ))}
+                    </div>
                   </>
                 ) : (
                   <p className="muted">Pick a day to see it on the map.</p>
