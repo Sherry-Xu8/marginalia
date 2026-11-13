@@ -38,13 +38,17 @@ export function arrivalDate(t: Transfer): string {
   return dep !== undefined && arr !== undefined && arr < dep ? dayAfter(t.date) : t.date
 }
 
+// Extra minutes for getting to a journey's departure point (airport, station) and from its arrival point to where you sleep,
+// worked out from the places a journey is linked to (see travelAround).
+export type TravelExtra = Record<string, { before: number; after: number }>
+
 // The stretches of this date taken up by journeys (including time to get to and from them).
-export function busyOn(transfers: Transfer[], date: string): { from: number; to: number; transfer: Transfer }[] {
+export function busyOn(transfers: Transfer[], date: string, extra?: TravelExtra): { from: number; to: number; transfer: Transfer }[] {
   const out: { from: number; to: number; transfer: Transfer }[] = []
   for (const t of transfers) {
     const dep = toMinutes(t.departTime)
     const arr = toMinutes(t.arriveTime)
-    const b = BUFFER[t.kind]
+    const b = { before: BUFFER[t.kind].before + (extra?.[t.id]?.before ?? 0), after: BUFFER[t.kind].after + (extra?.[t.id]?.after ?? 0) }
     const end = arrivalDate(t)
     if (date < t.date || date > end) continue
     if (end === t.date) {
@@ -64,8 +68,8 @@ export function busyOn(transfers: Transfer[], date: string): { from: number; to:
 }
 
 // The part of the day left for plans: the longest stretch between 9:00 and 21:00 that no journey uses.
-export function freeWindow(transfers: Transfer[], date: string, side?: 'arriving' | 'departing'): { start: number; end: number; busy: { from: number; to: number; transfer: Transfer }[] } {
-  const busy = busyOn(transfers, date).sort((a, b) => a.from - b.from)
+export function freeWindow(transfers: Transfer[], date: string, side?: 'arriving' | 'departing', extra?: TravelExtra): { start: number; end: number; busy: { from: number; to: number; transfer: Transfer }[] } {
+  const busy = busyOn(transfers, date, extra).sort((a, b) => a.from - b.from)
   let best = { start: DAY_START, end: DAY_START }
   let cursor = DAY_START
   for (const b of busy) {

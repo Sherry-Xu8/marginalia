@@ -10,12 +10,14 @@ export function DayMap({
   places,
   startStay,
   endStay,
+  gateways = [],
   focusId,
   onFocus,
 }: {
   places: Place[]
   startStay?: Place
   endStay?: Place
+  gateways?: Place[] // airports and stations the day's journeys leave from or arrive at
   focusId?: string
   onFocus?: (id: string) => void
 }) {
@@ -50,12 +52,17 @@ export function DayMap({
     g.clearLayers()
     markers.current.clear()
     const route: Place[] = [startStay, ...places, endStay].filter((p): p is Place => !!p)
-    const pts = route.map((p) => [p.lat, p.lon] as [number, number])
-    if (pts.length > 1) L.polyline(pts, { color: '#4a7461', weight: 3, opacity: 0.6, dashArray: '6 8' }).addTo(g)
+    const pts = [...route, ...gateways].map((p) => [p.lat, p.lon] as [number, number])
+    const line = route.map((p) => [p.lat, p.lon] as [number, number])
+    if (line.length > 1) L.polyline(line, { color: '#4a7461', weight: 3, opacity: 0.6, dashArray: '6 8' }).addTo(g)
 
     const stays = [...new Map([startStay, endStay].filter((p): p is Place => !!p).map((p) => [p.id, p])).values()]
     for (const p of stays) {
       const icon = L.divIcon({ className: 'num-pin stay-pin', html: '<span>H</span>', iconSize: [30, 30], iconAnchor: [15, 15] })
+      L.marker([p.lat, p.lon], { icon, title: p.name }).addTo(g)
+    }
+    for (const p of gateways) {
+      const icon = L.divIcon({ className: 'num-pin stay-pin', html: '<span>✈</span>', iconSize: [30, 30], iconAnchor: [15, 15] })
       L.marker([p.lat, p.lon], { icon, title: p.name }).addTo(g)
     }
     places.forEach((p, i) => {
@@ -71,7 +78,7 @@ export function DayMap({
     })
     m.invalidateSize()
     if (pts.length > 0) m.fitBounds(L.latLngBounds(pts), { padding: [40, 40], maxZoom: 15 })
-  }, [places, startStay, endStay])
+  }, [places, startStay, endStay, gateways.map((p) => p.id).join(',')])
 
   // Zoom to the place you picked.
   useEffect(() => {

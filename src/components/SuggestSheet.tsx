@@ -9,6 +9,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { shortDate } from '../lib/days'
 import { stayForStop } from '../lib/stays'
 import { DAY_START, clock, describeTransfer, freeWindow } from '../lib/journeys'
+import { travelAround } from '../lib/travelAround'
 import { hoursOn } from '../lib/hours'
 import { fromISO } from '../lib/days'
 import {
@@ -132,11 +133,12 @@ export function SuggestSheet({ trip, stop, onClose }: { trip: Trip; stop: Stop; 
   const dayFor = (date: string) => tripDays.find((d) => d.date === date)
   const tripTransfers = useMemo(() => transfers.filter((t) => t.tripId === trip.id), [transfers, trip.id])
   // A day with a journey on it: how much of it is left for plans, and what that journey is.
+  const extraTravel = useMemo(() => travelAround(trip, tripTransfers, places), [trip, tripTransfers, places]) // getting to and from linked airports and stations
   const si = trip.stops.findIndex((s) => s.id === stop.id)
   const windowOf = (date: string) => {
     const side =
       date === stop.arrival && trip.stops[si - 1]?.departure === date ? ('arriving' as const) : date === stop.departure && trip.stops[si + 1]?.arrival === date ? ('departing' as const) : undefined
-    const w = freeWindow(tripTransfers, date, side)
+    const w = freeWindow(tripTransfers, date, side, extraTravel)
     return w.busy.length > 0 ? w : undefined
   }
   const [modes, setModes] = useState<Record<string, DayMode>>(() =>

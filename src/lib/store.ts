@@ -264,6 +264,7 @@ export function removePlaces(ids: string[]) {
       days: s.days.map((d) => (d.items.some((i) => gone.has(i.placeId)) ? { ...d, items: d.items.filter((i) => !gone.has(i.placeId)) } : d)),
       trips: s.trips.map((t) => ((t.stays ?? []).some((st) => gone.has(st.placeId)) ? { ...t, stays: (t.stays ?? []).filter((st) => !gone.has(st.placeId)) } : t)),
       expenses: s.expenses.map((e) => (e.placeId && gone.has(e.placeId) ? { ...e, placeId: undefined } : e)),
+      transfers: s.transfers.map((t) => ((t.fromPlaceId && gone.has(t.fromPlaceId)) || (t.toPlaceId && gone.has(t.toPlaceId)) ? { ...t, fromPlaceId: t.fromPlaceId && gone.has(t.fromPlaceId) ? undefined : t.fromPlaceId, toPlaceId: t.toPlaceId && gone.has(t.toPlaceId) ? undefined : t.toPlaceId } : t)),
     }),
   )
 }

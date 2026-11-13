@@ -279,6 +279,8 @@ function cleanTransfer(v: unknown): Transfer | null {
     cost: num(o.cost) ?? undefined,
     paid: paidOf(o.paid),
     unpaid: o.unpaid === true ? true : undefined,
+    fromPlaceId: str(o.fromPlaceId, 100) ?? undefined,
+    toPlaceId: str(o.toPlaceId, 100) ?? undefined,
   }
 }
 

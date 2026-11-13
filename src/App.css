@@ -1014,3 +1014,9 @@ button.danger-solid:hover:not(:disabled) { background: color-mix(in srgb, var(--
 .replan-btn { margin-top: 8px; width: 100%; min-height: 40px; }
 .replan-card { display: flex; flex-direction: column; gap: 6px; }
 .replan-card p { margin: 0; }
+
+/* Linking a journey to a place on the map */
+.link-row { display: inline-flex; align-items: center; gap: 6px; margin: 2px 0; font-size: 0.85rem; }
+.link-panel { display: flex; flex-direction: column; gap: 6px; }
+.link-panel .soft-btn { justify-content: flex-start; text-align: left; margin-top: 0; min-height: 40px; }
+.link-panel p { margin: 0; }

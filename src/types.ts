@@ -23,6 +23,8 @@ export type Transfer = {
   title: string // e.g. "KE 123" or "KTX to Busan"
   from: string
   to: string
+  fromPlaceId?: string // the place on the map it leaves from (an airport, a station…), if linked
+  toPlaceId?: string // the place on the map it arrives at, if linked
   departTime?: string
   arriveTime?: string
   arriveDate?: string // yyyy-mm-dd, when it lands, if that is not the day you set off

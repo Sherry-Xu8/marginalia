@@ -29,6 +29,7 @@ import { fromISO, shortDate, stopLabel, stopsOn, toISO } from '../lib/days'
 import { distanceKm } from '../lib/geo'
 import { hoursOn, hoursWarning } from '../lib/hours'
 import { arrivalDate, freeWindow, journeyPositions } from '../lib/journeys'
+import { travelAround } from '../lib/travelAround'
 import { dayStays } from '../lib/stays'
 import { fmtMoney, fmtPaid } from '../lib/money'
 import { addToDay, clearDay, moveDayItem, moveItemToDay, removeDayItem, setLegMode, sortDayByTime, updateDayItem, useAppData } from '../lib/store'
@@ -111,8 +112,8 @@ function LegRow({ day, from, to }: { day: Day; from: Place; to: Place }) {
 }
 
 // The day's travel time: each journey counted by its own mode.
-function DayTravel({ day, points }: { day: Day; points: Place[] }) {
-  const legs = points.slice(1).map((p, i) => ({ from: points[i], to: p, mode: legModeOf(day, points[i], p) }))
+function DayTravel({ day, segments }: { day: Day; segments: Place[][] }) {
+  const legs = segments.flatMap((points) => points.slice(1).map((p, i) => ({ from: points[i], to: p, mode: legModeOf(day, points[i], p) })))
   const key = legs.map((l) => `${l.from.id}>${l.to.id}:${l.mode}`).join(',')
   const [total, setTotal] = useState<{ key: string; sum: number; approx: boolean } | null>(null)
   useEffect(() => {
@@ -215,7 +216,7 @@ function DayIdeas({ trip, day, route }: { trip: Trip; day: Day; route: Place[] }
 // When you've asked for meals each day and this day has fewer, offers the nearest restaurants not planned yet.
 function DayMeals({ trip, day, route, transfers }: { trip: Trip; day: Day; route: Place[]; transfers: Transfer[] }) {
   const { places, groups, days } = useAppData()
-  const w = freeWindow(transfers, day.date)
+  const w = freeWindow(transfers, day.date, undefined, travelAround(trip, transfers, places))
   const len = w.busy.length > 0 ? w.end - w.start : 720
   const wanted = Math.min(loadPrefs().meals, len >= 480 ? 3 : len >= 150 ? 1 : 0)
   const byId = new Map(places.map((p) => [p.id, p]))
@@ -591,12 +592,87 @@ export function DaysTab({ initialDate }: { initialDate?: string }) {
   const planned =
     day.items.reduce((s, i) => s + (i.cost ?? 0), 0) + dayTransfers.reduce((s, t) => s + (t.cost ?? 0), 0)
   const timed = day.items.filter((i) => i.time).length
-  const route = [startStay, ...dayPlaces, endStay].filter((p): p is Place => !!p)
-  const weatherPoint =
-    route[0] ?? places.find((p) => p.tripId === trip.id && p.groupId && groups.some((g) => g.id === p.groupId && g.stopId === arriving?.id))
   const jpos = journeyPositions(day.items, dayTransfers, day.date)
   const journeysAt = (i: number) => dayTransfers.filter((t) => jpos.get(t.id) === i)
-  const journeyCard = (t: Transfer) => <TransferCard key={t.id} t={t} day={day.date} currency={tripCurrency(trip)} onEdit={() => setTransferSheet({ transfer: t })} />
+  const placeAt = (i: number) => placeById.get(day.items[i]?.placeId ?? '')
+  // The airport or station a journey leaves from today, and the one it arrives at today (when you've linked them).
+  const depOf = (t: Transfer) => (t.date === day.date && t.fromPlaceId ? placeById.get(t.fromPlaceId) : undefined)
+  const arrOf = (t: Transfer) => (arrivalDate(t) === day.date && t.toPlaceId ? placeById.get(t.toPlaceId) : undefined)
+  // What the place at position i travels on to: the airport or station if a linked journey leaves next, nothing if you
+  // arrive somewhere new, otherwise the next place (or back to where you're staying after the last one).
+  const nextAfter = (i: number): Place | undefined => {
+    const js = journeysAt(i + 1)
+    const dep = js.map(depOf).find(Boolean)
+    if (dep) return dep
+    if (js.some((t) => arrOf(t))) return undefined
+    return placeAt(i + 1) ?? (i === day.items.length - 1 ? endStay : undefined)
+  }
+  // A day that begins with a linked arrival (you land, go to the hotel, then out): the arrival comes first.
+  const arrivalFirst = journeysAt(0).some((t) => arrOf(t))
+  const startTarget = (() => {
+    const js = journeysAt(0)
+    const dep = js.map(depOf).find(Boolean)
+    if (dep) return dep
+    return dayPlaces[0]
+  })()
+  // The day as stretches of travel: where you slept, the places, the airport or station you leave from (or arrive at, which
+  // starts a new stretch), and where you sleep. Used for the day's travel total.
+  const segments: Place[][] = []
+  const everywhere: Place[] = []
+  const gateways: Place[] = []
+  {
+    let seg: Place[] = startStay && !arrivalFirst ? [startStay] : []
+    if (startStay && !arrivalFirst) everywhere.push(startStay)
+    const close = () => {
+      if (seg.length > 1) segments.push(seg)
+      seg = []
+    }
+    for (let i = 0; i <= day.items.length; i++) {
+      for (const t of journeysAt(i)) {
+        const dp = depOf(t)
+        const ap = arrOf(t)
+        if (dp) {
+          seg.push(dp)
+          everywhere.push(dp)
+          gateways.push(dp)
+          close()
+        }
+        if (ap) {
+          close()
+          seg = [ap]
+          everywhere.push(ap)
+          gateways.push(ap)
+        }
+      }
+      if (i === 0 && arrivalFirst && startStay) {
+        seg.push(startStay)
+        everywhere.push(startStay)
+      }
+      const p = placeAt(i)
+      if (p) {
+        seg.push(p)
+        everywhere.push(p)
+      }
+    }
+    if (endStay) {
+      seg.push(endStay)
+      everywhere.push(endStay)
+    }
+    close()
+  }
+  const route = [...new Map(everywhere.map((p) => [p.id, p])).values()]
+  const weatherPoint =
+    route[0] ?? places.find((p) => p.tripId === trip.id && p.groupId && groups.some((g) => g.id === p.groupId && g.stopId === arriving?.id))
+  const journeyCard = (t: Transfer, at: number) => {
+    const a = arrOf(t)
+    const after = a ? (at === 0 && arrivalFirst ? (startStay ?? placeAt(0)) : (placeAt(at) ?? (at >= day.items.length ? endStay : undefined))) : undefined
+    return (
+      <Fragment key={t.id}>
+        <TransferCard t={t} day={day.date} currency={tripCurrency(trip)} onEdit={() => setTransferSheet({ transfer: t })} />
+        {a && after && <LegRow day={day} from={a} to={after} />}
+      </Fragment>
+    )
+  }
   const sheetItem = openItem ? day.items.find((i) => i.id === openItem) : undefined
 
   function onDragEnd(e: DragEndEvent) {
@@ -636,7 +712,7 @@ export function DaysTab({ initialDate }: { initialDate?: string }) {
 
       <div className="day-grid">
         <aside className="day-side">
-          <DayMap places={dayPlaces} startStay={startStay} endStay={endStay} focusId={focusId} onFocus={setFocusId} />
+          <DayMap places={dayPlaces} startStay={startStay} endStay={endStay} gateways={gateways} focusId={focusId} onFocus={setFocusId} />
         </aside>
         <div>
           <div className="row between day-actions">
@@ -651,17 +727,18 @@ export function DaysTab({ initialDate }: { initialDate?: string }) {
             )}
           </div>
 
-          {startStay && <StayCard label="Start from" place={startStay} onClick={() => setFocusId(startStay.id)} />}
+          {arrivalFirst && journeysAt(0).map((t) => journeyCard(t, 0))}
+          {startStay && <StayCard label={arrivalFirst ? 'Check in at' : 'Start from'} place={startStay} onClick={() => setFocusId(startStay.id)} />}
           {!stays.end && arriving && arriving.departure > day.date && (
             <button className="wide subtle" onClick={() => setStayFor({ checkIn: day.date, checkOut: arriving.departure })}>
               <BedDouble size={16} /> Add where you’re staying in {arriving.name}
             </button>
           )}
-          {startStay && dayPlaces[0] && <LegRow day={day} from={startStay} to={dayPlaces[0]} />}
+          {startStay && startTarget && <LegRow day={day} from={startStay} to={startTarget} />}
 
           {day.items.length === 0 ? (
             <>
-            {dayTransfers.map(journeyCard)}
+            {dayTransfers.filter((t) => !(arrivalFirst && journeysAt(0).includes(t))).map((t) => journeyCard(t, 0))}
             <div className="empty">
               <span className="empty-icon"><CalendarCheck size={30} /></span>
               <h3 className="display">A day with room in it.</h3>
@@ -674,14 +751,14 @@ export function DaysTab({ initialDate }: { initialDate?: string }) {
                 <SortableContext items={day.items.map((i) => i.id)} strategy={verticalListSortingStrategy}>
                   {day.items.map((item, i) => (
                     <Fragment key={item.id}>
-                    {journeysAt(i).map(journeyCard)}
+                    {(i > 0 || !arrivalFirst) && journeysAt(i).map((t) => journeyCard(t, i))}
                     <ItemRow
                       index={i}
                       day={day}
                       allDays={tripDays}
                       item={item}
                       place={placeById.get(item.placeId)}
-                      next={placeById.get(day.items[i + 1]?.placeId ?? '') ?? (i === day.items.length - 1 ? endStay : undefined)}
+                      next={nextAfter(i)}
                       trip={trip}
                       currency={tripCurrency(trip)}
                       focused={item.placeId === focusId}
@@ -695,11 +772,11 @@ export function DaysTab({ initialDate }: { initialDate?: string }) {
                     />
                     </Fragment>
                   ))}
-                  {journeysAt(day.items.length).map(journeyCard)}
+                  {journeysAt(day.items.length).map((t) => journeyCard(t, day.items.length))}
                 </SortableContext>
               </DndContext>
               {endStay && <StayCard label="Back to" place={endStay} onClick={() => setFocusId(endStay.id)} />}
-              <DayTravel day={day} points={route} />
+              <DayTravel day={day} segments={segments} />
               {timed > 1 && <button className="wide" onClick={() => sortDayByTime(day.id)}>Sort by time</button>}
               {done < day.items.length && (
                 <button

@@ -6,6 +6,7 @@ import { addTransfer, deleteTransfer, updateTransfer } from '../lib/store'
 import { TRANSFER_KINDS, type Transfer, type TransferKind, type Trip } from '../types'
 import { deleteWithUndo } from '../lib/toast'
 import { AmountInput } from './AmountInput'
+import { PlaceLink } from './PlaceLink'
 import { FormError } from './FormError'
 import { entryCurrency, toTripAmount, tripCurrency } from '../lib/convert'
 import { shortDate, fromISO, toISO } from '../lib/days'
@@ -46,6 +47,8 @@ export function TransferSheet({
   const [title, setTitle] = useState(transfer?.title ?? '')
   const [from, setFrom] = useState(transfer?.from ?? (between.length > 1 ? between[0].name : ''))
   const [to, setTo] = useState(transfer?.to ?? (between.length > 1 ? between[between.length - 1].name : ''))
+  const [fromPlaceId, setFromPlaceId] = useState(transfer?.fromPlaceId)
+  const [toPlaceId, setToPlaceId] = useState(transfer?.toPlaceId)
   const [when, setWhen] = useState(transfer?.date ?? date)
   const [depart, setDepart] = useState(transfer?.departTime ?? '')
   const [arrive, setArrive] = useState(transfer?.arriveTime ?? '')
@@ -128,6 +131,8 @@ export function TransferSheet({
       title: title.trim() || `${KIND_INFO[kind].label} to ${to.trim()}`,
       from: from.trim(),
       to: to.trim(),
+      fromPlaceId: from.trim() ? fromPlaceId : undefined,
+      toPlaceId: to.trim() ? toPlaceId : undefined,
       departTime: depart || undefined,
       arriveTime: arrive || undefined,
       arriveDate: endDate > when ? endDate : undefined,
@@ -195,6 +200,8 @@ export function TransferSheet({
           <label>From<input value={from} onChange={(e) => setFrom(e.target.value)} onBlur={() => kind === 'flight' && setFrom(expandAirport(from))} placeholder={kind === 'flight' ? 'e.g. ICN' : 'Seoul Station'} /></label>
           <label>To<input value={to} onChange={(e) => setTo(e.target.value)} onBlur={() => kind === 'flight' && setTo(expandAirport(to))} placeholder={kind === 'flight' ? 'e.g. PUS' : 'Busan Station'} /></label>
         </div>
+        <PlaceLink label="From" tripId={trip.id} text={from} placeId={fromPlaceId} onLink={(id, name) => { setFromPlaceId(id); if (id && !from.trim() && name) setFrom(name) }} />
+        <PlaceLink label="To" tripId={trip.id} text={to} placeId={toPlaceId} onLink={(id, name) => { setToPlaceId(id); if (id && !to.trim() && name) setTo(name) }} />
         <div className="row">
           <label>Leaves on<input type="date" value={when} onChange={(e) => setWhen(e.target.value)} /></label>
           <label>Departs<input type="time" value={depart} onChange={(e) => setDepart(e.target.value)} /></label>
