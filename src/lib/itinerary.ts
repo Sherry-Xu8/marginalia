@@ -313,9 +313,31 @@ function dayShape(idx: number[], cands: Place[], names: MealName[] = ['Breakfast
 }
 
 function bestOrder(idx: number[], anchor: Place | undefined, cands: Place[], D: Float64Array, n: number, names?: MealName[]): { order: number[]; labels: (string | undefined)[] } {
-  if (idx.length <= 1 || idx.length > 10) return { order: idx, labels: idx.map(() => undefined) }
+  if (idx.length <= 1) return { order: idx, labels: idx.map(() => undefined) }
   const shape = dayShape(idx, cands, names)
   const fits = (slot: DaySlot, p: number) => slot.kind === 'free' || (slot.kind === 'meal' ? kindOf(cands[p]) === 'meal' : kindOf(cands[p]) === 'cafe')
+  const labelsFor = (order: number[]) =>
+    order.map((p, x) => {
+      const slot = shape[x]
+      return slot?.label && ((slot.kind === 'meal' && kindOf(cands[p]) === 'meal') || (slot.kind === 'cafe' && kindOf(cands[p]) === 'cafe')) ? slot.label : undefined
+    })
+  // Trying every arrangement is only possible for a short day. A long one (a "fit everything in" day) is filled
+  // slot by slot instead, each time taking the nearest place that suits the slot, which still gives a day with
+  // its meals in the right places and no doubling back.
+  if (idx.length > 10) {
+    const left = [...idx]
+    const order: number[] = []
+    let cur: Place | undefined = anchor
+    for (const slot of shape) {
+      const pool = left.filter((p) => fits(slot, p))
+      const choose = pool.length > 0 ? pool : left
+      const best = choose.reduce((a, b) => (cur && distanceKm(cur, cands[b]) < distanceKm(cur, cands[a]) ? b : a))
+      order.push(best)
+      left.splice(left.indexOf(best), 1)
+      cur = cands[best]
+    }
+    return { order, labels: labelsFor(order) }
+  }
   let best: number[] = idx
   let bestCost = Infinity
   const used = new Array(idx.length).fill(false)
@@ -345,9 +367,5 @@ function bestOrder(idx: number[], anchor: Place | undefined, cands: Place[], D: 
   go(0)
   if (best.length !== idx.length || bestCost === Infinity) return { order: idx, labels: idx.map(() => undefined) }
   // Only label a place if it is really the kind its slot expects (a meal slot filled by a restaurant).
-  const labels = best.map((p, x) => {
-    const slot = shape[x]
-    return slot.label && ((slot.kind === 'meal' && kindOf(cands[p]) === 'meal') || (slot.kind === 'cafe' && kindOf(cands[p]) === 'cafe')) ? slot.label : undefined
-  })
-  return { order: best, labels }
+  return { order: best, labels: labelsFor(best) }
 }
