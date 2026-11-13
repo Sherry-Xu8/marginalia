@@ -554,40 +554,40 @@ export function SuggestSheet({ trip, stop, onClose }: { trip: Trip; stop: Stop; 
                 </div>
               )
             })}
-            <div className="card">
-              <strong>Unscheduled ({plan.unscheduled.length})</strong>
-              <p className="muted">Places that didn’t fit, with the day each would suit best (nearest to what’s already planned).</p>
+            <details className="card unsched" open={plan.unscheduled.length <= 6}>
+              <summary>
+                <strong>Unscheduled ({plan.unscheduled.length})</strong>
+                <small className="muted">didn’t fit — add any to a day</small>
+              </summary>
               {plan.unscheduled.slice(0, 60).map((id) => {
                 const ranked = rankDays(id)
                 const best = ranked[0]
+                const p = placeById.get(id)
                 return (
-                <div key={id} className="check">
-                  <span style={{ flex: 1 }}>
-                    {row(placeById.get(id))}
-                    {plan.reasons?.[id] && <small className="muted"> · {plan.reasons[id]}</small>}
+                  <div key={id} className="unsched-row">
+                    <span className="unsched-name" title={[p?.name, plan.reasons?.[id]].filter(Boolean).join(' — ')}>{row(p)}</span>
                     {best && (
-                      <button className="fit-btn" onClick={() => addToPlanDay(best.day.dayId, id)}>
-                        <b>Best fit: {shortDate(best.day.date)}</b>
-                        {best.near ? ` · ${kmText(best.km)} from ${best.near.name}` : ` · quietest day (${best.count})`}
+                      <button className="fit-btn" title={best.near ? `${kmText(best.km)} from ${best.near.name}` : `quietest day (${best.count} planned)`} onClick={() => addToPlanDay(best.day.dayId, id)}>
+                        + {shortDate(best.day.date)}
+                        {best.near ? ` · ${kmText(best.km)}` : ''}
                       </button>
                     )}
-                  </span>
-                  <select
-                    aria-label="Add to day"
-                    value=""
-                    style={{ width: 'auto' }}
-                    onChange={(e) => e.target.value && addToPlanDay(e.target.value, id)}
-                  >
-                    <option value="">Add to…</option>
-                    {ranked.map((r) => (
-                      <option key={r.day.dayId} value={r.day.dayId}>{shortDate(r.day.date)}{r.near ? ` · ${kmText(r.km)}` : ''}</option>
-                    ))}
-                  </select>
-                </div>
+                    <select
+                      className="unsched-day"
+                      aria-label={`Add ${p?.name ?? 'this place'} to a day`}
+                      value=""
+                      onChange={(e) => e.target.value && addToPlanDay(e.target.value, id)}
+                    >
+                      <option value="">Day…</option>
+                      {ranked.map((r) => (
+                        <option key={r.day.dayId} value={r.day.dayId}>{shortDate(r.day.date)}{r.near ? ` · ${kmText(r.km)}` : ''}</option>
+                      ))}
+                    </select>
+                  </div>
                 )
               })}
               {plan.unscheduled.length > 60 && <p className="muted">…and {plan.unscheduled.length - 60} more.</p>}
-            </div>
+            </details>
             <div className="row buttons">
               <button
                 className="primary"
