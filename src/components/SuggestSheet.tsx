@@ -3,6 +3,9 @@ import { SortableContext, arrayMove, sortableKeyboardCoordinates, useSortable, v
 import { CSS } from '@dnd-kit/utilities'
 import { GripVertical, Pin, Star, TriangleAlert } from 'lucide-react'
 import { checkDay, clockText, improveOrder } from '../lib/daycheck'
+import { DraftMap } from './DraftMap'
+import { AddPlaceSheet } from './AddPlaceSheet'
+import { createPortal } from 'react-dom'
 import { replanAll, replanDay, type ReplanCtx } from '../lib/replan'
 import { distanceKm } from '../lib/geo'
 import { useEffect, useMemo, useState } from 'react'
@@ -156,6 +159,8 @@ export function SuggestSheet({ trip, stop, onClose }: { trip: Trip; stop: Stop; 
   const [pins, setPins] = useState<Set<string>>(new Set())
   const [undoPlan, setUndoPlan] = useState<Suggestion | null>(null)
   const [notice, setNotice] = useState('')
+  const [mapDayId, setMapDayId] = useState('')
+  const [addingTo, setAddingTo] = useState<string | null>(null)
   const togglePin = (id: string) =>
     setPins((cur) => {
       const next = new Set(cur)
@@ -327,6 +332,25 @@ export function SuggestSheet({ trip, stop, onClose }: { trip: Trip; stop: Stop; 
       })
       .sort((a, b) => a.km - b.km || a.count - b.count)
   }
+  // The day shown on the map: the one you last tapped, else the first with something on it.
+  const activeDay =
+    plan?.days.find((d) => d.dayId === mapDayId && d.mode !== 'off') ??
+    plan?.days.find((d) => d.mode !== 'off' && d.placeIds.length > 0) ??
+    plan?.days.find((d) => d.mode !== 'off')
+
+  // The places that didn't fit, nearest to what this day already has (or to the hotel on an empty day), closest first.
+  function spareFor(d: Suggestion['days'][number], limit: number) {
+    if (!plan) return []
+    const hotel = places.find((x) => x.id === stayForStop(trip, stop)?.placeId)
+    const anchors = [...d.placeIds.map((id) => placeById.get(id)), ...(d.placeIds.length === 0 && hotel ? [hotel] : [])].filter((x): x is Place => !!x)
+    return plan.unscheduled
+      .map((id) => placeById.get(id))
+      .filter((x): x is Place => !!x && hoursOn(x.details?.hours, d.date).status !== 'closed')
+      .map((x) => ({ place: x, km: anchors.length ? Math.min(...anchors.map((a) => distanceKm(x, a))) : 0 }))
+      .sort((a, b) => a.km - b.km)
+      .slice(0, limit)
+  }
+
   const kmText = (km: number) => (km < 1 ? `${Math.max(50, Math.round(km * 10) * 100)} m` : `${km.toFixed(1)} km`)
 
   const row = (p: Place | undefined) =>
@@ -344,7 +368,7 @@ export function SuggestSheet({ trip, stop, onClose }: { trip: Trip; stop: Stop; 
         <strong>Suggest days · {stop.name}</strong>
         <button onClick={onClose}>Close</button>
       </div>
-      <div className="sheet-body">
+      <div className={'sheet-body' + (plan ? ' wide' : '')}>
         {stopPlaces.length === 0 ? (
           <div className="card">
             <h3>Which areas are in {stop.name}?</h3>
@@ -474,6 +498,8 @@ export function SuggestSheet({ trip, stop, onClose }: { trip: Trip; stop: Stop; 
                 )}
               </p>
             )}
+            <div className="draft-grid">
+              <div className="draft-days">
             {plan.days.map((d) => {
               const anchor = d.anchorId ? placeById.get(d.anchorId) : undefined
               const ordered = d.placeIds.map((id) => placeById.get(id)).filter((x): x is Place => !!x)
@@ -481,7 +507,7 @@ export function SuggestSheet({ trip, stop, onClose }: { trip: Trip; stop: Stop; 
               const check = d.mode !== 'off' && ordered.length > 0 ? checkDay(timing) : undefined
               const better = check ? improveOrder(timing) : null
               return (
-                <div key={d.dayId} className="card">
+                <div key={d.dayId} className={'card' + (d.dayId === activeDay?.dayId ? ' on-map' : '')} onClick={() => setMapDayId(d.dayId)}>
                   <strong>{shortDate(d.date)}</strong>
                   <span className="muted"> · {MODE_LABEL[d.mode]}</span>
                   {anchor && <p className="muted">Starts and ends at {anchor.name}</p>}
@@ -543,6 +569,16 @@ export function SuggestSheet({ trip, stop, onClose }: { trip: Trip; stop: Stop; 
                       <button className="soft-btn" onClick={() => setDayIds(d.dayId, better.order)}>Use it</button>
                     </div>
                   )}
+                  {d.mode !== 'off' && (
+                    <div className="near-row">
+                      {spareFor(d, 3).map(({ place, km }) => (
+                        <button key={place.id} className="near-chip" onClick={() => addToPlanDay(d.dayId, place.id)} title={`${place.name} · ${kmText(km)} from this day’s plan`}>
+                          + {place.name} <small className="muted">{kmText(km)}</small>
+                        </button>
+                      ))}
+                      <button className="near-chip add" onClick={() => setAddingTo(d.dayId)}>+ A place not on your list…</button>
+                    </div>
+                  )}
                   {d.placeIds.some((id) => pins.has(id)) && (
                     <button className="soft-btn replan-btn" onClick={() => replanOneDay(d.dayId)}>
                       Re-plan this day around my pins
@@ -588,6 +624,35 @@ export function SuggestSheet({ trip, stop, onClose }: { trip: Trip; stop: Stop; 
               })}
               {plan.unscheduled.length > 60 && <p className="muted">…and {plan.unscheduled.length - 60} more.</p>}
             </details>
+              </div>
+              <aside className="draft-side">
+                {activeDay ? (
+                  <>
+                    <p className="muted draft-side-head"><strong>{shortDate(activeDay.date)}</strong> · tap a <span className="spare-dot">+</span> pin to add it to this day</p>
+                    <DraftMap
+                      places={activeDay.placeIds.map((id) => placeById.get(id)).filter((x): x is Place => !!x)}
+                      spare={spareFor(activeDay, 12).map((x) => x.place)}
+                      anchor={activeDay.anchorId ? placeById.get(activeDay.anchorId) : undefined}
+                      onAdd={(id) => addToPlanDay(activeDay.dayId, id)}
+                    />
+                  </>
+                ) : (
+                  <p className="muted">Pick a day to see it on the map.</p>
+                )}
+              </aside>
+            </div>
+            {addingTo &&
+              createPortal(
+                <AddPlaceSheet
+                  trip={trip}
+                  onClose={() => setAddingTo(null)}
+                  onAdded={(id) => {
+                    addToPlanDay(addingTo, id)
+                    setAddingTo(null)
+                  }}
+                />,
+                document.body,
+              )}
             <div className="row buttons">
               <button
                 className="primary"
