@@ -340,7 +340,7 @@ input, select, textarea { border-radius: 14px; background: var(--card); }
 .stop-card .band { height: 72px; border-radius: 14px; }
 .stay-row { width: 100%; justify-content: flex-start; margin: 8px 0 2px; border: 0; background: var(--soft); box-shadow: none; min-height: 44px; border-radius: 12px; font-size: 0.9rem; font-weight: 500; }
 .stay-row span { flex: 1; text-align: left; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.trip-card:hover { box-shadow: 0 2px 4px rgba(31, 28, 25, 0.06), 0 16px 36px -16px rgba(31, 28, 25, 0.3); transform: translateY(-2px); }
+.trip-card:hover { box-shadow: 0 2px 4px rgba(31, 28, 25, 0.06), 0 16px 36px -16px rgba(31, 28, 25, 0.3); }
 .trip-card { transition: transform 0.15s, box-shadow 0.15s; }
 .chip-soft { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
 .countdown-big strong { font-weight: 700; }
@@ -902,7 +902,7 @@ i.spent.over { background: #c2582f; }
 
 /* The whole trip card opens the trip; the ⋯ menu sits above it */
 .tcard { cursor: pointer; transition: transform 0.15s, box-shadow 0.15s; }
-.tcard:hover { transform: translateY(-2px); box-shadow: 0 2px 4px rgba(31, 28, 25, 0.06), 0 16px 36px -16px rgba(31, 28, 25, 0.3); }
+.tcard:hover { box-shadow: 0 2px 4px rgba(31, 28, 25, 0.06), 0 16px 36px -16px rgba(31, 28, 25, 0.3); }
 .tcard-link { position: absolute; inset: 0; z-index: 1; border-radius: 28px; }
 .tcard-link:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
 .tcard-body { padding-bottom: 16px; }
@@ -917,7 +917,7 @@ i.spent.over { background: #c2582f; }
 
 /* The whole stop card opens its days; the controls on it sit above that link */
 .stop-card { position: relative; cursor: pointer; transition: transform 0.15s, box-shadow 0.15s; }
-.stop-card:hover { transform: translateY(-2px); box-shadow: 0 2px 4px rgba(31, 28, 25, 0.06), 0 16px 36px -16px rgba(31, 28, 25, 0.3); }
+.stop-card:hover { box-shadow: 0 2px 4px rgba(31, 28, 25, 0.06), 0 16px 36px -16px rgba(31, 28, 25, 0.3); }
 .stop-card .tcard-link { border-radius: 26px; }
 .stop-card .tcard-menu, .stop-card .stay-row, .stop-card .stop-actions { position: relative; z-index: 2; }
 .stop-card .stop-actions { margin-top: 8px; }

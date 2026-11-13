@@ -6,7 +6,8 @@ import { addCustomPlace, getState, useAppData } from '../lib/store'
 import type { TransferKind } from '../types'
 import { tagOf } from './FilterChips'
 
-// What to look for on the map: "Heathrow (LHR), London" on a flight is "Heathrow Airport"; anything else as typed.
+// What to look for on the map: "Heathrow (LHR), London" on a flight is "Heathrow Airport", "Busan" on a train is
+// "Busan station"; anything that already says what it is is searched as typed.
 export function mapQueryFor(text: string, kind: TransferKind): string {
   const t = text.trim()
   if (t.length < 3) return ''
@@ -15,14 +16,19 @@ export function mapQueryFor(text: string, kind: TransferKind): string {
     if (named) return /airport/i.test(named[1]) ? named[1] : `${named[1]} Airport`
     if (/^[A-Z]{3}$/.test(t)) return `${t} airport`
   }
+  if (kind === 'train' && !/station|sentral|central|terminal|stesen|stazione|bahnhof|gare|역|駅|站/i.test(t)) return `${t} station`
+  if (kind === 'bus' && !/station|terminal|stop|bus|역|站/i.test(t)) return `${t} bus terminal`
+  if (kind === 'ferry' && !/terminal|pier|port|jetty|ferry|harbour|harbor/i.test(t)) return `${t} ferry terminal`
   return t
 }
 
 // A name for a spot found on the map. The map's own name is used unless it's too vague ("Airport"), in which case
 // what you searched for is ("Shenzhen Bao'an Airport").
 export function nameFor(found: Located, query: string): string {
+  const name = found.name.toLowerCase()
   const first = query.toLowerCase().split(/[^a-z0-9']+/).find((w) => w.length >= 3)
-  return query && first && !found.name.toLowerCase().includes(first) ? query : found.name
+  const kindWord = query.match(/\b(airport|station|terminal)$/i)?.[1].toLowerCase() // added by mapQueryFor
+  return query && ((first && !name.includes(first)) || (kindWord && !name.includes(kindWord))) ? query : found.name
 }
 
 // The saved place for a spot found on the map: one already there (same name, close by), or a new one.
@@ -63,6 +69,11 @@ export function PlaceLink({
   const [message, setMessage] = useState('')
   const [looking, setLooking] = useState(false)
   const query = mapQueryFor(text, kind)
+  // Trains, buses and ferries are looked for near your trip's places first (there are many "Central Stations").
+  const near =
+    kind === 'flight' || mine.length === 0
+      ? undefined
+      : { lat: mine.reduce((s, p) => s + p.lat, 0) / mine.length, lon: mine.reduce((s, p) => s + p.lon, 0) / mine.length }
 
   // Look it up a moment after you stop typing (or as soon as a flight lookup fills it in).
   useEffect(() => {
@@ -73,7 +84,8 @@ export function PlaceLink({
     let live = true
     setLooking(true)
     const timer = setTimeout(async () => {
-      const found = await findLocation(query)
+      let found = await findLocation(query, near)
+      if (live && found?.length === 0 && query !== text.trim()) found = await findLocation(text.trim(), near) // try it exactly as typed
       if (!live) return
       setLooking(false)
       onGuess(found?.[0] ?? null)
@@ -128,7 +140,7 @@ export function PlaceLink({
     if (!text.trim()) return setMessage('Type where it leaves from or arrives at first, for example “Changi Airport”.')
     setBusy(true)
     setMessage('')
-    const found = await findLocation(query || text.trim())
+    const found = await findLocation(query || text.trim(), near)
     setBusy(false)
     setResults(found ?? [])
     if (!found) setMessage('The search service couldn’t be reached. Check your connection and try again.')
