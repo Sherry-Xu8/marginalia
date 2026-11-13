@@ -179,6 +179,7 @@ export function SuggestSheet({ trip, stop, onClose }: { trip: Trip; stop: Stop; 
   const [pins, setPins] = useState<Set<string>>(new Set())
   const [undoPlan, setUndoPlan] = useState<Suggestion | null>(null)
   const [notice, setNotice] = useState('')
+  const [fitAll, setFitAll] = useState(false)
   const [mapDayId, setMapDayId] = useState('')
   const [addingTo, setAddingTo] = useState<string | null>(null)
   const togglePin = (id: string) =>
@@ -287,6 +288,7 @@ export function SuggestSheet({ trip, stop, onClose }: { trip: Trip; stop: Stop; 
       pace,
       prefs,
       variant: v,
+      fitAll,
       closedOn: (p, date) =>
         hoursOn(p.details?.hours, date).status === 'closed' ? `Closed on ${fromISO(date).toLocaleDateString(undefined, { weekday: 'long' })}s` : null,
       stay: places.find((p) => p.id === stayForStop(trip, stop)?.placeId),
@@ -462,6 +464,15 @@ export function SuggestSheet({ trip, stop, onClose }: { trip: Trip; stop: Stop; 
               <input type="checkbox" checked={prefs.cafe} onChange={(e) => setPrefs({ ...prefs, cafe: e.target.checked })} />
               <span>A café stop every day <small className="muted">· coffee, tea or dessert (uses places tagged Cafes)</small></span>
             </label>
+            <label className="check">
+              <input type="checkbox" checked={fitAll} onChange={(e) => setFitAll(e.target.checked)} />
+              <span>
+                Fit every place in
+                <small className="muted">
+                  {' '}· all {stopPlaces.filter((p) => p.tag !== 'Accommodation' && p.tag !== 'Transport').length} places go on a day, so days will be full. Go through them and tap × on the ones you don’t want.
+                </small>
+              </span>
+            </label>
             {stopPlaces.length > 0 && !stopPlaces.some((p) => p.tag !== 'Food' && p.tag !== 'Cafes' && p.tag !== 'Accommodation' && p.tag !== 'Transport') && (
               <p className="muted">Heads up: these places are all food and cafés, so days will be mostly meals. Add sights to the map for a fuller mix.</p>
             )}
@@ -521,6 +532,7 @@ export function SuggestSheet({ trip, stop, onClose }: { trip: Trip; stop: Stop; 
           <>
             <p className="muted">
               Here’s a draft. Nothing is saved until you press Accept. Drag the handle to reorder, choose which meal a place is, or tap × to set one aside. Times are rough estimates.
+              {fitAll && ' Every place is on a day, so they’re full — work through them and set aside what you don’t want.'}
             </p>
             {pins.size > 0 && (
               <div className="card replan-card">

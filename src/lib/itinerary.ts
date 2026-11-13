@@ -87,16 +87,20 @@ export function suggestItinerary(opts: {
   prefs?: Prefs
   variant?: number
   stay?: Place
+  fitAll?: boolean // put every place on a day, however full they get, instead of setting the spare ones aside
   closedOn?: (place: Place, date: string) => string | null
 }): Suggestion {
-  const { places, slots, pace, prefs = DEFAULT_PREFS, variant = 0, stay, closedOn } = opts
+  const { places, slots, pace, prefs = DEFAULT_PREFS, variant = 0, stay, fitAll = false, closedOn } = opts
   // The accommodation you chose for the stop is the start and end of every day; otherwise any
   // accommodation among the places is used.
   const accommodations = stay ? [stay] : places.filter((p) => p.tag === 'Accommodation')
   const cands = places.filter((p) => p.tag !== 'Accommodation' && p.tag !== 'Transport')
   const active = slots.filter((s) => s.mode !== 'off')
   const quotas = active.map((s) => quotaFor(pace, s.mode, prefs, s.free))
-  const caps = quotas.map(capOf)
+  const planned = places.filter((p) => p.tag !== 'Accommodation' && p.tag !== 'Transport').length
+  // "Fit everything in": each day stretches to take its share of the places, rather than a day's worth.
+  const share = active.length > 0 ? Math.ceil(planned / active.length) : 0
+  const caps = quotas.map((q) => (fitAll ? Math.max(capOf(q), share + 1) : capOf(q)))
   const totalCap = caps.reduce((a, b) => a + b, 0)
   const emptyDays = (): SuggestedDay[] => slots.map((s) => ({ ...s, placeIds: [] }))
   if (active.length === 0 || cands.length === 0) return { days: emptyDays(), unscheduled: cands.map((p) => p.id) }
@@ -135,7 +139,7 @@ export function suggestItinerary(opts: {
     }
   }
   const keptCount = () => kept.filter(Boolean).length
-  if (n > totalCap) {
+  if (n > totalCap && !fitAll) {
     const foodCount = cands.filter((p, i) => kept[i] && isFood(p)).length
     const foodSoft = quotas.reduce((a, q) => a + q.meals + q.cafes, 0)
     const foodAllowed = Math.max(foodSoft, totalCap - (n - foodCount))
