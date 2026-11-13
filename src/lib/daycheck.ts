@@ -8,7 +8,7 @@ import { hoursOn } from './hours'
 // only ever raise a warning when the place's opening hours are clear, never on a guess.
 
 export type MealLabel = 'Breakfast' | 'Lunch' | 'Dinner' | 'Café'
-export type Problem = { id: string; kind: 'closed' | 'late' | 'early' | 'order' | 'meal-late' | 'meal-gap'; text: string }
+export type Problem = { id: string; kind: 'closed' | 'late' | 'early' | 'order' | 'meal-late' | 'meal-gap' | 'meal-run'; text: string }
 export type DayCheck = { arrive: Record<string, number>; problems: Problem[]; km: number; end: number }
 
 // A meal isn't eaten before its usual time, so a stop labelled Dinner is reached no earlier than 18:00.
@@ -16,6 +16,10 @@ const EARLIEST: Partial<Record<MealLabel, number>> = { Breakfast: 8 * 60, Lunch:
 // And the latest they still make sense: a "lunch" at 16:25 isn't lunch, and most kitchens have stopped serving by then.
 const LATEST: Partial<Record<MealLabel, number>> = { Breakfast: 11 * 60, Lunch: 15 * 60, Dinner: 22 * 60 }
 const MEAL_GAP = 150 // you don't eat two meals within two and a half hours of each other
+
+// A meal is a restaurant, or any place you've said is breakfast, lunch or dinner. A café on its own isn't
+// (coffee or dessert after dinner is fine), so only meals need something to do between them.
+const isMeal = (p: Place, label?: string) => p.tag === 'Food' || (label !== undefined && RANK[label] !== undefined)
 const RANK: Partial<Record<string, number>> = { Breakfast: 0, Lunch: 1, Dinner: 2 }
 const LAST_VISIT = 30 // you need at least this long before closing for it to be worth going
 
@@ -41,6 +45,9 @@ export function checkDay(opts: { places: Place[]; labels?: Record<string, string
   let t = start
   let km = 0
   let lastMeal: { at: number; name: string } | undefined
+  let prevMeal: string | undefined
+  // With more meals than other things to do, some have to sit together, so leave it alone.
+  const canSeparate = places.filter((p) => !isMeal(p, labels[p.id])).length >= places.filter((p) => isMeal(p, labels[p.id])).length - 1
   let prev: Place | undefined = anchor
   for (const p of places) {
     const hop = prev ? distanceKm(prev, p) : 0
@@ -64,6 +71,12 @@ export function checkDay(opts: { places: Place[]; labels?: Record<string, string
       if (!r) problems.push({ id: p.id, kind: 'late', text: `Closes ${clockText(ranges[ranges.length - 1][1])}, you’d get there about ${clockText(t)}` })
       else if (t < r[0]) problems.push({ id: p.id, kind: 'early', text: `Opens ${clockText(r[0])}, you’d get there about ${clockText(t)}` })
     }
+    // Two meals in a row, with nothing to do in between. Only worth saying when there's something to put between them.
+    if (isMeal(p, label) && prevMeal && canSeparate) {
+      problems.push({ id: p.id, kind: 'meal-run', text: `straight after ${prevMeal}, with nothing in between` })
+    }
+    prevMeal = isMeal(p, label) ? p.name : undefined
+
     // A meal at the wrong time of day, or right on top of the one before it.
     const meal = label as MealLabel | undefined
     if (meal && RANK[meal] !== undefined) {
