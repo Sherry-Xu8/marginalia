@@ -6,6 +6,7 @@ import { arrivalDate } from '../lib/journeys'
 import { stopDays } from '../lib/itinerary'
 import { nightsOf, staysForStop } from '../lib/stays'
 import { tripCurrency } from '../lib/convert'
+import { spentOf } from '../lib/bookings'
 import { fmtMoney, fmtPaid } from '../lib/money'
 import { go } from '../lib/route'
 import { addStop, deleteStop, deleteTrip, moveStop, updateStop, useAppData } from '../lib/store'
@@ -135,7 +136,7 @@ function Fold({ id, title, badge, open, onToggle, children }: { id: string; titl
 
 
 export function TripOverview({ trip }: { trip: Trip }) {
-  const { days, places, expenses } = useAppData()
+  const { days, places, expenses, transfers } = useAppData()
   const [addingStop, setAddingStop] = useState(false)
   const [openFolds, setOpenFolds] = useState<Set<string>>(new Set())
   const toggleFold = (id: string) =>
@@ -161,7 +162,7 @@ export function TripOverview({ trip }: { trip: Trip }) {
   const placeById = new Map(mine.map((p) => [p.id, p]))
   const dayNumber = next ? tripDays.indexOf(next) + 1 : 0
 
-  const spent = expenses.filter((e) => e.tripId === trip.id).reduce((s, e) => s + e.amount, 0)
+  const spent = spentOf(trip, expenses, transfers, places)
   const done = trip.checklist.filter((c) => c.done).length
 
   return (

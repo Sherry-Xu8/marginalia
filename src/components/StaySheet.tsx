@@ -37,6 +37,7 @@ export function StaySheet({
   const [cost, setCost] = useState(stay?.paid ? String(stay.paid.amount) : stay?.cost !== undefined ? String(stay.cost) : '')
   const [costCur, setCostCur] = useState(stay ? (stay.paid?.currency ?? tripCurrency(trip)) : entryCurrency(trip))
   const [saving, setSaving] = useState(false)
+  const [unpaid, setUnpaid] = useState(!!stay?.unpaid)
   const [reference, setReference] = useState(stay?.reference ?? '')
   const [note, setNote] = useState(stay?.note ?? '')
   const [error, setError] = useState('')
@@ -108,6 +109,7 @@ export function StaySheet({
       checkOut,
       cost: money?.amount,
       paid: money?.paid,
+      unpaid: money && unpaid ? true : undefined,
       reference: reference.trim() || undefined,
       note: note.trim() || undefined,
     }
@@ -150,6 +152,12 @@ export function StaySheet({
                 <input value={reference} onChange={(e) => setReference(e.target.value)} />
               </label>
             </div>
+            {cost.trim() !== '' && (
+              <label className="check">
+                <input type="checkbox" checked={unpaid} onChange={(e) => setUnpaid(e.target.checked)} />
+                <span>Not paid yet <small className="muted">· pay on arrival or later, so it isn’t counted as spent</small></span>
+              </label>
+            )}
             <label>
               Note (check-in time, address in the local language…)
               <textarea rows={2} value={note} onChange={(e) => setNote(e.target.value)} />

@@ -113,7 +113,7 @@ function cleanTrip(v: unknown): Trip | null {
     const checkIn = date(xo?.checkIn)
     const checkOut = date(xo?.checkOut)
     return xo && xid && placeId && checkIn && checkOut && checkOut > checkIn
-      ? [{ id: xid, placeId, checkIn, checkOut, cost: num(xo.cost) ?? undefined, paid: paidOf(xo.paid), reference: str(xo.reference, 100) ?? undefined, note: str(xo.note, 1000) ?? undefined }]
+      ? [{ id: xid, placeId, checkIn, checkOut, cost: num(xo.cost) ?? undefined, paid: paidOf(xo.paid), unpaid: xo.unpaid === true ? true : undefined, reference: str(xo.reference, 100) ?? undefined, note: str(xo.note, 1000) ?? undefined }]
       : []
   })
   // Files from before multiple stays kept one place per stop.
@@ -278,6 +278,7 @@ function cleanTransfer(v: unknown): Transfer | null {
     note: str(o.note, 1000) ?? undefined,
     cost: num(o.cost) ?? undefined,
     paid: paidOf(o.paid),
+    unpaid: o.unpaid === true ? true : undefined,
   }
 }
 

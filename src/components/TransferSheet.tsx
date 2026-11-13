@@ -54,6 +54,7 @@ export function TransferSheet({
   const [cost, setCost] = useState(transfer?.paid ? String(transfer.paid.amount) : transfer?.cost !== undefined ? String(transfer.cost) : '')
   const [costCur, setCostCur] = useState(transfer ? (transfer.paid?.currency ?? tripCurrency(trip)) : entryCurrency(trip))
   const [saving, setSaving] = useState(false)
+  const [unpaid, setUnpaid] = useState(!!transfer?.unpaid)
   const [note, setNote] = useState(transfer?.note ?? '')
   const [error, setError] = useState('')
   const [flightNo, setFlightNo] = useState(transfer?.kind === 'flight' ? flightNoFrom(transfer.title) : '')
@@ -134,6 +135,7 @@ export function TransferSheet({
       note: note.trim() || undefined,
       cost: money?.amount,
       paid: money?.paid,
+      unpaid: money && unpaid ? true : undefined,
     }
     if (transfer) updateTransfer(transfer.id, data)
     else addTransfer({ tripId: trip.id, ...data })
@@ -207,6 +209,12 @@ export function TransferSheet({
           <label>Booking reference<input value={reference} onChange={(e) => setReference(e.target.value)} /></label>
           <AmountInput label="Cost" trip={trip} amount={cost} currency={costCur} onChange={(a, c) => { setCost(a); setCostCur(c) }} />
         </div>
+        {cost.trim() !== '' && (
+          <label className="check">
+            <input type="checkbox" checked={unpaid} onChange={(e) => setUnpaid(e.target.checked)} />
+            <span>Not paid yet <small className="muted">· so it isn’t counted as spent</small></span>
+          </label>
+        )}
         <label>Notes<textarea rows={2} value={note} onChange={(e) => setNote(e.target.value)} placeholder="Platform, seat, terminal…" /></label>
         <FormError message={error} />
         <div className="row buttons">

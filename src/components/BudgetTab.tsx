@@ -1,6 +1,10 @@
 import { AmountInput } from './AmountInput'
 import { addExpenseIn, entryCurrency, homeCurrencyOf, tripCurrency } from '../lib/convert'
-import { BedDouble, Plus, ShoppingBag, Ticket, TrainFront, Utensils, Wallet, X, type LucideIcon } from 'lucide-react'
+import { BedDouble, Pencil, Plus, ShoppingBag, Ticket, TrainFront, Utensils, Wallet, X, type LucideIcon } from 'lucide-react'
+import { createPortal } from 'react-dom'
+import { bookingsOf, type Booking } from '../lib/bookings'
+import { StaySheet } from './StaySheet'
+import { TransferSheet } from './TransferSheet'
 import { useMemo, useState } from 'react'
 import { shortDate, toISO } from '../lib/days'
 import { fmtMoney, normaliseCurrency } from '../lib/money'
@@ -41,9 +45,10 @@ function Bar({ value, max, colour }: { value: number; max: number; colour?: stri
 }
 
 export function BudgetTab() {
-  const { trips, activeTripId, days, expenses, transfers } = useAppData()
+  const { trips, activeTripId, days, expenses, transfers, places } = useAppData()
   const trip = trips.find((t) => t.id === activeTripId)
   const [adding, setAdding] = useState(false)
+  const [editBooking, setEditBooking] = useState<Booking | null>(null)
   const [showSettings, setShowSettings] = useState<boolean | null>(null)
   const [budgetText, setBudgetText] = useState<string | null>(null)
   const [showFx, setShowFxState] = useState(() => {
@@ -92,16 +97,22 @@ export function BudgetTab() {
   }
 
   const foodPerDay = trip.foodPerDay ?? 0
+  // Hotels and journeys with a price count as booked and paid (spent), unless marked "Not paid yet".
+  const bookings = bookingsOf(trip, transfers, places)
+  const paidBookings = bookings.filter((b) => !b.unpaid)
+  const booked = paidBookings.reduce((s, b) => s + b.amount, 0)
   const ticketsPlanned =
     tripDays.reduce((s, d) => s + d.items.reduce((t, i) => t + (i.cost ?? 0), 0), 0) +
-    transfers.filter((t) => t.tripId === activeTripId).reduce((s, t) => s + (t.cost ?? 0), 0) +
-    (trip.stays ?? []).reduce((s, x) => s + (x.cost ?? 0), 0)
+    bookings.filter((b) => b.unpaid).reduce((s, b) => s + b.amount, 0)
   const planned = ticketsPlanned + foodPerDay * tripDays.length
-  const spent = mine.reduce((s, e) => s + e.amount, 0)
+  const spent = mine.reduce((s, e) => s + e.amount, 0) + booked
   const budget = trip.budget
   const left = budget !== undefined ? budget - spent : undefined
   const over = left !== undefined && left < 0
-  const byCategory = EXPENSE_CATEGORIES.map((c) => ({ c, total: mine.filter((e) => e.category === c).reduce((s, e) => s + e.amount, 0) }))
+  const byCategory = EXPENSE_CATEGORIES.map((c) => ({
+    c,
+    total: mine.filter((e) => e.category === c).reduce((s, e) => s + e.amount, 0) + paidBookings.filter((x) => x.category === c).reduce((s, x) => s + x.amount, 0),
+  }))
     .filter((x) => x.total > 0)
     .sort((a, b) => b.total - a.total)
   const byDate = new Map<string, Expense[]>()
@@ -112,7 +123,7 @@ export function BudgetTab() {
     .map((d) => ({
       date: d.date,
       planned: d.items.reduce((s, i) => s + (i.cost ?? 0), 0) + foodPerDay,
-      spent: mine.filter((e) => e.date === d.date).reduce((s, e) => s + e.amount, 0),
+      spent: mine.filter((e) => e.date === d.date).reduce((s, e) => s + e.amount, 0) + paidBookings.filter((x) => x.date === d.date).reduce((s, x) => s + x.amount, 0),
     }))
     .filter((d) => d.planned > 0 || d.spent > 0)
   const dayMax = Math.max(1, ...dayData.map((d) => Math.max(d.planned, d.spent)))
@@ -170,11 +181,12 @@ export function BudgetTab() {
         </div>
         <div className="money-tiles">
           <div><span>Budget</span><strong>{budget !== undefined ? money(budget) : '—'}</strong>{budget !== undefined && <Fx n={budget} />}</div>
-          {planned > 0 && <div><span>Planned</span><strong>{money(planned)}</strong><Fx n={planned} /></div>}
+          {booked > 0 && <div><span>Booked</span><strong>{money(booked)}</strong><Fx n={booked} /></div>}
+          {planned > 0 && <div><span>Still to come</span><strong>{money(planned)}</strong><Fx n={planned} /></div>}
         </div>
       </section>
-      {planned > 0 && budget !== undefined && planned > budget && (
-        <p className="error">Your planned costs ({money(planned)}) are more than your budget.</p>
+      {planned > 0 && budget !== undefined && spent + planned > budget && (
+        <p className="error">What you’ve spent plus what’s still planned ({money(spent + planned)}) is more than your budget.</p>
       )}
 
       <div className="money-grid">
@@ -202,6 +214,41 @@ export function BudgetTab() {
                     </div>
                     <Bar value={total} max={spent} colour={TAG_STYLE[CAT[c].style].colour} />
                   </div>
+                </div>
+              ))
+            )}
+          </section>
+
+          <section className="card panel">
+            <header className="panel-head">
+              <div>
+                <p className="eyebrow">Hotels and journeys</p>
+                <h2 className="display">Bookings</h2>
+              </div>
+            </header>
+            {bookings.length === 0 ? (
+              <p className="note">A price on a hotel or journey shows up here and counts as spent. Add one from the Overview tab.</p>
+            ) : (
+              bookings.map((b) => (
+                <div key={b.id} className="exp-row">
+                  <CatTile cat={b.category} />
+                  <div className="exp-main">
+                    <span className="exp-title">{b.title}</span>
+                    <small className="muted">
+                      {[
+                        b.kind === 'stay' && b.stay ? `${shortDate(b.stay.checkIn)} → ${shortDate(b.stay.checkOut)}` : [shortDate(b.date), b.detail].filter(Boolean).join(' · '),
+                        b.paid ? `paid ${fmtMoney(b.paid.amount, b.paid.currency)}` : '',
+                        b.unpaid ? 'Not paid yet' : '',
+                      ].filter(Boolean).join(' · ')}
+                    </small>
+                  </div>
+                  <strong className="amt">
+                    {money(b.amount)}
+                    <Fx n={b.amount} />
+                  </strong>
+                  <button className="icon-btn" aria-label={`Edit ${b.title}`} onClick={() => setEditBooking(b)}>
+                    <Pencil size={16} />
+                  </button>
                 </div>
               ))
             )}
@@ -307,8 +354,8 @@ export function BudgetTab() {
           {mine.length === 0 && (
             <div className="empty">
               <span className="empty-icon"><Wallet size={30} /></span>
-              <h3 className="display">Nothing spent yet.</h3>
-              <p className="muted">Log an expense here, or from any place on your Days tab.</p>
+              <h3 className="display">{booked > 0 ? 'No other expenses yet.' : 'Nothing spent yet.'}</h3>
+              <p className="muted">Log an expense here, or from any place on your Days tab.{booked > 0 ? ' Your hotels and journeys are counted under Bookings.' : ''}</p>
               <button className="soft-btn" onClick={() => setAdding(true)}><Plus size={18} /> Add your first expense</button>
             </div>
           )}
@@ -342,6 +389,8 @@ export function BudgetTab() {
         </section>
       </div>
 
+      {editBooking?.stay && createPortal(<StaySheet trip={trip} stay={editBooking.stay} onClose={() => setEditBooking(null)} />, document.body)}
+      {editBooking?.transfer && createPortal(<TransferSheet trip={trip} date={editBooking.transfer.date} transfer={editBooking.transfer} onClose={() => setEditBooking(null)} />, document.body)}
       {adding && <AddExpenseSheet trip={trip} tripId={trip.id} local={local} onClose={() => setAdding(false)} />}
     </div>
   )
@@ -396,6 +445,9 @@ function AddExpenseSheet({ trip, tripId, local, onClose }: { trip: Trip; tripId:
             <input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
           </label>
         </div>
+        {(category === 'Accommodation' || category === 'Transport') && (
+          <p className="muted">Hotels and journeys you’ve entered on the Overview tab are already counted under Bookings, so only add this if it’s something else.</p>
+        )}
         <FormError message={error} />
         <button className="primary wide" disabled={busy} onClick={add}>{busy ? 'Converting…' : 'Add expense'}</button>
       </div>

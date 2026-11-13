@@ -30,6 +30,7 @@ export type Transfer = {
   note?: string
   cost?: number
   paid?: { amount: number; currency: string } // what was actually paid, if in another currency
+  unpaid?: boolean // a price entered for something not paid yet (pay on arrival): counts as still to come, not spent
 }
 
 // A booked place to sleep: a hotel, hostel or apartment for a run of nights.
@@ -42,6 +43,7 @@ export type Stay = {
   paid?: { amount: number; currency: string } // what was actually paid, if in another currency
   reference?: string // booking reference
   note?: string
+  unpaid?: boolean // a price entered for something not paid yet (pay on arrival): counts as still to come, not spent
 }
 
 // A handy note: a hotel address to show a taxi driver, Wi-Fi code, emergency numbers…
