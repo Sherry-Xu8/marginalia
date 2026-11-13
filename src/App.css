@@ -1097,3 +1097,5 @@ button.danger-solid:hover:not(:disabled) { background: color-mix(in srgb, var(--
 /* the weather sits beside the day's name, and the meal prompts match the other chips */
 .draft-days .card > .wx { margin-left: 8px; }
 .draft-days .meal-gaps .soft-btn { min-height: 34px; padding: 0 14px; font-size: 0.8rem; margin-top: 6px; }
+.near-lead { flex-basis: 100%; font-size: 0.74rem; margin-bottom: -1px; }
+.near-chip small { font-weight: 400; }

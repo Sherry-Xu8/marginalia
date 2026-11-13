@@ -391,7 +391,10 @@ export function SuggestSheet({ trip, stop, onClose }: { trip: Trip; stop: Stop; 
     return plan.unscheduled
       .map((id) => placeById.get(id))
       .filter((x): x is Place => !!x && hoursOn(x.details?.hours, d.date).status !== 'closed')
-      .map((x) => ({ place: x, km: anchors.length ? Math.min(...anchors.map((a) => distanceKm(x, a))) : 0 }))
+      .map((x) => {
+        const nearest = anchors.length ? anchors.map((a) => ({ a, km: distanceKm(x, a) })).sort((p, q) => p.km - q.km)[0] : undefined
+        return { place: x, km: nearest?.km ?? 0, from: nearest?.a, fromHotel: d.placeIds.length === 0 }
+      })
       .sort((a, b) => a.km - b.km)
       .slice(0, limit)
   }
@@ -628,9 +631,17 @@ export function SuggestSheet({ trip, stop, onClose }: { trip: Trip; stop: Stop; 
                   )}
                   {d.mode !== 'off' && (
                     <div className="near-row">
-                      {spareFor(d, 3).map(({ place, km }) => (
-                        <button key={place.id} className="near-chip" onClick={() => addToPlanDay(d.dayId, place.id)} title={`${place.name} · ${kmText(km)} from this day’s plan`}>
-                          + {place.name} <small className="muted">{kmText(km)}</small>
+                      <span className="near-lead muted">
+                        {d.placeIds.length === 0 ? 'Near where you’re staying:' : 'Not planned yet, measured from the closest place on this day:'}
+                      </span>
+                      {spareFor(d, 3).map(({ place, km, from }) => (
+                        <button
+                          key={place.id}
+                          className="near-chip"
+                          onClick={() => addToPlanDay(d.dayId, place.id)}
+                          title={from ? `${place.name} — ${kmText(km)} from ${from.name}` : place.name}
+                        >
+                          + {place.name} <small className="muted">{kmText(km)}{from ? ` from ${from.name}` : ''}</small>
                         </button>
                       ))}
                       <button className="near-chip add" onClick={() => setAddingTo(d.dayId)}>+ A place not on your list…</button>
