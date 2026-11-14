@@ -1,7 +1,7 @@
 import { DndContext, KeyboardSensor, PointerSensor, closestCenter, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core'
 import { SortableContext, arrayMove, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
-import { Clock, GripVertical, Pin, Star, TriangleAlert } from 'lucide-react'
+import { Clock, GripVertical, Pin, Star, TriangleAlert, X } from 'lucide-react'
 import { checkDay, clockText, improveOrder } from '../lib/daycheck'
 import { fmtMinutes, LONG_TRAVEL_MINUTES } from '../lib/commute'
 import { WeatherChip } from './WeatherChip'
@@ -90,10 +90,11 @@ const LABELS = ['Breakfast', 'Lunch', 'Dinner', 'Café'] as const
 
 // One place in a drafted day: drag the handle to reorder, pick which meal it is, or set it aside.
 function DraftRow({
-  id, index, time, fixed, label, problem, canLabel, pinned, onPin, onFix, onLabel, onRemove, children,
+  id, index, time, fixed, label, problem, canLabel, pinned, moveTo, onPin, onFix, onLabel, onMove, onRemove, children,
 }: {
   id: string; index: number; time?: number; fixed?: string; label?: string; problem?: string; canLabel: boolean; pinned: boolean
-  onPin: () => void; onFix: (time: string) => void; onLabel: (label: string) => void; onRemove: () => void; children: React.ReactNode
+  moveTo: { dayId: string; label: string }[]
+  onPin: () => void; onFix: (time: string) => void; onLabel: (label: string) => void; onMove: (dayId: string) => void; onRemove: () => void; children: React.ReactNode
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id })
   return (
@@ -129,6 +130,20 @@ function DraftRow({
               {LABELS.map((l) => <option key={l} value={l}>{l}</option>)}
             </select>
           )}
+          {moveTo.length > 0 && (
+            <select
+              className="move-select"
+              aria-label="Move to another day"
+              value=""
+              onChange={(e) => e.target.value && onMove(e.target.value)}
+            >
+              <option value="">Move…</option>
+              {moveTo.map((d) => (
+                <option key={d.dayId} value={d.dayId}>{d.label}</option>
+              ))}
+              <option value="__unscheduled">Set aside</option>
+            </select>
+          )}
           <button className={'pin-btn' + (pinned ? ' on' : '')} aria-pressed={pinned} aria-label={pinned ? 'Unpin' : 'Pin to this day'} title={pinned ? 'Pinned: re-planning keeps it on this day' : 'Pin so re-planning keeps it on this day'} onClick={onPin}>
             <Pin size={14} fill={pinned ? 'currentColor' : 'none'} /> {pinned ? 'Pinned' : 'Pin'}
           </button>
@@ -136,6 +151,58 @@ function DraftRow({
         {problem && <span className="rsv warn"><TriangleAlert size={13} aria-hidden /> {problem}</span>}
       </span>
       <button aria-label="Set aside" onClick={onRemove}>×</button>
+    </div>
+  )
+}
+
+// All the places for this stop in one list, showing which day each is on, so you can pull any of them onto
+// the day you're working on without hunting through Unscheduled.
+function DraftPicker({
+  places,
+  dayLabel,
+  whereIs,
+  onPick,
+  onClose,
+}: {
+  places: Place[]
+  dayLabel: string
+  whereIs: (placeId: string) => string | undefined // the day it's on now, if any
+  onPick: (placeId: string) => void
+  onClose: () => void
+}) {
+  const [q, setQ] = useState('')
+  const [only, setOnly] = useState<'all' | 'free'>('all')
+  const text = q.trim().toLowerCase()
+  const shown = places.filter((p) => (!text || p.name.toLowerCase().includes(text)) && (only === 'all' || !whereIs(p.id)))
+  return (
+    <div className="sheet" role="dialog" aria-label={`Add a place to ${dayLabel}`}>
+      <div className="sheet-head">
+        <strong>Add to {dayLabel}</strong>
+        <button onClick={onClose}><X size={16} /> Close</button>
+      </div>
+      <div className="sheet-body">
+        <label>
+          Search your places
+          <input autoFocus value={q} onChange={(e) => setQ(e.target.value)} placeholder="Name of a place" />
+        </label>
+        <div className="row buttons">
+          <button className={only === 'all' ? 'chip on' : 'chip'} onClick={() => setOnly('all')}>All {places.length}</button>
+          <button className={only === 'free' ? 'chip on' : 'chip'} onClick={() => setOnly('free')}>Not on a day yet</button>
+        </div>
+        {shown.length === 0 && <p className="muted">Nothing matches.</p>}
+        {shown.map((p) => {
+          const on = whereIs(p.id)
+          return (
+            <button key={p.id} className={'pick' + (on ? ' planned' : '')} onClick={() => onPick(p.id)}>
+              <TagIcon tag={tagOf(p)} size={26} />
+              <span className="pick-head">
+                {p.name}
+                {on && <small className="muted">on {on} — tap to move it here</small>}
+              </span>
+            </button>
+          )
+        })}
+      </div>
     </div>
   )
 }
@@ -183,6 +250,7 @@ export function SuggestSheet({ trip, stop, onClose }: { trip: Trip; stop: Stop; 
   const [fitAll, setFitAll] = useState(false)
   const [mapDayId, setMapDayId] = useState('')
   const [addingTo, setAddingTo] = useState<string | null>(null)
+  const [pickFor, setPickFor] = useState<string | null>(null)
   const togglePin = (id: string) =>
     setPins((cur) => {
       const next = new Set(cur)
@@ -214,6 +282,37 @@ export function SuggestSheet({ trip, stop, onClose }: { trip: Trip; stop: Stop; 
   // Whether a day starts and/or ends where you're staying (an arrival day often starts from the airport instead).
   const setAnchorUse = (dayId: string, use: AnchorUse) =>
     setPlan((p) => p && { ...p, days: p.days.map((d) => (d.dayId === dayId ? { ...d, anchorUse: use } : d)) })
+
+  // Move a place straight to another day (or set it aside), keeping its meal label and any time you fixed.
+  const moveToDay = (fromDayId: string, placeId: string, toDayId: string) =>
+    setPlan((p) => {
+      if (!p) return p
+      const from = p.days.find((d) => d.dayId === fromDayId)
+      const label = from?.labels?.[placeId]
+      const time = from?.times?.[placeId]
+      const strip = (d: Suggestion['days'][number]) => {
+        const { [placeId]: _l, ...labels } = d.labels ?? {}
+        const { [placeId]: _t, ...times } = d.times ?? {}
+        return { ...d, placeIds: d.placeIds.filter((x) => x !== placeId), labels, times }
+      }
+      const aside = toDayId === '__unscheduled'
+      return {
+        ...p,
+        days: p.days.map((d) => {
+          if (d.dayId === fromDayId) return strip(d)
+          if (!aside && d.dayId === toDayId) {
+            return {
+              ...d,
+              placeIds: [...d.placeIds, placeId],
+              labels: label ? { ...(d.labels ?? {}), [placeId]: label } : d.labels,
+              times: time ? { ...(d.times ?? {}), [placeId]: time } : d.times,
+            }
+          }
+          return d
+        }),
+        unscheduled: aside ? [...p.unscheduled, placeId] : p.unscheduled.filter((x) => x !== placeId),
+      }
+    })
 
   const setLabel = (dayId: string, placeId: string, label: string) => {
     if (label) setPins((cur) => new Set(cur).add(placeId)) // choosing a meal for a place is a decision to keep
@@ -312,6 +411,7 @@ export function SuggestSheet({ trip, stop, onClose }: { trip: Trip; stop: Stop; 
     pace,
     prefs,
     variant,
+    fitAll,
     windowOf: (date) => {
       const w = windowOf(date)
       return w ? { start: w.start, end: w.end } : undefined
@@ -649,6 +749,8 @@ export function SuggestSheet({ trip, stop, onClose }: { trip: Trip; stop: Stop; 
                             onFix={(t) => setFixedTime(d.dayId, id, t)}
                             pinned={pins.has(id)}
                             onPin={() => togglePin(id)}
+                            moveTo={mapDays.filter((m) => m.dayId !== d.dayId).map((m) => ({ dayId: m.dayId, label: m.label }))}
+                            onMove={(to) => moveToDay(d.dayId, id, to)}
                             onLabel={(l) => setLabel(d.dayId, id, l)}
                             onRemove={() => removeFromDay(d.dayId, id)}
                           >
@@ -682,6 +784,7 @@ export function SuggestSheet({ trip, stop, onClose }: { trip: Trip; stop: Stop; 
                           + {place.name} <small className="muted">{kmText(km)}{from ? ` from ${from.name}` : ''}</small>
                         </button>
                       ))}
+                      <button className="near-chip add" onClick={() => setPickFor(d.dayId)}>+ From your saved places…</button>
                       <button className="near-chip add" onClick={() => setAddingTo(d.dayId)}>+ A place not on your list…</button>
                     </div>
                   )}
@@ -699,7 +802,9 @@ export function SuggestSheet({ trip, stop, onClose }: { trip: Trip; stop: Stop; 
             <details className="card unsched" open={plan.unscheduled.length <= 6}>
               <summary>
                 <strong>Unscheduled ({plan.unscheduled.length})</strong>
-                <small className="muted">didn’t fit — add any to a day</small>
+                <small className="muted">
+                  {fitAll ? 'closed on the days you’re here' : 'your days were already full — add any below, or go Back and tick “Fit every place in”'}
+                </small>
               </summary>
               {plan.unscheduled.slice(0, 60).map((id) => {
                 const ranked = rankDays(id)
@@ -707,9 +812,9 @@ export function SuggestSheet({ trip, stop, onClose }: { trip: Trip; stop: Stop; 
                 const p = placeById.get(id)
                 return (
                   <div key={id} className="unsched-row">
-                    <span className="unsched-name" title={`${p?.name ?? ''} — ${plan.reasons?.[id] ?? 'no room left on any day'}`}>
+                    <span className="unsched-name" title={`${p?.name ?? ''} — ${plan.reasons?.[id] ?? 'the days were already full at this pace'}`}>
                       {row(p)}
-                      <small className="muted why">{plan.reasons?.[id] ?? 'no room'}</small>
+                      <small className="muted why">{plan.reasons?.[id] ?? 'days full'}</small>
                     </span>
                     {best && (
                       <button className="fit-btn" title={best.near ? `${kmText(best.km)} from ${best.near.name}` : `quietest day (${best.count} planned)`} onClick={() => addToPlanDay(best.day.dayId, id)}>
@@ -765,6 +870,25 @@ export function SuggestSheet({ trip, stop, onClose }: { trip: Trip; stop: Stop; 
                 )}
               </aside>
             </div>
+            {pickFor &&
+              createPortal(
+                <DraftPicker
+                  places={stopPlaces.filter((p) => p.tag !== 'Accommodation' && p.tag !== 'Transport')}
+                  dayLabel={shortDate(plan.days.find((d) => d.dayId === pickFor)?.date ?? '')}
+                  whereIs={(id) => {
+                    const on = plan.days.find((d) => d.placeIds.includes(id))
+                    return on ? shortDate(on.date) : undefined
+                  }}
+                  onPick={(id) => {
+                    const on = plan.days.find((d) => d.placeIds.includes(id))
+                    if (on && on.dayId !== pickFor) moveToDay(on.dayId, id, pickFor)
+                    else if (!on) addToPlanDay(pickFor, id)
+                    setPickFor(null)
+                  }}
+                  onClose={() => setPickFor(null)}
+                />,
+                document.body,
+              )}
             {addingTo &&
               createPortal(
                 <AddPlaceSheet

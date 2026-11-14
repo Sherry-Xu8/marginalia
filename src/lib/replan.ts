@@ -18,6 +18,7 @@ export type ReplanCtx = {
   closedOn: (place: Place, date: string) => string | null
   stay?: Place
   variant: number
+  fitAll: boolean // keep "fit every place in" on when re-planning, or everything spills back out
 }
 
 type Kind = 'meal' | 'cafe' | 'sight'
@@ -27,7 +28,7 @@ const NEARBY_KM = 3 // nothing further than this from the rest of the day is pul
 const minDist = (p: Place, among: Place[]) => (among.length ? Math.min(...among.map((r) => distanceKm(p, r))) : Infinity)
 
 // Fills a day around its pinned places from a pool of candidates, then orders it. Returns the day and what it used.
-function fillDay(day: SuggestedDay, pinned: Place[], pool: Place[], ctx: ReplanCtx): { day: SuggestedDay; used: Set<string> } {
+function fillDay(day: SuggestedDay, pinned: Place[], pool: Place[], ctx: ReplanCtx, cap?: number): { day: SuggestedDay; used: Set<string> } {
   const w = ctx.windowOf(day.date)
   const q = quotaFor(ctx.pace, day.mode, ctx.prefs, w)
   const have: Record<Kind, number> = { sight: 0, meal: 0, cafe: 0 }
@@ -36,6 +37,10 @@ function fillDay(day: SuggestedDay, pinned: Place[], pool: Place[], ctx: ReplanC
     sight: Math.max(0, q.sights - have.sight),
     meal: Math.max(0, q.meals - have.meal),
     cafe: Math.max(0, q.cafes - have.cafe),
+  }
+  // Fitting everything in means a day takes its share of the places — not a day's worth, and not the whole lot.
+  if (ctx.fitAll && cap !== undefined) {
+    need.sight += Math.max(0, cap - (pinned.length + need.sight + need.meal + need.cafe))
   }
   const left = pool.filter((p) => !ctx.closedOn(p, day.date))
   const reference = [...pinned]
@@ -129,7 +134,9 @@ export function replanDay(plan: Suggestion, dayId: string, ctx: ReplanCtx): Repl
     }
   }
 
-  const { day: filled, used } = fillDay(day, pinned, pool, ctx)
+  const active = plan.days.filter((d) => d.mode !== 'off').length
+  const everything = plan.days.reduce((n, d) => n + d.placeIds.length, 0) + plan.unscheduled.length
+  const { day: filled, used } = fillDay(day, pinned, pool, ctx, active > 0 ? Math.ceil(everything / active) : undefined)
   const keep = new Set(filled.placeIds)
   const displaced = day.placeIds.filter((id) => !keep.has(id))
   const fresh = filled.placeIds.filter((id) => !day.placeIds.includes(id)).length
@@ -163,10 +170,14 @@ export function replanAll(plan: Suggestion, ctx: ReplanCtx): Suggestion {
   plan.days.forEach((d) => d.placeIds.forEach(add))
   plan.unscheduled.forEach(add)
 
+  const activeDays = plan.days.filter((d) => d.mode !== 'off').length
+  const everything = pool.size + plan.days.reduce((n, d) => n + d.placeIds.filter((id) => ctx.pins.has(id)).length, 0)
+  const share = activeDays > 0 ? Math.ceil(everything / activeDays) : 0
+
   const done = new Map<string, SuggestedDay>()
   for (const day of pinnedDays) {
     const pinned = day.placeIds.map((id) => ctx.placeById.get(id)).filter((p): p is Place => !!p && ctx.pins.has(p.id))
-    const { day: filled, used } = fillDay(day, pinned, [...pool.values()], ctx)
+    const { day: filled, used } = fillDay(day, pinned, [...pool.values()], ctx, share)
     used.forEach((id) => pool.delete(id))
     done.set(day.dayId, filled)
   }
@@ -180,12 +191,16 @@ export function replanAll(plan: Suggestion, ctx: ReplanCtx): Suggestion {
     pace: ctx.pace,
     prefs: ctx.prefs,
     variant: ctx.variant,
+    fitAll: ctx.fitAll,
     closedOn: ctx.closedOn,
     stay: ctx.stay,
   })
   const restById = new Map(rest.days.map((d) => [d.dayId, d]))
+  const keepSettings = (was: SuggestedDay, now: SuggestedDay): SuggestedDay => ({ ...now, anchorUse: was.anchorUse })
   return {
-    days: plan.days.map((d) => done.get(d.dayId) ?? (d.mode === 'off' ? d : restById.get(d.dayId) ?? { ...d, placeIds: [], labels: {} })),
+    days: plan.days.map((d) =>
+      done.get(d.dayId) ?? (d.mode === 'off' ? d : restById.get(d.dayId) ? keepSettings(d, restById.get(d.dayId)!) : { ...d, placeIds: [], labels: {}, times: {} }),
+    ),
     unscheduled: rest.unscheduled,
     reasons: rest.reasons,
   }
