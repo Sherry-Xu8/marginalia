@@ -16,6 +16,7 @@ export type MapDay = { dayId: string; label: string; places: Place[] }
 export function DraftMap({
   days,
   activeId,
+  focusId,
   spare,
   anchor,
   onAdd,
@@ -23,6 +24,7 @@ export function DraftMap({
 }: {
   days: MapDay[]
   activeId?: string
+  focusId?: string // a place you tapped in the list: the map flies to it
   spare: Place[]
   anchor?: Place
   onAdd: (placeId: string) => void
@@ -35,6 +37,7 @@ export function DraftMap({
   const layer = useRef<L.LayerGroup | null>(null)
   const cb = useRef({ onAdd, onPickDay })
   cb.current = { onAdd, onPickDay }
+  const markers = useRef(new Map<string, L.Marker>())
 
   useEffect(() => {
     if (!el.current) return
@@ -56,6 +59,7 @@ export function DraftMap({
     const m = map.current
     if (!g || !m) return
     g.clearLayers()
+    markers.current.clear()
     const active = days.find((d) => d.dayId === activeId) ?? days[0]
 
     // The other days first, so the day you're on sits on top of them.
@@ -88,7 +92,7 @@ export function DraftMap({
         iconSize: [30, 30],
         iconAnchor: [15, 15],
       })
-      L.marker([p.lat, p.lon], { icon, title: p.name }).addTo(g)
+      markers.current.set(p.id, L.marker([p.lat, p.lon], { icon, title: p.name }).addTo(g))
     })
     for (const p of spare) {
       const icon = L.divIcon({ className: 'num-pin spare-pin', html: '<span>+</span>', iconSize: [26, 26], iconAnchor: [13, 13] })
@@ -108,6 +112,18 @@ export function DraftMap({
     if (pts.length > 0) m.fitBounds(L.latLngBounds(pts), { padding: [34, 34], maxZoom: fit === 'trip' ? 15 : 16 })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [key])
+
+  // Tapping a place in the list brings it into view.
+  useEffect(() => {
+    const m = map.current
+    markers.current.forEach((mk, id) => mk.getElement()?.classList.toggle('focus', id === focusId))
+    if (!m || !focusId) return
+    const mk = markers.current.get(focusId)
+    if (mk) {
+      m.invalidateSize()
+      m.flyTo(mk.getLatLng(), Math.max(m.getZoom(), 16), { duration: 0.6 })
+    }
+  }, [focusId])
 
   return (
     <div className="draft-map-wrap">

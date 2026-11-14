@@ -106,15 +106,15 @@ function DraftJourney({ transfer, free }: { transfer: Transfer; free?: { start: 
 
 // One place in a drafted day: drag the handle to reorder, pick which meal it is, or set it aside.
 function DraftRow({
-  id, index, time, leg, fixed, band, label, problem, canLabel, pinned, moveTo, onPin, onFix, onBand, onLabel, onMove, onRemove, children,
+  id, index, time, leg, fixed, band, label, problem, canLabel, pinned, focused, moveTo, onPin, onFix, onBand, onLabel, onMove, onRemove, onFocus, children,
 }: {
-  id: string; index: number; time?: number; leg?: { km: number; minutes: number }; fixed?: string; band?: string; label?: string; problem?: string; canLabel: boolean; pinned: boolean
+  id: string; index: number; time?: number; leg?: { km: number; minutes: number }; fixed?: string; band?: string; label?: string; problem?: string; canLabel: boolean; pinned: boolean; focused?: boolean
   moveTo: { dayId: string; label: string }[]
-  onPin: () => void; onFix: (time: string) => void; onBand: (band: string) => void; onLabel: (label: string) => void; onMove: (dayId: string) => void; onRemove: () => void; children: React.ReactNode
+  onPin: () => void; onFix: (time: string) => void; onBand: (band: string) => void; onLabel: (label: string) => void; onMove: (dayId: string) => void; onRemove: () => void; onFocus: () => void; children: React.ReactNode
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id })
   return (
-    <div ref={setNodeRef} style={{ transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.6 : 1 }} className="draft-row">
+    <div ref={setNodeRef} style={{ transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.6 : 1 }} className={'draft-row' + (focused ? ' focused' : '')}>
       {leg && (
         <span
           className="leg-hint muted"
@@ -127,7 +127,7 @@ function DraftRow({
         <GripVertical size={18} />
       </button>
       <span className="draft-main">
-        <span>{index + 1}. {children}</span>
+        <button className="draft-name" onClick={onFocus} title="Show this on the map">{index + 1}. {children}</button>
         <span className="draft-sub">
           {fixed ? (
             <span className="fixed-time" title="A time you've fixed — a booking, a tour, a train">
@@ -285,6 +285,7 @@ export function SuggestSheet({ trip, stop, onClose }: { trip: Trip; stop: Stop; 
   const [mapDayId, setMapDayId] = useState('')
   const [addingTo, setAddingTo] = useState<string | null>(null)
   const [pickFor, setPickFor] = useState<string | null>(null)
+  const [focusId, setFocusId] = useState<string | undefined>()
   const [replanTurn, setReplanTurn] = useState(0) // bumped each press, so you get a different option around the same pins
   const togglePin = (id: string) =>
     setPins((cur) => {
@@ -857,6 +858,8 @@ export function SuggestSheet({ trip, stop, onClose }: { trip: Trip; stop: Stop; 
                             onFix={(t) => setFixedTime(d.dayId, id, t)}
                             onBand={(b) => setBand(d.dayId, id, b)}
                             pinned={pins.has(id)}
+                            focused={focusId === id}
+                            onFocus={() => setFocusId(id)}
                             onPin={() => togglePin(id)}
                             moveTo={mapDays.filter((m) => m.dayId !== d.dayId).map((m) => ({ dayId: m.dayId, label: m.label }))}
                             onMove={(to) => moveToDay(d.dayId, id, to)}
@@ -958,6 +961,7 @@ export function SuggestSheet({ trip, stop, onClose }: { trip: Trip; stop: Stop; 
                     <DraftMap
                       days={mapDays}
                       activeId={activeDay.dayId}
+                      focusId={focusId}
                       spare={spareFor(activeDay, 12).map((x) => x.place)}
                       anchor={activeDay.anchorId ? placeById.get(activeDay.anchorId) : undefined}
                       onAdd={(id) => addToPlanDay(activeDay.dayId, id)}
