@@ -9,7 +9,7 @@ import { toMinutes } from './journeys'
 // only ever raise a warning when the place's opening hours are clear, never on a guess.
 
 export type MealLabel = 'Breakfast' | 'Lunch' | 'Dinner' | 'Café'
-export type Problem = { id: string; kind: 'closed' | 'late' | 'early' | 'order' | 'meal-late' | 'meal-gap' | 'meal-run' | 'booked'; text: string }
+export type Problem = { id: string; kind: 'closed' | 'late' | 'early' | 'order' | 'meal-late' | 'meal-gap' | 'meal-run' | 'booked' | 'band'; text: string }
 // legTo: how far and how long it is to reach each place from the one before it (the first is from where the day starts).
 export type DayCheck = { arrive: Record<string, number>; legTo: Record<string, { km: number; minutes: number }>; problems: Problem[]; km: number; travel: number; end: number }
 
@@ -17,6 +17,15 @@ export type DayCheck = { arrive: Record<string, number>; legTo: Record<string, {
 const EARLIEST: Partial<Record<MealLabel, number>> = { Breakfast: 8 * 60, Lunch: 12 * 60, Dinner: 18 * 60 }
 // And the latest they still make sense: a "lunch" at 16:25 isn't lunch, and most kitchens have stopped serving by then.
 const LATEST: Partial<Record<MealLabel, number>> = { Breakfast: 11 * 60, Lunch: 15 * 60, Dinner: 22 * 60 }
+// A loose time of day, for "Orchard Road in the evening" — softer than a booking, but the day still plans around it.
+export const BANDS = {
+  morning: { label: 'in the morning', start: 8 * 60, end: 12 * 60 },
+  afternoon: { label: 'in the afternoon', start: 12 * 60, end: 17 * 60 },
+  evening: { label: 'in the evening', start: 17 * 60, end: 21 * 60 },
+  night: { label: 'at night', start: 20 * 60, end: 24 * 60 },
+} as const
+export type Band = keyof typeof BANDS
+
 const MEAL_GAP = 120 // two meals inside two hours of each other is one too many
 
 // A meal is a restaurant, or any place you've said is breakfast, lunch or dinner. A café on its own isn't
@@ -68,10 +77,10 @@ const travelMinutes = (km: number) => (km < 1.2 ? km * 13 : 8 + km * 3.5)
 
 // anchor: where the day begins (your hotel, or nowhere if you're arriving from elsewhere).
 // anchorEnd: where it ends. Left out, the day ends wherever its last place is.
-type DayOpts = { places: Place[]; labels?: Record<string, string>; times?: Record<string, string>; date: string; start: number; anchor?: Place; anchorEnd?: Place }
+type DayOpts = { places: Place[]; labels?: Record<string, string>; times?: Record<string, string>; bands?: Record<string, string>; date: string; start: number; anchor?: Place; anchorEnd?: Place }
 
 export function checkDay(opts: DayOpts): DayCheck {
-  const { places, labels = {}, times = {}, date, start, anchor, anchorEnd } = opts
+  const { places, labels = {}, times = {}, bands = {}, date, start, anchor, anchorEnd } = opts
   const arrive: Record<string, number> = {}
   const legTo: Record<string, { km: number; minutes: number }> = {}
   const problems: Problem[] = []
@@ -97,6 +106,12 @@ export function checkDay(opts: DayOpts): DayCheck {
     if (clash) problems.push({ id: p.id, kind: 'order', text: `${label} is after ${clash.toLowerCase()}, so it would be about ${clockText(Math.max(t, EARLIEST[label as MealLabel] ?? 0))}` })
     const earliest = label ? EARLIEST[label as MealLabel] : undefined
     if (earliest !== undefined && t < earliest) t = earliest
+    // A loose time of day you asked for: you wait if you're early, and it's a clash if the day has run past it.
+    const band = BANDS[bands[p.id] as Band]
+    if (band) {
+      if (t > band.end) problems.push({ id: p.id, kind: 'band', text: `you wanted this ${band.label}, but you'd get here about ${clockText(t)}` })
+      t = Math.max(t, band.start)
+    }
     // A time you've fixed yourself (a booking, a tour, a train): you wait if you're early, and it's a clash if you'd be late.
     const booked = toMinutes(times[p.id])
     if (booked !== undefined) {

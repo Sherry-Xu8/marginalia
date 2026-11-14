@@ -2,7 +2,7 @@ import { DndContext, KeyboardSensor, PointerSensor, closestCenter, useSensor, us
 import { SortableContext, arrayMove, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 import { Clock, GripVertical, Pin, Star, TriangleAlert, X } from 'lucide-react'
-import { checkDay, clockText, improveOrder } from '../lib/daycheck'
+import { BANDS, checkDay, clockText, improveOrder } from '../lib/daycheck'
 import { fmtKm, fmtMinutes, LONG_TRAVEL_MINUTES, WALK_BELOW_KM } from '../lib/commute'
 import { WeatherChip } from './WeatherChip'
 import { DraftMap, dayColour } from './DraftMap'
@@ -106,11 +106,11 @@ function DraftJourney({ transfer, free }: { transfer: Transfer; free?: { start: 
 
 // One place in a drafted day: drag the handle to reorder, pick which meal it is, or set it aside.
 function DraftRow({
-  id, index, time, leg, fixed, label, problem, canLabel, pinned, moveTo, onPin, onFix, onLabel, onMove, onRemove, children,
+  id, index, time, leg, fixed, band, label, problem, canLabel, pinned, moveTo, onPin, onFix, onBand, onLabel, onMove, onRemove, children,
 }: {
-  id: string; index: number; time?: number; leg?: { km: number; minutes: number }; fixed?: string; label?: string; problem?: string; canLabel: boolean; pinned: boolean
+  id: string; index: number; time?: number; leg?: { km: number; minutes: number }; fixed?: string; band?: string; label?: string; problem?: string; canLabel: boolean; pinned: boolean
   moveTo: { dayId: string; label: string }[]
-  onPin: () => void; onFix: (time: string) => void; onLabel: (label: string) => void; onMove: (dayId: string) => void; onRemove: () => void; children: React.ReactNode
+  onPin: () => void; onFix: (time: string) => void; onBand: (band: string) => void; onLabel: (label: string) => void; onMove: (dayId: string) => void; onRemove: () => void; children: React.ReactNode
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id })
   return (
@@ -142,11 +142,21 @@ function DraftRow({
               <button aria-label="Clear the fixed time, back to an estimate" title="Back to an estimated time" onClick={() => onFix('')}>×</button>
             </span>
           ) : (
-            time !== undefined && (
-              <button className="time-btn" title="Tap to fix this time (a booking, a tour, a train)" onClick={() => onFix(clockText(time))}>
-                about {clockText(time)}
-              </button>
-            )
+            <>
+              {time !== undefined && <small className="muted">about {clockText(time)}</small>}
+              <select
+                className="when-select"
+                aria-label="When you want to be here"
+                value={band ?? ''}
+                onChange={(e) => (e.target.value === '__exact' ? onFix(clockText(time ?? 9 * 60)) : onBand(e.target.value))}
+              >
+                <option value="">whenever it fits</option>
+                {Object.entries(BANDS).map(([key, b]) => (
+                  <option key={key} value={key}>{b.label}</option>
+                ))}
+                <option value="__exact">at a set time…</option>
+              </select>
+            </>
           )}
           {canLabel && (
             <select className="meal-select" aria-label="Which meal is this?" value={label ?? ''} onChange={(e) => onLabel(e.target.value)}>
@@ -358,6 +368,22 @@ export function SuggestSheet({ trip, stop, onClose }: { trip: Trip; stop: Stop; 
         unscheduled: aside ? [...p.unscheduled, placeId] : p.unscheduled.filter((x) => x !== placeId),
       }
     })
+
+  // A loose time of day ("in the evening"), softer than a booking but still planned around.
+  const setBand = (dayId: string, placeId: string, band: string) => {
+    if (band) setPins((cur) => new Set(cur).add(placeId))
+    setPlan((p) => {
+      if (!p) return p
+      return {
+        ...p,
+        days: p.days.map((d) => {
+          if (d.dayId !== dayId) return d
+          const { [placeId]: _old, ...rest } = d.bands ?? {}
+          return { ...d, bands: band ? { ...rest, [placeId]: band } : rest }
+        }),
+      }
+    })
+  }
 
   const setLabel = (dayId: string, placeId: string, label: string) => {
     if (label) setPins((cur) => new Set(cur).add(placeId)) // choosing a meal for a place is a decision to keep
@@ -741,6 +767,7 @@ export function SuggestSheet({ trip, stop, onClose }: { trip: Trip; stop: Stop; 
                 places: ordered,
                 labels: d.labels,
                 times: d.times,
+                bands: d.bands,
                 date: d.date,
                 start: windowOf(d.date)?.start ?? DAY_START,
                 anchor: startAt,
@@ -823,7 +850,9 @@ export function SuggestSheet({ trip, stop, onClose }: { trip: Trip; stop: Stop; 
                             problem={check?.problems.filter((x) => x.id === id).map((x) => x.text).join(' · ') || undefined}
                             canLabel={pl?.tag === 'Food' || pl?.tag === 'Cafes'}
                             fixed={d.times?.[id]}
+                            band={d.bands?.[id]}
                             onFix={(t) => setFixedTime(d.dayId, id, t)}
+                            onBand={(b) => setBand(d.dayId, id, b)}
                             pinned={pins.has(id)}
                             onPin={() => togglePin(id)}
                             moveTo={mapDays.filter((m) => m.dayId !== d.dayId).map((m) => ({ dayId: m.dayId, label: m.label }))}
@@ -841,7 +870,7 @@ export function SuggestSheet({ trip, stop, onClose }: { trip: Trip; stop: Stop; 
                     <div className="fit-tip">
                       <span>
                         <b>A better order:</b>{' '}
-                        {[better.fixed > 0 ? `fits the opening hours of ${better.fixed} place${better.fixed === 1 ? '' : 's'}` : '', better.savedKm >= 0.5 ? `saves about ${better.savedKm.toFixed(1)} km of travel` : ''].filter(Boolean).join(' and ')}.
+                        {[better.fixed > 0 ? `clears ${better.fixed} clash${better.fixed === 1 ? '' : 'es'}` : '', better.savedKm >= 0.5 ? `saves about ${better.savedKm.toFixed(1)} km of travel` : ''].filter(Boolean).join(' and ')}.
                       </span>
                       <button className="soft-btn" onClick={() => setDayIds(d.dayId, better.order)}>Use it</button>
                     </div>
@@ -953,7 +982,7 @@ export function SuggestSheet({ trip, stop, onClose }: { trip: Trip; stop: Stop; 
             {pickFor &&
               createPortal(
                 <DraftPicker
-                  places={stopPlaces.filter((p) => p.tag !== 'Accommodation' && p.tag !== 'Transport')}
+                  places={stopPlaces}
                   dayLabel={shortDate(plan.days.find((d) => d.dayId === pickFor)?.date ?? '')}
                   whereIs={(id) => {
                     const on = plan.days.find((d) => d.placeIds.includes(id))
@@ -985,7 +1014,7 @@ export function SuggestSheet({ trip, stop, onClose }: { trip: Trip; stop: Stop; 
               <button
                 className="primary"
                 onClick={() => {
-                  applySuggestion(plan.days.filter((d) => d.mode !== 'off').map((d) => ({ dayId: d.dayId, placeIds: d.placeIds, times: d.times, startId: d.startId, endId: d.endId })))
+                  applySuggestion(plan.days.filter((d) => d.mode !== 'off').map((d) => ({ dayId: d.dayId, placeIds: d.placeIds, times: d.times, bands: d.bands, startId: d.startId, endId: d.endId })))
                   onClose()
                 }}
               >

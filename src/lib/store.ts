@@ -567,7 +567,7 @@ export function removeCheckItem(tripId: string, itemId: string) {
 }
 
 // Saves an accepted suggestion: each listed day gets exactly these places, in this order.
-export function applySuggestion(plan: { dayId: string; placeIds: string[]; times?: Record<string, string>; startId?: string | null; endId?: string | null }[]) {
+export function applySuggestion(plan: { dayId: string; placeIds: string[]; times?: Record<string, string>; bands?: Record<string, string>; startId?: string | null; endId?: string | null }[]) {
   const byDay = new Map(plan.map((p) => [p.dayId, p]))
   update((s) => ({
     ...s,
@@ -577,6 +577,7 @@ export function applySuggestion(plan: { dayId: string; placeIds: string[]; times
             ...d,
             // Times you fixed yourself in the draft (a booking, a tour) are kept on the day's plan.
             items: byDay.get(d.id)!.placeIds.map((placeId) => ({ id: newId(), placeId, note: '', done: false, time: byDay.get(d.id)!.times?.[placeId] })),
+            bands: byDay.get(d.id)!.bands,
             startPlaceId: byDay.get(d.id)!.startId,
             endPlaceId: byDay.get(d.id)!.endId,
           }
