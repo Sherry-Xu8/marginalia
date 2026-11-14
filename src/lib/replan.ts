@@ -1,7 +1,7 @@
 import type { Place } from '../types'
 import { arrangeDay } from './daycheck'
 import { distanceKm } from './geo'
-import { DAY_START } from './journeys'
+import { DAY_END, DAY_START, toMinutes } from './journeys'
 import { quotaFor, suggestItinerary, type MealName, type Pace, type Prefs, type Suggestion, type SuggestedDay } from './itinerary'
 
 // "Re-plan around my choices". Places you've pinned (for example the café you chose for lunch) stay on
@@ -75,6 +75,7 @@ function fillDay(day: SuggestedDay, pinned: Place[], pool: Place[], ctx: ReplanC
 
   // A first draft of the order (breakfast first, lunch in the middle, dinner last), then the clock and opening hours tidy it.
   const anchor = day.anchorId ? ctx.placeById.get(day.anchorId) : ctx.stay
+  const use = day.anchorUse ?? 'both'
   const byLabel = (l: string) => places.filter((p) => labels[p.id] === l)
   const rest = places.filter((p) => !['Breakfast', 'Lunch', 'Dinner', 'Café'].includes(labels[p.id] ?? ''))
   const route: Place[] = []
@@ -89,7 +90,16 @@ function fillDay(day: SuggestedDay, pinned: Place[], pool: Place[], ctx: ReplanC
   }
   const half = Math.ceil(route.length / 2)
   const draft = [...byLabel('Breakfast'), ...route.slice(0, half), ...byLabel('Lunch'), ...byLabel('Café'), ...route.slice(half), ...byLabel('Dinner')]
-  const ordered = arrangeDay({ places: draft, labels, date: day.date, start: w?.start ?? DAY_START, anchor })
+  // A place with a time you fixed yourself sits at that hour; everything else keeps its place in the day,
+  // so the draft the ordering starts from already respects your bookings.
+  const dayFrom = w?.start ?? DAY_START
+  const dayUntil = Math.max(dayFrom + 60, w?.end ?? DAY_END)
+  const seeded = draft
+    .map((p, i) => ({ p, at: toMinutes(day.times?.[p.id]) ?? dayFrom + ((i + 0.5) * (dayUntil - dayFrom)) / draft.length }))
+    .sort((a, b) => a.at - b.at)
+    .map((x) => x.p)
+  // Times you've fixed go in too, or the re-plan happily drops a 09:00 booking into the afternoon.
+  const ordered = arrangeDay({ places: seeded, labels, times: day.times, date: day.date, start: w?.start ?? DAY_START, anchor: use === 'both' || use === 'start' ? anchor : undefined, anchorEnd: use === 'both' || use === 'end' ? anchor : undefined })
   const sorted = ordered.map((p) => p.id)
   return { day: { ...day, placeIds: sorted, labels, anchorId: anchor?.id ?? day.anchorId }, used: new Set(chosen.map((p) => p.id)) }
 }

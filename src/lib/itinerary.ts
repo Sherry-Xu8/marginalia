@@ -70,7 +70,10 @@ export function stopDays(trip: Trip, stop: Stop, transfers: Transfer[] = []): { 
   }))
 }
 
-export type SuggestedDay = { dayId: string; date: string; mode: DayMode; placeIds: string[]; anchorId?: string; labels?: Record<string, string>; times?: Record<string, string> }
+// anchorUse: whether the day starts and/or ends where you're staying. An arrival day often doesn't start
+// there (you come from the airport), and a departure day doesn't end there.
+export type AnchorUse = 'both' | 'start' | 'end' | 'none'
+export type SuggestedDay = { dayId: string; date: string; mode: DayMode; placeIds: string[]; anchorId?: string; anchorUse?: AnchorUse; labels?: Record<string, string>; times?: Record<string, string> }
 export type Suggestion = { days: SuggestedDay[]; unscheduled: string[]; reasons?: Record<string, string> }
 export type Slot = { dayId: string; date: string; mode: DayMode; free?: FreeWindow }
 

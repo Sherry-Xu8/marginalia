@@ -65,10 +65,12 @@ export function clusteredStay(minutes: number, nearestNeighbourKm: number): numb
 // Walking for short hops, otherwise a bus or train.
 const travelMinutes = (km: number) => (km < 1.2 ? km * 13 : 8 + km * 3.5)
 
-type DayOpts = { places: Place[]; labels?: Record<string, string>; times?: Record<string, string>; date: string; start: number; anchor?: Place }
+// anchor: where the day begins (your hotel, or nowhere if you're arriving from elsewhere).
+// anchorEnd: where it ends. Left out, the day ends wherever its last place is.
+type DayOpts = { places: Place[]; labels?: Record<string, string>; times?: Record<string, string>; date: string; start: number; anchor?: Place; anchorEnd?: Place }
 
 export function checkDay(opts: DayOpts): DayCheck {
-  const { places, labels = {}, times = {}, date, start, anchor } = opts
+  const { places, labels = {}, times = {}, date, start, anchor, anchorEnd } = opts
   const arrive: Record<string, number> = {}
   const problems: Problem[] = []
   let t = start
@@ -129,8 +131,8 @@ export function checkDay(opts: DayOpts): DayCheck {
     t += isMeal(p, label) ? mins : clusteredStay(mins, Math.min(...gaps))
     prev = p
   }
-  if (prev && anchor) {
-    const back = distanceKm(prev, anchor)
+  if (prev && anchorEnd) {
+    const back = distanceKm(prev, anchorEnd)
     km += back
     travel += travelMinutes(back)
   }
@@ -138,7 +140,7 @@ export function checkDay(opts: DayOpts): DayCheck {
 }
 
 // Lower is better: a place that's shut when you arrive matters most, then meals out of order, then walking.
-function cost(places: Place[], opts: { labels?: Record<string, string>; date: string; start: number; anchor?: Place }): number {
+function cost(places: Place[], opts: Omit<DayOpts, 'places'>): number {
   const c = checkDay({ ...opts, places })
   return 1000 * c.problems.length + 10 * c.km + 2 * Math.max(0, c.end - 21 * 60) / 10
 }

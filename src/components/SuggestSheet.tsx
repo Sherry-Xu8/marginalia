@@ -27,6 +27,7 @@ import {
   type MealName,
   type Pace,
   type Prefs,
+  type AnchorUse,
   type Suggestion,
 } from '../lib/itinerary'
 import { applySuggestion, setGroupStop, tagUntagged, useAppData } from '../lib/store'
@@ -209,6 +210,10 @@ export function SuggestSheet({ trip, stop, onClose }: { trip: Trip; stop: Stop; 
       }
     })
   }
+
+  // Whether a day starts and/or ends where you're staying (an arrival day often starts from the airport instead).
+  const setAnchorUse = (dayId: string, use: AnchorUse) =>
+    setPlan((p) => p && { ...p, days: p.days.map((d) => (d.dayId === dayId ? { ...d, anchorUse: use } : d)) })
 
   const setLabel = (dayId: string, placeId: string, label: string) => {
     if (label) setPins((cur) => new Set(cur).add(placeId)) // choosing a meal for a place is a decision to keep
@@ -563,7 +568,16 @@ export function SuggestSheet({ trip, stop, onClose }: { trip: Trip; stop: Stop; 
             {plan.days.map((d) => {
               const anchor = d.anchorId ? placeById.get(d.anchorId) : undefined
               const ordered = d.placeIds.map((id) => placeById.get(id)).filter((x): x is Place => !!x)
-              const timing = { places: ordered, labels: d.labels, times: d.times, date: d.date, start: windowOf(d.date)?.start ?? DAY_START, anchor }
+              const use: AnchorUse = d.anchorUse ?? 'both'
+              const timing = {
+                places: ordered,
+                labels: d.labels,
+                times: d.times,
+                date: d.date,
+                start: windowOf(d.date)?.start ?? DAY_START,
+                anchor: use === 'both' || use === 'start' ? anchor : undefined,
+                anchorEnd: use === 'both' || use === 'end' ? anchor : undefined,
+              }
               const check = d.mode !== 'off' && ordered.length > 0 ? checkDay(timing) : undefined
               const better = check ? improveOrder(timing) : null
               return (
@@ -574,7 +588,19 @@ export function SuggestSheet({ trip, stop, onClose }: { trip: Trip; stop: Stop; 
                   <strong>{shortDate(d.date)}</strong>
                   <span className="muted"> · {MODE_LABEL[d.mode]}</span>
                   {d.mode !== 'off' && <WeatherChip point={ordered[0] ?? anchor} date={d.date} />}
-                  {anchor && <p className="muted">Starts and ends at {anchor.name}</p>}
+                  {anchor && (
+                    <p className="muted anchor-row">
+                      <select aria-label={`Where the day starts and ends, ${shortDate(d.date)}`} value={use} onChange={(e) => setAnchorUse(d.dayId, e.target.value as AnchorUse)}>
+                        <option value="both">Starts and ends at</option>
+                        <option value="end">Ends at</option>
+                        <option value="start">Starts at</option>
+                        <option value="none">Not based at</option>
+                      </select>{' '}
+                      {anchor.name}
+                      {use === 'end' && <small> · arriving from somewhere else</small>}
+                      {use === 'start' && <small> · moving on afterwards</small>}
+                    </p>
+                  )}
                   {check && ordered.length > 1 && (
                     <p className={'muted draft-travel' + (check.travel > LONG_TRAVEL_MINUTES ? ' warn' : '')}>
                       {fmtMinutes(check.travel)} of travel · ends about {clockText(check.end)}

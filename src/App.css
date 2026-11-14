@@ -1106,3 +1106,5 @@ button.danger-solid:hover:not(:disabled) { background: color-mix(in srgb, var(--
 .fit-pick { position: absolute; right: 10px; top: 10px; z-index: 500; display: flex; gap: 2px; padding: 2px; border-radius: 11px; background: var(--card); box-shadow: 0 2px 6px rgba(31, 28, 25, 0.25); }
 .fit-pick button { min-height: 26px; padding: 0 9px; border-radius: 9px; border: 0; background: transparent; color: var(--muted); font-size: 0.74rem; font-weight: 600; cursor: pointer; }
 .fit-pick button.on { background: var(--accent); color: var(--accent-text); }
+.anchor-row { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin: 2px 0; }
+.anchor-row select { width: auto; min-height: 26px; padding: 0 6px; font-size: 0.78rem; border-radius: 9px; }
