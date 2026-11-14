@@ -2,7 +2,7 @@ import type { Place } from '../types'
 import { arrangeDay } from './daycheck'
 import { distanceKm } from './geo'
 import { DAY_END, DAY_START, toMinutes } from './journeys'
-import { quotaFor, suggestItinerary, type MealName, type Pace, type Prefs, type Suggestion, type SuggestedDay } from './itinerary'
+import { quotaFor, type MealName, type Pace, type Prefs, type Suggestion, type SuggestedDay } from './itinerary'
 
 // "Re-plan around my choices". Places you've pinned (for example the café you chose for lunch) stay on
 // their day. The rest of the day is then rebuilt around them: nearby places fill whatever the day still
@@ -110,7 +110,7 @@ function fillDay(day: SuggestedDay, pinned: Place[], pool: Place[], ctx: ReplanC
   return { day: { ...day, placeIds: sorted, labels, anchorId: anchor?.id ?? day.anchorId }, used: new Set(chosen.map((p) => p.id)) }
 }
 
-export type Replanned = { plan: Suggestion; pulled: number; setAside: number }
+export type Replanned = { plan: Suggestion; pulled: number; setAside: number; days?: number }
 
 // Rebuild one day around its pinned places, drawing on unscheduled places and on places on other days
 // that are close to what's pinned here.
@@ -178,52 +178,20 @@ export function replanDay(plan: Suggestion, dayId: string, ctx: ReplanCtx): Repl
   }
 }
 
-// Rebuild every day that has pinned places, then plan the remaining days from whatever is left.
-export function replanAll(plan: Suggestion, ctx: ReplanCtx): Suggestion {
+// Rebuild each day that has pinned places, one at a time. Days with no pins are left exactly as they are:
+// pinning one place on the last day should not reshuffle the days before it.
+export function replanAll(plan: Suggestion, ctx: ReplanCtx): Replanned {
   const pinnedDays = plan.days.filter((d) => d.mode !== 'off' && d.placeIds.some((id) => ctx.pins.has(id)))
-  if (pinnedDays.length === 0) return plan
-
-  const pool = new Map<string, Place>()
-  const add = (id: string) => {
-    const p = ctx.placeById.get(id)
-    if (p && !ctx.pins.has(id)) pool.set(id, p)
+  let out = plan
+  let pulled = 0
+  let setAside = 0
+  let days = 0
+  for (const d of pinnedDays) {
+    const r = replanDay(out, d.dayId, ctx)
+    if (r.plan !== out) days++
+    out = r.plan
+    pulled += r.pulled
+    setAside += r.setAside
   }
-  plan.days.forEach((d) => d.placeIds.forEach(add))
-  plan.unscheduled.forEach(add)
-
-  const activeDays = plan.days.filter((d) => d.mode !== 'off').length
-  const everything = pool.size + plan.days.reduce((n, d) => n + d.placeIds.filter((id) => ctx.pins.has(id)).length, 0)
-  const share = activeDays > 0 ? Math.ceil(everything / activeDays) : 0
-
-  const done = new Map<string, SuggestedDay>()
-  for (const day of pinnedDays) {
-    const pinned = day.placeIds.map((id) => ctx.placeById.get(id)).filter((p): p is Place => !!p && ctx.pins.has(p.id))
-    const { day: filled, used } = fillDay(day, pinned, [...pool.values()], ctx, share)
-    used.forEach((id) => pool.delete(id))
-    done.set(day.dayId, filled)
-  }
-
-  const restSlots = plan.days
-    .filter((d) => d.mode !== 'off' && !done.has(d.dayId))
-    .map((d) => ({ dayId: d.dayId, date: d.date, mode: d.mode, free: ctx.windowOf(d.date) }))
-  const rest = suggestItinerary({
-    places: [...pool.values()],
-    slots: restSlots,
-    pace: ctx.pace,
-    prefs: ctx.prefs,
-    variant: ctx.variant,
-    fitAll: ctx.fitAll,
-    closedOn: ctx.closedOn,
-    stay: ctx.stay,
-  })
-  const restById = new Map(rest.days.map((d) => [d.dayId, d]))
-  const keepSettings = (was: SuggestedDay, now: SuggestedDay): SuggestedDay => ({ ...now, startId: was.startId, endId: was.endId })
-  return {
-    days: plan.days.map((d) =>
-      done.get(d.dayId) ?? (d.mode === 'off' ? d : restById.get(d.dayId) ? keepSettings(d, restById.get(d.dayId)!) : { ...d, placeIds: [], labels: {}, times: {} }),
-    ),
-    unscheduled: rest.unscheduled,
-    reasons: rest.reasons,
-  }
+  return { plan: out, pulled, setAside, days }
 }
-

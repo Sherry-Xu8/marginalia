@@ -10,7 +10,8 @@ import { toMinutes } from './journeys'
 
 export type MealLabel = 'Breakfast' | 'Lunch' | 'Dinner' | 'Café'
 export type Problem = { id: string; kind: 'closed' | 'late' | 'early' | 'order' | 'meal-late' | 'meal-gap' | 'meal-run' | 'booked'; text: string }
-export type DayCheck = { arrive: Record<string, number>; problems: Problem[]; km: number; travel: number; end: number }
+// legTo: how far and how long it is to reach each place from the one before it (the first is from where the day starts).
+export type DayCheck = { arrive: Record<string, number>; legTo: Record<string, { km: number; minutes: number }>; problems: Problem[]; km: number; travel: number; end: number }
 
 // A meal isn't eaten before its usual time, so a stop labelled Dinner is reached no earlier than 18:00.
 const EARLIEST: Partial<Record<MealLabel, number>> = { Breakfast: 8 * 60, Lunch: 12 * 60, Dinner: 18 * 60 }
@@ -72,6 +73,7 @@ type DayOpts = { places: Place[]; labels?: Record<string, string>; times?: Recor
 export function checkDay(opts: DayOpts): DayCheck {
   const { places, labels = {}, times = {}, date, start, anchor, anchorEnd } = opts
   const arrive: Record<string, number> = {}
+  const legTo: Record<string, { km: number; minutes: number }> = {}
   const problems: Problem[] = []
   let t = start
   let km = 0
@@ -85,6 +87,7 @@ export function checkDay(opts: DayOpts): DayCheck {
     const hop = prev ? distanceKm(prev, p) : 0
     km += hop
     const hopMins = prev ? travelMinutes(hop) : 0
+    if (prev) legTo[p.id] = { km: hop, minutes: Math.round(hopMins) }
     travel += hopMins
     t += hopMins
     const label = labels[p.id]
@@ -136,7 +139,7 @@ export function checkDay(opts: DayOpts): DayCheck {
     km += back
     travel += travelMinutes(back)
   }
-  return { arrive, problems, km, travel: Math.round(travel), end: t }
+  return { arrive, legTo, problems, km, travel: Math.round(travel), end: t }
 }
 
 // Lower is better: a place that's shut when you arrive matters most, then meals out of order, then walking.

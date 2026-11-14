@@ -3,7 +3,7 @@ import { SortableContext, arrayMove, sortableKeyboardCoordinates, useSortable, v
 import { CSS } from '@dnd-kit/utilities'
 import { Clock, GripVertical, Pin, Star, TriangleAlert, X } from 'lucide-react'
 import { checkDay, clockText, improveOrder } from '../lib/daycheck'
-import { fmtMinutes, LONG_TRAVEL_MINUTES } from '../lib/commute'
+import { fmtKm, fmtMinutes, LONG_TRAVEL_MINUTES } from '../lib/commute'
 import { WeatherChip } from './WeatherChip'
 import { DraftMap, dayColour } from './DraftMap'
 import { AddPlaceSheet } from './AddPlaceSheet'
@@ -89,15 +89,20 @@ const LABELS = ['Breakfast', 'Lunch', 'Dinner', 'Café'] as const
 
 // One place in a drafted day: drag the handle to reorder, pick which meal it is, or set it aside.
 function DraftRow({
-  id, index, time, fixed, label, problem, canLabel, pinned, moveTo, onPin, onFix, onLabel, onMove, onRemove, children,
+  id, index, time, leg, fixed, label, problem, canLabel, pinned, moveTo, onPin, onFix, onLabel, onMove, onRemove, children,
 }: {
-  id: string; index: number; time?: number; fixed?: string; label?: string; problem?: string; canLabel: boolean; pinned: boolean
+  id: string; index: number; time?: number; leg?: { km: number; minutes: number }; fixed?: string; label?: string; problem?: string; canLabel: boolean; pinned: boolean
   moveTo: { dayId: string; label: string }[]
   onPin: () => void; onFix: (time: string) => void; onLabel: (label: string) => void; onMove: (dayId: string) => void; onRemove: () => void; children: React.ReactNode
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id })
   return (
     <div ref={setNodeRef} style={{ transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.6 : 1 }} className="draft-row">
+      {leg && (
+        <span className="leg-hint muted" aria-label={`${fmtMinutes(leg.minutes)} to get here`}>
+          ↓ {fmtMinutes(leg.minutes)} · {fmtKm(leg.km)}
+        </span>
+      )}
       <button className="handle" aria-label="Drag to reorder" {...attributes} {...listeners}>
         <GripVertical size={18} />
       </button>
@@ -450,9 +455,14 @@ export function SuggestSheet({ trip, stop, onClose }: { trip: Trip; stop: Stop; 
   }
   function replanEverything() {
     if (!plan) return
+    const r = replanAll(plan, replanCtx())
     setUndoPlan(plan)
-    setPlan(replanAll(plan, replanCtx()))
-    setNotice('Re-planned every day around your pinned places, and laid out the other days again from what was left.')
+    setPlan(r.plan)
+    setNotice(
+      r.days
+        ? `Re-planned the ${r.days} day${r.days === 1 ? '' : 's'} with pins${r.pulled ? `, brought in ${r.pulled} nearby` : ''}${r.setAside ? `, set ${r.setAside} aside` : ''}. The other days were left as they were.`
+        : 'Nothing to re-plan — pin a place on a day first.',
+    )
   }
 
   const removeFromDay = (dayId: string, placeId: string) => {
@@ -771,6 +781,7 @@ export function SuggestSheet({ trip, stop, onClose }: { trip: Trip; stop: Stop; 
                             id={id}
                             index={n}
                             time={check?.arrive[id]}
+                            leg={check?.legTo[id]}
                             label={d.labels?.[id]}
                             problem={check?.problems.filter((x) => x.id === id).map((x) => x.text).join(' · ') || undefined}
                             canLabel={pl?.tag === 'Food' || pl?.tag === 'Cafes'}
