@@ -239,6 +239,7 @@ function cleanDay(v: unknown): Day | null {
     id, tripId, date: d, items,
     legModes: Object.keys(legModes).length > 0 ? (legModes as Day['legModes']) : undefined,
     bands: Object.fromEntries(Object.entries(obj(o.bands) ?? {}).flatMap(([k, v]) => (typeof v === 'string' ? [[str(k, 100) ?? '', v.slice(0, 20)]] : []))),
+    startTime: typeof o.startTime === 'string' && /^\d{2}:\d{2}$/.test(o.startTime) ? o.startTime : undefined,
     startPlaceId: endpoint(o.startPlaceId),
     endPlaceId: endpoint(o.endPlaceId),
   }

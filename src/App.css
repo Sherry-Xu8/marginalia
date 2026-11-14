@@ -1124,3 +1124,4 @@ button.danger-solid:hover:not(:disabled) { background: color-mix(in srgb, var(--
 .rsv.warn { align-items: flex-start; }
 .warn-list { display: flex; flex-direction: column; gap: 2px; }
 .rsv.warn { align-items: flex-start; }
+.anchor-row .day-start { width: auto; min-height: 26px; padding: 0 4px; font-size: 0.78rem; border-radius: 9px; }

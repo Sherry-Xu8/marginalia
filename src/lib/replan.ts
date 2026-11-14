@@ -108,7 +108,9 @@ function fillDay(day: SuggestedDay, pinned: Place[], pool: Place[], ctx: ReplanC
   const draft = [...byLabel('Breakfast'), ...route.slice(0, half), ...byLabel('Lunch'), ...byLabel('Café'), ...route.slice(half), ...byLabel('Dinner')]
   // A place with a time you fixed yourself sits at that hour; everything else keeps its place in the day,
   // so the draft the ordering starts from already respects your bookings.
-  const dayFrom = w?.start ?? DAY_START
+  // the same rule as the draft: what you set, else the free part of the day, pulled earlier by any booking
+  const booked = Object.values(day.times ?? {}).map(toMinutes).filter((t): t is number => t !== undefined)
+  const dayFrom = toMinutes(day.startTime) ?? Math.min(w?.start ?? DAY_START, ...(booked.length ? booked : [w?.start ?? DAY_START]))
   const dayUntil = Math.max(dayFrom + 60, w?.end ?? DAY_END)
   const seeded = draft
     .map((p, i) => ({
@@ -122,7 +124,7 @@ function fillDay(day: SuggestedDay, pinned: Place[], pool: Place[], ctx: ReplanC
     .sort((a, b) => a.at - b.at)
     .map((x) => x.p)
   // Times you've fixed go in too, or the re-plan happily drops a 09:00 booking into the afternoon.
-  const ordered = arrangeDay({ places: seeded, labels, times: day.times, bands: day.bands, date: day.date, start: w?.start ?? DAY_START, anchor: startAt, anchorEnd: endAt })
+  const ordered = arrangeDay({ places: seeded, labels, times: day.times, bands: day.bands, date: day.date, start: dayFrom, anchor: startAt, anchorEnd: endAt })
   const sorted = ordered.map((p) => p.id)
   return { day: { ...day, placeIds: sorted, labels, anchorId: anchor?.id ?? day.anchorId }, used: new Set(chosen.map((p) => p.id)) }
 }

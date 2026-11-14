@@ -117,6 +117,7 @@ export type Day = {
   startPlaceId?: string | null
   endPlaceId?: string | null
   bands?: Record<string, string> // a loose time of day asked for, keyed by place id
+  startTime?: string // when the day begins, "HH:MM"
 }
 
 export const TAGS = [

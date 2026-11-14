@@ -13,7 +13,7 @@ import { distanceKm } from '../lib/geo'
 import { useEffect, useMemo, useState } from 'react'
 import { shortDate } from '../lib/days'
 import { stayForStop } from '../lib/stays'
-import { DAY_START, arrivalDate, clock, describeTransfer, freeWindow } from '../lib/journeys'
+import { DAY_START, arrivalDate, clock, describeTransfer, freeWindow, toMinutes } from '../lib/journeys'
 import { KIND_INFO } from './TransferSheet'
 import { travelAround } from '../lib/travelAround'
 import { hoursOn } from '../lib/hours'
@@ -396,6 +396,9 @@ export function SuggestSheet({ trip, stop, onClose }: { trip: Trip; stop: Stop; 
     })
   }
 
+  const setDayStart = (dayId: string, value: string) =>
+    setPlan((p) => p && { ...p, days: p.days.map((d) => (d.dayId === dayId ? { ...d, startTime: value || undefined } : d)) })
+
   const setLabel = (dayId: string, placeId: string, label: string) => {
     if (label) setPins((cur) => new Set(cur).add(placeId)) // choosing a meal for a place is a decision to keep
     setPlan((p) => {
@@ -486,7 +489,7 @@ export function SuggestSheet({ trip, stop, onClose }: { trip: Trip; stop: Stop; 
       ...result,
       days: result.days.map((d) => {
         const saved = tripDays.find((x) => x.id === d.dayId)
-        return { ...d, startId: saved?.startPlaceId, endId: saved?.endPlaceId }
+        return { ...d, startId: saved?.startPlaceId, endId: saved?.endPlaceId, startTime: saved?.startTime }
       }),
     })
     setPins(new Set())
@@ -598,6 +601,16 @@ export function SuggestSheet({ trip, stop, onClose }: { trip: Trip; stop: Stop; 
     plan?.days.find((d) => d.mode !== 'off' && d.placeIds.length > 0) ??
     plan?.days.find((d) => d.mode !== 'off')
 
+  // When a day begins: what you set, else the free part of the day, pulled earlier if you've booked
+  // something before then (a 07:00 pick-up is no use if the day only starts at nine).
+  const dayStart = (d: Suggestion['days'][number]) => {
+    const set = toMinutes(d.startTime)
+    if (set !== undefined) return set
+    const from = windowOf(d.date)?.start ?? DAY_START
+    const booked = Object.values(d.times ?? {}).map(toMinutes).filter((t): t is number => t !== undefined)
+    return booked.length > 0 ? Math.min(from, ...booked) : from
+  }
+
   // Working out a day's timings, and whether a better order exists, is slow. Do it once per change to the
   // draft rather than on every keystroke, or editing anything locks the sheet up.
   const dayChecks = useMemo(() => {
@@ -612,7 +625,7 @@ export function SuggestSheet({ trip, stop, onClose }: { trip: Trip; stop: Stop; 
         times: d.times,
         bands: d.bands,
         date: d.date,
-        start: windowOf(d.date)?.start ?? DAY_START,
+        start: dayStart(d),
         anchor: startId ? placeOf(startId) : undefined,
         anchorEnd: endId ? placeOf(endId) : undefined,
       }
@@ -835,7 +848,15 @@ export function SuggestSheet({ trip, stop, onClose }: { trip: Trip; stop: Stop; 
                   ))}
                   {(anchor || endpoints.length > 0) && (
                     <p className="muted anchor-row">
-                      <span>Starts at</span>
+                      <span>Starts</span>
+                      <input
+                        type="time"
+                        className="day-start"
+                        aria-label={`What time ${shortDate(d.date)} begins`}
+                        value={d.startTime ?? clock(dayStart(d))}
+                        onChange={(e) => setDayStart(d.dayId, e.target.value)}
+                      />
+                      <span>at</span>
                       <select aria-label={`Where ${shortDate(d.date)} starts`} value={startId ?? ''} onChange={(e) => setEndpoint(d.dayId, 'start', e.target.value || null)}>
                         <option value="">nowhere in particular</option>
                         {endpoints.map((p) => (
@@ -1066,7 +1087,7 @@ export function SuggestSheet({ trip, stop, onClose }: { trip: Trip; stop: Stop; 
               <button
                 className="primary"
                 onClick={() => {
-                  applySuggestion(plan.days.filter((d) => d.mode !== 'off').map((d) => ({ dayId: d.dayId, placeIds: d.placeIds.map(baseId), times: d.times, bands: d.bands, startId: d.startId, endId: d.endId })))
+                  applySuggestion(plan.days.filter((d) => d.mode !== 'off').map((d) => ({ dayId: d.dayId, placeIds: d.placeIds.map(baseId), times: d.times, bands: d.bands, startTime: d.startTime, startId: d.startId, endId: d.endId })))
                   onClose()
                 }}
               >

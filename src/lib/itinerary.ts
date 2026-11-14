@@ -83,6 +83,7 @@ export type SuggestedDay = {
   labels?: Record<string, string>
   times?: Record<string, string>
   bands?: Record<string, string> // a loose time of day you asked for (morning, evening…)
+  startTime?: string // when the day begins, "HH:MM" (otherwise 09:00, or earlier if something is booked)
 }
 export type Suggestion = { days: SuggestedDay[]; unscheduled: string[]; reasons?: Record<string, string> }
 export type Slot = { dayId: string; date: string; mode: DayMode; free?: FreeWindow }
