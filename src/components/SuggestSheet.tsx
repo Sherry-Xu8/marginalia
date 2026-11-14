@@ -285,6 +285,7 @@ export function SuggestSheet({ trip, stop, onClose }: { trip: Trip; stop: Stop; 
   const [mapDayId, setMapDayId] = useState('')
   const [addingTo, setAddingTo] = useState<string | null>(null)
   const [pickFor, setPickFor] = useState<string | null>(null)
+  const [replanTurn, setReplanTurn] = useState(0) // bumped each press, so you get a different option around the same pins
   const togglePin = (id: string) =>
     setPins((cur) => {
       const next = new Set(cur)
@@ -489,7 +490,7 @@ export function SuggestSheet({ trip, stop, onClose }: { trip: Trip; stop: Stop; 
     pins,
     pace,
     prefs,
-    variant,
+    variant: variant + replanTurn,
     fitAll,
     windowOf: (date) => {
       const w = windowOf(date)
@@ -501,20 +502,22 @@ export function SuggestSheet({ trip, stop, onClose }: { trip: Trip; stop: Stop; 
   })
   function replanOneDay(dayId: string) {
     if (!plan) return
+    setReplanTurn((n) => n + 1)
     const day = plan.days.find((d) => d.dayId === dayId)
-    const r = replanDay(plan, dayId, replanCtx())
+    const r = replanDay(plan, dayId, { ...replanCtx(), variant: variant + replanTurn + 1 })
     setUndoPlan(plan)
     setPlan(r.plan)
-    setNotice(`Re-planned ${day ? shortDate(day.date) : 'the day'} around your pinned places${r.pulled ? `, brought in ${r.pulled} nearby` : ''}${r.setAside ? `, set ${r.setAside} aside (see Unscheduled)` : ''}.`)
+    setNotice(`Re-planned ${day ? shortDate(day.date) : 'the day'} around your pinned places${r.pulled ? `, brought in ${r.pulled} nearby` : ''}${r.setAside ? `, set ${r.setAside} aside` : ''}. Press again for a different option.`)
   }
   function replanEverything() {
     if (!plan) return
-    const r = replanAll(plan, replanCtx())
+    setReplanTurn((n) => n + 1)
+    const r = replanAll(plan, { ...replanCtx(), variant: variant + replanTurn + 1 })
     setUndoPlan(plan)
     setPlan(r.plan)
     setNotice(
       r.days
-        ? `Re-planned every day around your pinned places${r.setAside ? `, with ${r.setAside} set aside` : ''}. Pinned places stayed where you put them.`
+        ? `Re-planned every day around your pinned places${r.setAside ? `, with ${r.setAside} set aside` : ''}. Press again for a different option.`
         : 'Nothing to re-plan — pin a place on a day first.',
     )
   }

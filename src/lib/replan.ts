@@ -25,6 +25,16 @@ type Kind = 'meal' | 'cafe' | 'sight'
 const kindOf = (p: Place): Kind => (p.tag === 'Food' ? 'meal' : p.tag === 'Cafes' ? 'cafe' : 'sight')
 const NEARBY_KM = 3 // nothing further than this from the rest of the day is pulled in
 
+// A small, repeatable nudge so pressing re-plan again offers a different arrangement around the same pins.
+// Variant 0 is the plain nearest-first answer; later variants shuffle the close calls.
+function jitter(id: string, variant: number): number {
+  if (!variant) return 0
+  let h = 2166136261
+  const key = `${id}:${variant}`
+  for (let i = 0; i < key.length; i++) h = Math.imul(h ^ key.charCodeAt(i), 16777619)
+  return (((h >>> 0) % 1000) / 1000) * 0.8 // up to 800 m of "near enough"
+}
+
 const minDist = (p: Place, among: Place[]) => (among.length ? Math.min(...among.map((r) => distanceKm(p, r))) : Infinity)
 
 // Fills a day around its pinned places from a pool of candidates, then orders it. Returns the day and what it used.
@@ -52,7 +62,7 @@ function fillDay(day: SuggestedDay, pinned: Place[], pool: Place[], ctx: ReplanC
       if (need[kindOf(p)] <= 0) continue
       const d = minDist(p, reference)
       if (d > NEARBY_KM) continue
-      const score = d - (p.must ? 0.5 : 0) // must-dos are preferred when two are about as close
+      const score = d - (p.must ? 0.5 : 0) + jitter(p.id, ctx.variant) // must-dos are preferred when two are about as close
       if (score < bestScore) {
         bestScore = score
         best = p
