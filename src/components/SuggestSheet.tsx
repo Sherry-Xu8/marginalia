@@ -3,7 +3,7 @@ import { SortableContext, arrayMove, sortableKeyboardCoordinates, useSortable, v
 import { CSS } from '@dnd-kit/utilities'
 import { Clock, GripVertical, Pin, Star, TriangleAlert, X } from 'lucide-react'
 import { checkDay, clockText, improveOrder } from '../lib/daycheck'
-import { fmtKm, fmtMinutes, LONG_TRAVEL_MINUTES } from '../lib/commute'
+import { fmtKm, fmtMinutes, LONG_TRAVEL_MINUTES, WALK_BELOW_KM } from '../lib/commute'
 import { WeatherChip } from './WeatherChip'
 import { DraftMap, dayColour } from './DraftMap'
 import { AddPlaceSheet } from './AddPlaceSheet'
@@ -116,8 +116,11 @@ function DraftRow({
   return (
     <div ref={setNodeRef} style={{ transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.6 : 1 }} className="draft-row">
       {leg && (
-        <span className="leg-hint muted" aria-label={`${fmtMinutes(leg.minutes)} to get here`}>
-          ↓ {fmtMinutes(leg.minutes)} · {fmtKm(leg.km)}
+        <span
+          className="leg-hint muted"
+          title="A rough estimate: walking for short hops, otherwise a bus or train. The distance is as the crow flies, so the real route is a little longer."
+        >
+          ↓ {fmtMinutes(leg.minutes)} {leg.km < WALK_BELOW_KM ? 'walk' : 'by bus or train'} · {fmtKm(leg.km)}
         </span>
       )}
       <button className="handle" aria-label="Drag to reorder" {...attributes} {...listeners}>
