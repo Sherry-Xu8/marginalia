@@ -13,7 +13,8 @@ import { distanceKm } from '../lib/geo'
 import { useEffect, useMemo, useState } from 'react'
 import { shortDate } from '../lib/days'
 import { stayForStop } from '../lib/stays'
-import { DAY_START, clock, describeTransfer, freeWindow } from '../lib/journeys'
+import { DAY_START, arrivalDate, clock, describeTransfer, freeWindow } from '../lib/journeys'
+import { KIND_INFO } from './TransferSheet'
 import { travelAround } from '../lib/travelAround'
 import { hoursOn } from '../lib/hours'
 import { fromISO } from '../lib/days'
@@ -30,7 +31,7 @@ import {
   type Suggestion,
 } from '../lib/itinerary'
 import { applySuggestion, setGroupStop, tagUntagged, useAppData } from '../lib/store'
-import type { Place, Stop, Trip } from '../types'
+import type { Place, Stop, Transfer, Trip } from '../types'
 import { tagOf } from './FilterChips'
 import { TagIcon } from './TagIcon'
 
@@ -86,6 +87,22 @@ function AreaPicker({ trip, stop }: { trip: Trip; stop: Stop }) {
 }
 
 const LABELS = ['Breakfast', 'Lunch', 'Dinner', 'Café'] as const
+
+// A flight, train or bus on a drafted day, with the part of the day it leaves free.
+function DraftJourney({ transfer, free }: { transfer: Transfer; free?: { start: number; end: number } }) {
+  const { Icon, label } = KIND_INFO[transfer.kind]
+  const where = transfer.from && transfer.to ? `${transfer.from} → ${transfer.to}` : ''
+  return (
+    <div className="draft-journey">
+      <span className="stay-tile transfer"><Icon size={18} /></span>
+      <span>
+        <strong>{describeTransfer(transfer)}</strong>
+        <small className="muted">{[label, where].filter(Boolean).join(' · ')}</small>
+        {free && free.end > free.start && <small className="muted">Leaves you {clock(free.start)}–{clock(free.end)} for plans</small>}
+      </span>
+    </div>
+  )
+}
 
 // One place in a drafted day: drag the handle to reorder, pick which meal it is, or set it aside.
 function DraftRow({
@@ -468,7 +485,7 @@ export function SuggestSheet({ trip, stop, onClose }: { trip: Trip; stop: Stop; 
     setPlan(r.plan)
     setNotice(
       r.days
-        ? `Re-planned the ${r.days} day${r.days === 1 ? '' : 's'} with pins${r.pulled ? `, brought in ${r.pulled} nearby` : ''}${r.setAside ? `, set ${r.setAside} aside` : ''}. The other days were left as they were.`
+        ? `Re-planned every day around your pinned places${r.setAside ? `, with ${r.setAside} set aside` : ''}. Pinned places stayed where you put them.`
         : 'Nothing to re-plan — pin a place on a day first.',
     )
   }
@@ -527,6 +544,12 @@ export function SuggestSheet({ trip, stop, onClose }: { trip: Trip; stop: Stop; 
       label: shortDate(d.date),
       places: d.placeIds.map((id) => placeById.get(id)).filter((x): x is Place => !!x),
     }))
+
+  // The journeys that land on a date, and the ones that set off from it.
+  const dayJourneys = (date: string) => ({
+    arriving: tripTransfers.filter((t) => arrivalDate(t) === date && t.date !== date),
+    leaving: tripTransfers.filter((t) => t.date === date),
+  })
 
   // The places that didn't fit, nearest to what this day already has (or to the hotel on an empty day), closest first.
   function spareFor(d: Suggestion['days'][number], limit: number) {
@@ -730,6 +753,9 @@ export function SuggestSheet({ trip, stop, onClose }: { trip: Trip; stop: Stop; 
                   <strong>{shortDate(d.date)}</strong>
                   <span className="muted"> · {MODE_LABEL[d.mode]}</span>
                   {d.mode !== 'off' && <WeatherChip point={ordered[0] ?? anchor} date={d.date} />}
+                  {dayJourneys(d.date).arriving.map((t) => (
+                    <DraftJourney key={t.id} transfer={t} free={windowOf(d.date)} />
+                  ))}
                   {(anchor || endpoints.length > 0) && (
                     <p className="muted anchor-row">
                       <span>Starts at</span>
@@ -836,6 +862,9 @@ export function SuggestSheet({ trip, stop, onClose }: { trip: Trip; stop: Stop; 
                       <button className="near-chip add" onClick={() => setAddingTo(d.dayId)}>+ A place not on your list…</button>
                     </div>
                   )}
+                  {dayJourneys(d.date).leaving.map((t) => (
+                    <DraftJourney key={t.id} transfer={t} free={windowOf(d.date)} />
+                  ))}
                   {d.placeIds.some((id) => pins.has(id)) && (
                     <button className="soft-btn replan-btn" onClick={() => replanOneDay(d.dayId)}>
                       Re-plan this day around my pins
