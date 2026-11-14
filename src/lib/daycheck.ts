@@ -11,7 +11,8 @@ import { toMinutes } from './journeys'
 export type MealLabel = 'Breakfast' | 'Lunch' | 'Dinner' | 'Café'
 export type Problem = { id: string; kind: 'closed' | 'late' | 'early' | 'order' | 'meal-late' | 'meal-gap' | 'meal-run' | 'booked' | 'band'; text: string }
 // legTo: how far and how long it is to reach each place from the one before it (the first is from where the day starts).
-export type DayCheck = { arrive: Record<string, number>; legTo: Record<string, { km: number; minutes: number }>; problems: Problem[]; km: number; travel: number; end: number }
+// idle: time spent waiting about because something later is fixed to a time or a part of the day.
+export type DayCheck = { arrive: Record<string, number>; legTo: Record<string, { km: number; minutes: number }>; problems: Problem[]; km: number; travel: number; idle: number; end: number }
 
 // A meal isn't eaten before its usual time, so a stop labelled Dinner is reached no earlier than 18:00.
 const EARLIEST: Partial<Record<MealLabel, number>> = { Breakfast: 8 * 60, Lunch: 12 * 60, Dinner: 18 * 60 }
@@ -87,6 +88,7 @@ export function checkDay(opts: DayOpts): DayCheck {
   let t = start
   let km = 0
   let travel = 0
+  let idle = 0
   let lastMeal: { at: number; name: string } | undefined
   let prevMeal: string | undefined
   // With more meals than other things to do, some have to sit together, so leave it alone.
@@ -105,17 +107,22 @@ export function checkDay(opts: DayOpts): DayCheck {
     const clash = rank === undefined ? undefined : places.slice(0, places.indexOf(p)).map((q) => labels[q.id]).find((l) => (RANK[l ?? ''] ?? -1) > rank)
     if (clash) problems.push({ id: p.id, kind: 'order', text: `${label} is after ${clash.toLowerCase()}, so it would be about ${clockText(Math.max(t, EARLIEST[label as MealLabel] ?? 0))}` })
     const earliest = label ? EARLIEST[label as MealLabel] : undefined
-    if (earliest !== undefined && t < earliest) t = earliest
+    if (earliest !== undefined && t < earliest) {
+      idle += earliest - t
+      t = earliest
+    }
     // A loose time of day you asked for: you wait if you're early, and it's a clash if the day has run past it.
     const band = BANDS[bands[p.id] as Band]
     if (band) {
       if (t > band.end) problems.push({ id: p.id, kind: 'band', text: `you wanted this ${band.label}, but you'd get here about ${clockText(t)}` })
+      if (t < band.start) idle += band.start - t
       t = Math.max(t, band.start)
     }
     // A time you've fixed yourself (a booking, a tour, a train): you wait if you're early, and it's a clash if you'd be late.
     const booked = toMinutes(times[p.id])
     if (booked !== undefined) {
       if (t > booked + 10) problems.push({ id: p.id, kind: 'booked', text: `booked for ${clockText(booked)}, but you'd get here about ${clockText(t)}` })
+      if (t < booked) idle += booked - t
       t = Math.max(t, booked)
     }
     arrive[p.id] = t
@@ -154,13 +161,15 @@ export function checkDay(opts: DayOpts): DayCheck {
     km += back
     travel += travelMinutes(back)
   }
-  return { arrive, legTo, problems, km, travel: Math.round(travel), end: t }
+  return { arrive, legTo, problems, km, travel: Math.round(travel), idle: Math.round(idle), end: t }
 }
 
 // Lower is better: a place that's shut when you arrive matters most, then meals out of order, then walking.
+// What makes a day bad, worst first: something that doesn't work at all, then running on into the night,
+// then hanging about waiting for a booking, then walking further than you need to.
 function cost(places: Place[], opts: Omit<DayOpts, 'places'>): number {
   const c = checkDay({ ...opts, places })
-  return 1000 * c.problems.length + 10 * c.km + 2 * Math.max(0, c.end - 21 * 60) / 10
+  return 1000 * c.problems.length + 3 * Math.max(0, c.end - 21 * 60) + 1.5 * c.idle + 10 * c.km
 }
 
 export type Improvement = { order: string[]; fixed: number; savedKm: number }

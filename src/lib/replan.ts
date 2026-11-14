@@ -1,5 +1,5 @@
 import type { Place } from '../types'
-import { arrangeDay } from './daycheck'
+import { BANDS, arrangeDay, type Band } from './daycheck'
 import { distanceKm } from './geo'
 import { DAY_END, DAY_START, toMinutes } from './journeys'
 import { quotaFor, suggestItinerary, type MealName, type Pace, type Prefs, type Suggestion, type SuggestedDay } from './itinerary'
@@ -101,7 +101,14 @@ function fillDay(day: SuggestedDay, pinned: Place[], pool: Place[], ctx: ReplanC
   const dayFrom = w?.start ?? DAY_START
   const dayUntil = Math.max(dayFrom + 60, w?.end ?? DAY_END)
   const seeded = draft
-    .map((p, i) => ({ p, at: toMinutes(day.times?.[p.id]) ?? dayFrom + ((i + 0.5) * (dayUntil - dayFrom)) / draft.length }))
+    .map((p, i) => ({
+      // a booking first, then a part of the day you asked for, else wherever it already sits
+      p,
+      at:
+        toMinutes(day.times?.[p.id]) ??
+        BANDS[day.bands?.[p.id] as Band]?.start ??
+        dayFrom + ((i + 0.5) * (dayUntil - dayFrom)) / draft.length,
+    }))
     .sort((a, b) => a.at - b.at)
     .map((x) => x.p)
   // Times you've fixed go in too, or the re-plan happily drops a 09:00 booking into the afternoon.
