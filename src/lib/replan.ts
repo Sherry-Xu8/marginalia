@@ -80,7 +80,8 @@ function fillDay(day: SuggestedDay, pinned: Place[], pool: Place[], ctx: ReplanC
 
   // A first draft of the order (breakfast first, lunch in the middle, dinner last), then the clock and opening hours tidy it.
   const anchor = day.anchorId ? ctx.placeById.get(day.anchorId) : ctx.stay
-  const use = day.anchorUse ?? 'both'
+  const startAt = day.startId === undefined ? anchor : day.startId ? ctx.placeById.get(day.startId) : undefined
+  const endAt = day.endId === undefined ? anchor : day.endId ? ctx.placeById.get(day.endId) : undefined
   const byLabel = (l: string) => places.filter((p) => labels[p.id] === l)
   const rest = places.filter((p) => !['Breakfast', 'Lunch', 'Dinner', 'Café'].includes(labels[p.id] ?? ''))
   const route: Place[] = []
@@ -104,7 +105,7 @@ function fillDay(day: SuggestedDay, pinned: Place[], pool: Place[], ctx: ReplanC
     .sort((a, b) => a.at - b.at)
     .map((x) => x.p)
   // Times you've fixed go in too, or the re-plan happily drops a 09:00 booking into the afternoon.
-  const ordered = arrangeDay({ places: seeded, labels, times: day.times, date: day.date, start: w?.start ?? DAY_START, anchor: use === 'both' || use === 'start' ? anchor : undefined, anchorEnd: use === 'both' || use === 'end' ? anchor : undefined })
+  const ordered = arrangeDay({ places: seeded, labels, times: day.times, date: day.date, start: w?.start ?? DAY_START, anchor: startAt, anchorEnd: endAt })
   const sorted = ordered.map((p) => p.id)
   return { day: { ...day, placeIds: sorted, labels, anchorId: anchor?.id ?? day.anchorId }, used: new Set(chosen.map((p) => p.id)) }
 }
@@ -216,7 +217,7 @@ export function replanAll(plan: Suggestion, ctx: ReplanCtx): Suggestion {
     stay: ctx.stay,
   })
   const restById = new Map(rest.days.map((d) => [d.dayId, d]))
-  const keepSettings = (was: SuggestedDay, now: SuggestedDay): SuggestedDay => ({ ...now, anchorUse: was.anchorUse })
+  const keepSettings = (was: SuggestedDay, now: SuggestedDay): SuggestedDay => ({ ...now, startId: was.startId, endId: was.endId })
   return {
     days: plan.days.map((d) =>
       done.get(d.dayId) ?? (d.mode === 'off' ? d : restById.get(d.dayId) ? keepSettings(d, restById.get(d.dayId)!) : { ...d, placeIds: [], labels: {}, times: {} }),

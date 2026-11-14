@@ -70,10 +70,19 @@ export function stopDays(trip: Trip, stop: Stop, transfers: Transfer[] = []): { 
   }))
 }
 
-// anchorUse: whether the day starts and/or ends where you're staying. An arrival day often doesn't start
-// there (you come from the airport), and a departure day doesn't end there.
-export type AnchorUse = 'both' | 'start' | 'end' | 'none'
-export type SuggestedDay = { dayId: string; date: string; mode: DayMode; placeIds: string[]; anchorId?: string; anchorUse?: AnchorUse; labels?: Record<string, string>; times?: Record<string, string> }
+// startId / endId: where the day begins and ends. Left out, both are where you're staying (anchorId).
+// null means nowhere in particular — an arrival day may begin at the airport and a departure day end there.
+export type SuggestedDay = {
+  dayId: string
+  date: string
+  mode: DayMode
+  placeIds: string[]
+  anchorId?: string
+  startId?: string | null
+  endId?: string | null
+  labels?: Record<string, string>
+  times?: Record<string, string>
+}
 export type Suggestion = { days: SuggestedDay[]; unscheduled: string[]; reasons?: Record<string, string> }
 export type Slot = { dayId: string; date: string; mode: DayMode; free?: FreeWindow }
 

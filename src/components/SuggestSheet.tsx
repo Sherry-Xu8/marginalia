@@ -27,7 +27,6 @@ import {
   type MealName,
   type Pace,
   type Prefs,
-  type AnchorUse,
   type Suggestion,
 } from '../lib/itinerary'
 import { applySuggestion, setGroupStop, tagUntagged, useAppData } from '../lib/store'
@@ -279,9 +278,30 @@ export function SuggestSheet({ trip, stop, onClose }: { trip: Trip; stop: Stop; 
     })
   }
 
-  // Whether a day starts and/or ends where you're staying (an arrival day often starts from the airport instead).
-  const setAnchorUse = (dayId: string, use: AnchorUse) =>
-    setPlan((p) => p && { ...p, days: p.days.map((d) => (d.dayId === dayId ? { ...d, anchorUse: use } : d)) })
+  // Where a day begins and ends. Picking one of the day's own places (the airport you land at) takes it out of
+  // the list and makes it the day's end point; the one it replaces goes back into the list.
+  const endpointOf = (d: Suggestion['days'][number], which: 'start' | 'end') => {
+    const set = which === 'start' ? d.startId : d.endId
+    return set === undefined ? d.anchorId ?? null : set
+  }
+  const setEndpoint = (dayId: string, which: 'start' | 'end', value: string | null) =>
+    setPlan((p) => {
+      if (!p) return p
+      return {
+        ...p,
+        days: p.days.map((d) => {
+          if (d.dayId !== dayId) return d
+          const was = endpointOf(d, which)
+          const other = endpointOf(d, which === 'start' ? 'end' : 'start')
+          let placeIds = d.placeIds
+          if (was && was !== d.anchorId && was !== other && was !== value && !placeIds.includes(was)) {
+            placeIds = which === 'start' ? [was, ...placeIds] : [...placeIds, was]
+          }
+          if (value) placeIds = placeIds.filter((x) => x !== value)
+          return { ...d, placeIds, ...(which === 'start' ? { startId: value } : { endId: value }) }
+        }),
+      }
+    })
 
   // Move a place straight to another day (or set it aside), keeping its meal label and any time you fixed.
   const moveToDay = (fromDayId: string, placeId: string, toDayId: string) =>
@@ -668,15 +688,19 @@ export function SuggestSheet({ trip, stop, onClose }: { trip: Trip; stop: Stop; 
             {plan.days.map((d) => {
               const anchor = d.anchorId ? placeById.get(d.anchorId) : undefined
               const ordered = d.placeIds.map((id) => placeById.get(id)).filter((x): x is Place => !!x)
-              const use: AnchorUse = d.anchorUse ?? 'both'
+              const startId = endpointOf(d, 'start')
+              const endId = endpointOf(d, 'end')
+              const startAt = startId ? placeById.get(startId) : undefined
+              const endAt = endId ? placeById.get(endId) : undefined
+              const endpoints = [...new Map([anchor, startAt, endAt, ...ordered].filter((x): x is Place => !!x).map((x) => [x.id, x])).values()]
               const timing = {
                 places: ordered,
                 labels: d.labels,
                 times: d.times,
                 date: d.date,
                 start: windowOf(d.date)?.start ?? DAY_START,
-                anchor: use === 'both' || use === 'start' ? anchor : undefined,
-                anchorEnd: use === 'both' || use === 'end' ? anchor : undefined,
+                anchor: startAt,
+                anchorEnd: endAt,
               }
               const check = d.mode !== 'off' && ordered.length > 0 ? checkDay(timing) : undefined
               const better = check ? improveOrder(timing) : null
@@ -688,17 +712,22 @@ export function SuggestSheet({ trip, stop, onClose }: { trip: Trip; stop: Stop; 
                   <strong>{shortDate(d.date)}</strong>
                   <span className="muted"> · {MODE_LABEL[d.mode]}</span>
                   {d.mode !== 'off' && <WeatherChip point={ordered[0] ?? anchor} date={d.date} />}
-                  {anchor && (
+                  {(anchor || endpoints.length > 0) && (
                     <p className="muted anchor-row">
-                      <select aria-label={`Where the day starts and ends, ${shortDate(d.date)}`} value={use} onChange={(e) => setAnchorUse(d.dayId, e.target.value as AnchorUse)}>
-                        <option value="both">Starts and ends at</option>
-                        <option value="end">Ends at</option>
-                        <option value="start">Starts at</option>
-                        <option value="none">Not based at</option>
-                      </select>{' '}
-                      {anchor.name}
-                      {use === 'end' && <small> · arriving from somewhere else</small>}
-                      {use === 'start' && <small> · moving on afterwards</small>}
+                      <span>Starts at</span>
+                      <select aria-label={`Where ${shortDate(d.date)} starts`} value={startId ?? ''} onChange={(e) => setEndpoint(d.dayId, 'start', e.target.value || null)}>
+                        <option value="">nowhere in particular</option>
+                        {endpoints.map((p) => (
+                          <option key={p.id} value={p.id}>{p.name}</option>
+                        ))}
+                      </select>
+                      <span>and ends at</span>
+                      <select aria-label={`Where ${shortDate(d.date)} ends`} value={endId ?? ''} onChange={(e) => setEndpoint(d.dayId, 'end', e.target.value || null)}>
+                        <option value="">nowhere in particular</option>
+                        {endpoints.map((p) => (
+                          <option key={p.id} value={p.id}>{p.name}</option>
+                        ))}
+                      </select>
                     </p>
                   )}
                   {check && ordered.length > 1 && (
