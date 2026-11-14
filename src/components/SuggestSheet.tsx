@@ -2,7 +2,7 @@ import { DndContext, KeyboardSensor, PointerSensor, closestCenter, useSensor, us
 import { SortableContext, arrayMove, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 import { Clock, GripVertical, Pin, Star, TriangleAlert, X } from 'lucide-react'
-import { BANDS, checkDay, clockText, improveOrder } from '../lib/daycheck'
+import { BANDS, checkDay, clockText, improveOrder, type DayCheck, type Improvement } from '../lib/daycheck'
 import { fmtKm, fmtMinutes, LONG_TRAVEL_MINUTES, WALK_BELOW_KM } from '../lib/commute'
 import { WeatherChip } from './WeatherChip'
 import { DraftMap, dayColour } from './DraftMap'
@@ -106,9 +106,9 @@ function DraftJourney({ transfer, free }: { transfer: Transfer; free?: { start: 
 
 // One place in a drafted day: drag the handle to reorder, pick which meal it is, or set it aside.
 function DraftRow({
-  id, index, time, leg, fixed, band, label, problem, canLabel, pinned, focused, moveTo, onPin, onFix, onBand, onLabel, onMove, onRemove, onFocus, children,
+  id, index, time, leg, fixed, band, label, problems, canLabel, pinned, focused, moveTo, onPin, onFix, onBand, onLabel, onMove, onRemove, onFocus, children,
 }: {
-  id: string; index: number; time?: number; leg?: { km: number; minutes: number }; fixed?: string; band?: string; label?: string; problem?: string; canLabel: boolean; pinned: boolean; focused?: boolean
+  id: string; index: number; time?: number; leg?: { km: number; minutes: number }; fixed?: string; band?: string; label?: string; problems?: string[]; canLabel: boolean; pinned: boolean; focused?: boolean
   moveTo: { dayId: string; label: string }[]
   onPin: () => void; onFix: (time: string) => void; onBand: (band: string) => void; onLabel: (label: string) => void; onMove: (dayId: string) => void; onRemove: () => void; onFocus: () => void; children: React.ReactNode
 }) {
@@ -182,7 +182,16 @@ function DraftRow({
             <Pin size={14} fill={pinned ? 'currentColor' : 'none'} /> {pinned ? 'Pinned' : 'Pin'}
           </button>
         </span>
-        {problem && <span className="rsv warn"><TriangleAlert size={13} aria-hidden /> {problem}</span>}
+        {problems && problems.length > 0 && (
+          <span className="rsv warn">
+            <TriangleAlert size={13} aria-hidden />
+            <span className="warn-list">
+              {problems.map((t) => (
+                <span key={t}>{t}</span>
+              ))}
+            </span>
+          </span>
+        )}
       </span>
       <button aria-label="Set aside" onClick={onRemove}>×</button>
     </div>
@@ -589,6 +598,31 @@ export function SuggestSheet({ trip, stop, onClose }: { trip: Trip; stop: Stop; 
     plan?.days.find((d) => d.mode !== 'off' && d.placeIds.length > 0) ??
     plan?.days.find((d) => d.mode !== 'off')
 
+  // Working out a day's timings, and whether a better order exists, is slow. Do it once per change to the
+  // draft rather than on every keystroke, or editing anything locks the sheet up.
+  const dayChecks = useMemo(() => {
+    const out = new Map<string, { check?: DayCheck; better: Improvement | null }>()
+    for (const d of plan?.days ?? []) {
+      const ordered = d.placeIds.map(placeOf).filter((x): x is Place => !!x)
+      const startId = d.startId === undefined ? d.anchorId ?? null : d.startId
+      const endId = d.endId === undefined ? d.anchorId ?? null : d.endId
+      const timing = {
+        places: ordered,
+        labels: d.labels,
+        times: d.times,
+        bands: d.bands,
+        date: d.date,
+        start: windowOf(d.date)?.start ?? DAY_START,
+        anchor: startId ? placeOf(startId) : undefined,
+        anchorEnd: endId ? placeOf(endId) : undefined,
+      }
+      const check = d.mode !== 'off' && ordered.length > 0 ? checkDay(timing) : undefined
+      out.set(d.dayId, { check, better: check ? improveOrder(timing) : null })
+    }
+    return out
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [plan, places, tripTransfers, extraTravel])
+
   // Every planned day, in order, for the map and its colour key.
   const mapDays = (plan?.days ?? [])
     .filter((d) => d.mode !== 'off')
@@ -787,18 +821,7 @@ export function SuggestSheet({ trip, stop, onClose }: { trip: Trip; stop: Stop; 
               const startAt = startId ? placeById.get(startId) : undefined
               const endAt = endId ? placeById.get(endId) : undefined
               const endpoints = [...new Map([anchor, startAt, endAt, ...ordered].filter((x): x is Place => !!x).map((x) => [x.id, x])).values()]
-              const timing = {
-                places: ordered,
-                labels: d.labels,
-                times: d.times,
-                bands: d.bands,
-                date: d.date,
-                start: windowOf(d.date)?.start ?? DAY_START,
-                anchor: startAt,
-                anchorEnd: endAt,
-              }
-              const check = d.mode !== 'off' && ordered.length > 0 ? checkDay(timing) : undefined
-              const better = check ? improveOrder(timing) : null
+              const { check, better } = dayChecks.get(d.dayId) ?? { check: undefined, better: null }
               return (
                 <div key={d.dayId} className={'card' + (d.dayId === activeDay?.dayId ? ' on-map' : '')} onClick={() => setMapDayId(d.dayId)}>
                   {mapDays.findIndex((m) => m.dayId === d.dayId) >= 0 && (
@@ -871,7 +894,7 @@ export function SuggestSheet({ trip, stop, onClose }: { trip: Trip; stop: Stop; 
                             time={check?.arrive[id]}
                             leg={check?.legTo[id]}
                             label={d.labels?.[id]}
-                            problem={check?.problems.filter((x) => x.id === id).map((x) => x.text).join(' · ') || undefined}
+                            problems={check?.problems.filter((x) => x.id === id).map((x) => x.text)}
                             canLabel={pl?.tag === 'Food' || pl?.tag === 'Cafes'}
                             fixed={d.times?.[id]}
                             band={d.bands?.[id]}

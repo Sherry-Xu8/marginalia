@@ -40,6 +40,7 @@ export function DraftMap({
   const cb = useRef({ onAdd, onPickDay, onPickPlace })
   cb.current = { onAdd, onPickDay, onPickPlace }
   const markers = useRef(new Map<string, L.Marker>())
+  const fittedTo = useRef('') // only re-frame the map when you switch day or view, not on every edit
 
   useEffect(() => {
     if (!el.current) return
@@ -110,12 +111,18 @@ export function DraftMap({
 
     // Fit to the day you're looking at (and what you could add to it), not the whole trip, or a city's worth
     // of places leaves everything in one unreadable clump. The other days stay drawn around it.
-    const everything = [...days.flatMap((d) => d.places), ...spare, ...(anchor ? [anchor] : [])]
-    const focus = [...(active?.places ?? []), ...spare, ...(anchor ? [anchor] : [])]
-    const chosen = fit === 'trip' ? everything : focus.length > 0 ? focus : everything
-    const pts = chosen.map((p) => [p.lat, p.lon] as [number, number])
     m.invalidateSize()
-    if (pts.length > 0) m.fitBounds(L.latLngBounds(pts), { padding: [34, 34], maxZoom: fit === 'trip' ? 15 : 16 })
+    // Re-framing on every edit makes the sheet feel stuck while the map slides about, so only do it when
+    // you move to another day or switch between this day and the whole trip.
+    const fitKey = `${fit}|${active?.dayId ?? ''}`
+    if (fitKey !== fittedTo.current) {
+      fittedTo.current = fitKey
+      const everything = [...days.flatMap((d) => d.places), ...spare, ...(anchor ? [anchor] : [])]
+      const focus = [...(active?.places ?? []), ...spare, ...(anchor ? [anchor] : [])]
+      const chosen = fit === 'trip' ? everything : focus.length > 0 ? focus : everything
+      const pts = chosen.map((p) => [p.lat, p.lon] as [number, number])
+      if (pts.length > 0) m.fitBounds(L.latLngBounds(pts), { padding: [34, 34], maxZoom: fit === 'trip' ? 15 : 16 })
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [key])
 
