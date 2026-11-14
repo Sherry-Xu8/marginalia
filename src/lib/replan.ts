@@ -138,7 +138,26 @@ export function replanDay(plan: Suggestion, dayId: string, ctx: ReplanCtx): Repl
   const everything = plan.days.reduce((n, d) => n + d.placeIds.length, 0) + plan.unscheduled.length
   const { day: filled, used } = fillDay(day, pinned, pool, ctx, active > 0 ? Math.ceil(everything / active) : undefined)
   const keep = new Set(filled.placeIds)
-  const displaced = day.placeIds.filter((id) => !keep.has(id))
+  let displaced = day.placeIds.filter((id) => !keep.has(id))
+  // With "fit every place in" on, nothing is meant to be set aside, so anything pushed off this day goes to
+  // whichever other day it sits closest to rather than back into Unscheduled.
+  const rehomed = new Map<string, string[]>()
+  if (ctx.fitAll && displaced.length > 0) {
+    const others = plan.days.filter((d) => d.dayId !== dayId && d.mode !== 'off')
+    if (others.length > 0) {
+      for (const id of displaced) {
+        const p = ctx.placeById.get(id)
+        const best = others
+          .map((o) => {
+            const here = o.placeIds.map((x) => ctx.placeById.get(x)).filter((x): x is Place => !!x)
+            return { o, km: p && here.length ? minDist(p, here) : Infinity }
+          })
+          .sort((a, b) => a.km - b.km)[0].o
+        rehomed.set(best.dayId, [...(rehomed.get(best.dayId) ?? []), id])
+      }
+      displaced = []
+    }
+  }
   const fresh = filled.placeIds.filter((id) => !day.placeIds.includes(id)).length
   return {
     pulled: fresh,
@@ -147,8 +166,9 @@ export function replanDay(plan: Suggestion, dayId: string, ctx: ReplanCtx): Repl
     ...plan,
     days: plan.days.map((d) => {
       if (d.dayId === dayId) return filled
-      if (!d.placeIds.some((id) => used.has(id))) return d
-      const placeIds = d.placeIds.filter((id) => !used.has(id))
+      const extra = rehomed.get(d.dayId) ?? []
+      if (!d.placeIds.some((id) => used.has(id)) && extra.length === 0) return d
+      const placeIds = [...d.placeIds.filter((id) => !used.has(id)), ...extra]
       const labels = Object.fromEntries(Object.entries(d.labels ?? {}).filter(([id]) => !used.has(id)))
       return { ...d, placeIds, labels }
     }),
