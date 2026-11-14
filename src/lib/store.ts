@@ -269,6 +269,50 @@ export function removePlaces(ids: string[]) {
   )
 }
 
+// Joins up places that are really the same spot, keeping the one your plans already point at.
+// Returns how many copies were folded away.
+export function mergeDuplicatePlaces(tripId: string): number {
+  const mine = state.places.filter((p) => p.tripId === tripId)
+  const used = new Set<string>()
+  for (const d of state.days) for (const i of d.items) used.add(i.placeId)
+  for (const t of state.trips) for (const st of t.stays ?? []) used.add(st.placeId)
+  for (const t of state.transfers) {
+    if (t.fromPlaceId) used.add(t.fromPlaceId)
+    if (t.toPlaceId) used.add(t.toPlaceId)
+  }
+
+  // id of the copy to drop -> id of the one to keep
+  const into = new Map<string, string>()
+  const groups: Place[][] = []
+  for (const p of mine) {
+    const g = groups.find((x) => sameSpot(x[0], p))
+    if (g) g.push(p)
+    else groups.push([p])
+  }
+  for (const g of groups) {
+    if (g.length < 2) continue
+    const keep = g.find((p) => used.has(p.id)) ?? g.find((p) => p.must) ?? g[0]
+    for (const p of g) if (p.id !== keep.id) into.set(p.id, keep.id)
+  }
+  if (into.size === 0) return 0
+
+  const to = (id: string | undefined | null) => (id && into.get(id)) || id
+  update((s) => ({
+    ...s,
+    places: s.places.filter((p) => !into.has(p.id)),
+    days: s.days.map((d) => ({
+      ...d,
+      items: d.items.map((i) => ({ ...i, placeId: to(i.placeId)! })),
+      startPlaceId: d.startPlaceId === null ? null : to(d.startPlaceId),
+      endPlaceId: d.endPlaceId === null ? null : to(d.endPlaceId),
+    })),
+    trips: s.trips.map((t) => ({ ...t, stays: (t.stays ?? []).map((st) => ({ ...st, placeId: to(st.placeId)! })) })),
+    transfers: s.transfers.map((t) => ({ ...t, fromPlaceId: to(t.fromPlaceId) ?? undefined, toPlaceId: to(t.toPlaceId) ?? undefined })),
+    expenses: s.expenses.map((e) => ({ ...e, placeId: to(e.placeId) ?? undefined })),
+  }))
+  return into.size
+}
+
 export function clearPlaces(tripId: string) {
   update((s) => ({
     ...s,
@@ -797,7 +841,14 @@ export function deleteNote(tripId: string, id: string) {
 
 // A place you add yourself (for example a hotel found by search). It is sorted into a
 // location group like any imported place.
+// Two places count as the same if they share a name and sit within about 80 m of each other.
+const sameSpot = (a: { name: string; lat: number; lon: number }, b: { name: string; lat: number; lon: number }) =>
+  a.name.trim().toLowerCase() === b.name.trim().toLowerCase() && distanceKm(a, b) < 0.08
+
 export function addCustomPlace(p: { tripId: string; name: string; lat: number; lon: number; tag?: Tag }): string {
+  // Picking the same hotel or airport again shouldn't leave a second copy of it in your places.
+  const already = state.places.find((x) => x.tripId === p.tripId && sameSpot(x, p))
+  if (already) return already.id
   const place: Place = {
     id: newId(),
     tripId: p.tripId,

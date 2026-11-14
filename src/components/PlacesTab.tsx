@@ -5,6 +5,7 @@ import {
   clearPlaces,
   englishNameCandidates,
   mergeGroups,
+  mergeDuplicatePlaces,
   movePlaces,
   renameGroup,
   restoreOriginalNames,
@@ -303,7 +304,17 @@ export function PlacesTab({
   const waitingForNames = myGroups.some((g) => g.nameSource === 'auto')
   const failedNames = myGroups.some((g) => g.nameSource === 'fallback')
   const anyRenamed = mine.some((p) => p.originalName)
-  const needsTidy = untagged.length > 0 || englishCount > 0 || anyRenamed || failedNames
+  // Copies of the same spot: same name, within about 80 m.
+  const duplicates = useMemo(() => {
+    const seen = new Map<string, number>()
+    for (const p of mine) {
+      const key = `${p.name.trim().toLowerCase()}|${p.lat.toFixed(3)}|${p.lon.toFixed(3)}`
+      seen.set(key, (seen.get(key) ?? 0) + 1)
+    }
+    return [...seen.values()].reduce((n, c) => n + (c > 1 ? c - 1 : 0), 0)
+  }, [mine])
+
+  const needsTidy = duplicates > 0 || untagged.length > 0 || englishCount > 0 || anyRenamed || failedNames
 
   const card = (p: Place) => (
     <PlaceCard
@@ -385,6 +396,16 @@ export function PlacesTab({
           {needsTidy && (
             <div className="tidy">
               <strong>Tidy up</strong>
+              {duplicates > 0 && (
+                <button
+                  onClick={() => {
+                    const n = mergeDuplicatePlaces(trip.id)
+                    toast(n > 0 ? `Folded ${n} duplicate${n === 1 ? '' : 's'} into the place your plans use.` : 'No duplicates found.')
+                  }}
+                >
+                  Merge {duplicates} duplicate{duplicates === 1 ? '' : 's'}
+                </button>
+              )}
               {untagged.length > 0 && <button onClick={() => setQuickTag(true)}>Tag {untagged.length} untagged</button>}
               {untagged.length > 0 && (
                 <button
