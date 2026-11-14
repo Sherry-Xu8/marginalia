@@ -32,7 +32,7 @@ import { arrivalDate, freeWindow, journeyPositions } from '../lib/journeys'
 import { travelAround } from '../lib/travelAround'
 import { dayStays } from '../lib/stays'
 import { fmtMoney, fmtPaid } from '../lib/money'
-import { addToDay, clearDay, moveDayItem, moveItemToDay, removeDayItem, setLegMode, sortDayByTime, updateDayItem, useAppData } from '../lib/store'
+import { addToDay, clearDay, moveDayItem, setDayEndpoint, moveItemToDay, removeDayItem, setLegMode, sortDayByTime, updateDayItem, useAppData } from '../lib/store'
 import { EXPENSE_CATEGORIES, type Day, type DayItem, type ExpenseCategory, type Place, type Stop, type Transfer, type Trip } from '../types'
 import { DayMap } from './DayMap'
 import { FilterChips, tagOf } from './FilterChips'
@@ -144,7 +144,37 @@ function DayTravel({ day, segments }: { day: Day; segments: Place[][] }) {
 
 // ---- Cards ----
 
-function StayCard({ label, place, onClick }: { label: string; place: Place; onClick: () => void }) {
+function StayCard({
+  label, place, choices, onPick, onClick,
+}: {
+  label: string; place?: Place; choices: Place[]; onPick: (placeId: string | null) => void; onClick: () => void
+}) {
+  const [editing, setEditing] = useState(false)
+  if (editing || !place) {
+    return (
+      <div className="item stay-card">
+        <span aria-hidden />
+        <span className="stay-tile"><BedDouble size={22} aria-hidden /></span>
+        <label className="item-main static endpoint-pick">
+          <span className="muted">{label}</span>
+          <select
+            autoFocus
+            value={place?.id ?? ''}
+            onChange={(e) => {
+              onPick(e.target.value || null)
+              setEditing(false)
+            }}
+            onBlur={() => setEditing(false)}
+          >
+            <option value="">nowhere in particular</option>
+            {choices.map((p) => (
+              <option key={p.id} value={p.id}>{p.name}</option>
+            ))}
+          </select>
+        </label>
+      </div>
+    )
+  }
   return (
     <div className="item stay-card">
       <span aria-hidden /> {/* keeps the icon in the same column as the place icons below */}
@@ -152,6 +182,9 @@ function StayCard({ label, place, onClick }: { label: string; place: Place; onCl
       <button className="item-main" onClick={onClick}>
         <span className="muted">{label}</span>
         <strong className="serif">{place.name}</strong>
+      </button>
+      <button className="icon-btn" aria-label={`Change where the day ${label.toLowerCase().includes('back') ? 'ends' : 'starts'}`} onClick={() => setEditing(true)}>
+        <Pencil size={17} />
       </button>
     </div>
   )
@@ -583,8 +616,11 @@ export function DaysTab({ initialDate }: { initialDate?: string }) {
   const dayStops = stopsOn(trip, day.date)
   const arriving = dayStops[dayStops.length - 1]
   const stays = dayStays(trip, day.date)
-  const startStay = placeById.get(stays.start?.placeId ?? '')
-  const endStay = placeById.get(stays.end?.placeId ?? '')
+  // Where you sleep, unless this day has been given its own start or end (the airport you land at, say).
+  const sleepStart = placeById.get(stays.start?.placeId ?? '')
+  const sleepEnd = placeById.get(stays.end?.placeId ?? '')
+  const startStay = day.startPlaceId === undefined ? sleepStart : day.startPlaceId ? placeById.get(day.startPlaceId) : undefined
+  const endStay = day.endPlaceId === undefined ? sleepEnd : day.endPlaceId ? placeById.get(day.endPlaceId) : undefined
   const done = day.items.filter((i) => i.done).length
   const dayTransfers = transfers
     .filter((t) => t.tripId === trip.id && (t.date === day.date || arrivalDate(t) === day.date))
@@ -661,6 +697,14 @@ export function DaysTab({ initialDate }: { initialDate?: string }) {
     close()
   }
   const route = [...new Map(everywhere.map((p) => [p.id, p])).values()]
+  // What a day can start or end at: where you sleep, any airport or station it travels through, and its own places.
+  const endpointChoices = [
+    ...new Map(
+      [sleepStart, sleepEnd, ...gateways, ...dayPlaces, ...places.filter((p) => p.tripId === trip.id && p.tag === 'Accommodation')]
+        .filter((p): p is Place => !!p)
+        .map((p) => [p.id, p]),
+    ).values(),
+  ]
   const weatherPoint =
     route[0] ?? places.find((p) => p.tripId === trip.id && p.groupId && groups.some((g) => g.id === p.groupId && g.stopId === arriving?.id))
   const journeyCard = (t: Transfer, at: number) => {
@@ -728,7 +772,13 @@ export function DaysTab({ initialDate }: { initialDate?: string }) {
           </div>
 
           {arrivalFirst && journeysAt(0).map((t) => journeyCard(t, 0))}
-          {startStay && <StayCard label={arrivalFirst ? 'Check in at' : 'Start from'} place={startStay} onClick={() => setFocusId(startStay.id)} />}
+          <StayCard
+            label={arrivalFirst ? 'Check in at' : 'Start from'}
+            place={startStay}
+            choices={endpointChoices}
+            onPick={(id) => setDayEndpoint(day.id, 'start', id)}
+            onClick={() => startStay && setFocusId(startStay.id)}
+          />
           {!stays.end && arriving && arriving.departure > day.date && (
             <button className="wide subtle" onClick={() => setStayFor({ checkIn: day.date, checkOut: arriving.departure })}>
               <BedDouble size={16} /> Add where you’re staying in {arriving.name}
@@ -775,7 +825,13 @@ export function DaysTab({ initialDate }: { initialDate?: string }) {
                   {journeysAt(day.items.length).map((t) => journeyCard(t, day.items.length))}
                 </SortableContext>
               </DndContext>
-              {endStay && <StayCard label="Back to" place={endStay} onClick={() => setFocusId(endStay.id)} />}
+              <StayCard
+                label="Back to"
+                place={endStay}
+                choices={endpointChoices}
+                onPick={(id) => setDayEndpoint(day.id, 'end', id)}
+                onClick={() => endStay && setFocusId(endStay.id)}
+              />
               <DayTravel day={day} segments={segments} />
               {timed > 1 && <button className="wide" onClick={() => sortDayByTime(day.id)}>Sort by time</button>}
               {done < day.items.length && (

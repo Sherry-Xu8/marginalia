@@ -234,7 +234,13 @@ function cleanDay(v: unknown): Day | null {
       .slice(0, 300)
       .filter(([k, v]) => /^[\w-]{1,100}>[\w-]{1,100}$/.test(k) && (v === 'walk' || v === 'transit' || v === 'taxi')),
   )
-  return { id, tripId, date: d, items, legModes: Object.keys(legModes).length > 0 ? (legModes as Day['legModes']) : undefined }
+  const endpoint = (v: unknown) => (v === null ? null : str(v, 100) ?? undefined)
+  return {
+    id, tripId, date: d, items,
+    legModes: Object.keys(legModes).length > 0 ? (legModes as Day['legModes']) : undefined,
+    startPlaceId: endpoint(o.startPlaceId),
+    endPlaceId: endpoint(o.endPlaceId),
+  }
 }
 
 function cleanExpense(v: unknown): Expense | null {

@@ -423,7 +423,15 @@ export function SuggestSheet({ trip, stop, onClose }: { trip: Trip; stop: Stop; 
       stay: places.find((p) => p.id === stayForStop(trip, stop)?.placeId),
     })
     setVariant(v)
-    setPlan(result)
+    // Keep what the Days tab already knows about each day: where it starts and ends (the airport you land at,
+    // a hotel you check into later), so the draft doesn't quietly undo it.
+    setPlan({
+      ...result,
+      days: result.days.map((d) => {
+        const saved = tripDays.find((x) => x.id === d.dayId)
+        return { ...d, startId: saved?.startPlaceId, endId: saved?.endPlaceId }
+      }),
+    })
     setPins(new Set())
     setUndoPlan(null)
     setNotice('')
@@ -945,7 +953,7 @@ export function SuggestSheet({ trip, stop, onClose }: { trip: Trip; stop: Stop; 
               <button
                 className="primary"
                 onClick={() => {
-                  applySuggestion(plan.days.filter((d) => d.mode !== 'off').map((d) => ({ dayId: d.dayId, placeIds: d.placeIds, times: d.times })))
+                  applySuggestion(plan.days.filter((d) => d.mode !== 'off').map((d) => ({ dayId: d.dayId, placeIds: d.placeIds, times: d.times, startId: d.startId, endId: d.endId })))
                   onClose()
                 }}
               >

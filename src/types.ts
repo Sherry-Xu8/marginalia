@@ -112,6 +112,10 @@ export type Day = {
   date: string // yyyy-mm-dd
   items: DayItem[] // in the order you'll visit them
   legModes?: Record<string, TravelMode> // how you travel each journey, keyed "fromPlaceId>toPlaceId"
+  // Where the day begins and ends. Left out, both are where you're sleeping; null means nowhere in particular
+  // (an arrival day that starts at the airport, a departure day that ends there).
+  startPlaceId?: string | null
+  endPlaceId?: string | null
 }
 
 export const TAGS = [

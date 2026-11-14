@@ -467,6 +467,11 @@ export function updateDayItem(dayId: string, itemId: string, patch: Partial<Pick
   mapDay(dayId, (d) => ({ ...d, items: d.items.map((i) => (i.id === itemId ? { ...i, ...patch } : i)) }))
 }
 
+// Where a day begins or ends: a place, or null for nowhere in particular. undefined goes back to where you sleep.
+export function setDayEndpoint(dayId: string, which: 'start' | 'end', placeId: string | null | undefined) {
+  mapDay(dayId, (d) => ({ ...d, ...(which === 'start' ? { startPlaceId: placeId } : { endPlaceId: placeId }) }))
+}
+
 export function removeDayItem(dayId: string, itemId: string) {
   mapDay(dayId, (d) => ({ ...d, items: d.items.filter((i) => i.id !== itemId) }))
 }
@@ -562,7 +567,7 @@ export function removeCheckItem(tripId: string, itemId: string) {
 }
 
 // Saves an accepted suggestion: each listed day gets exactly these places, in this order.
-export function applySuggestion(plan: { dayId: string; placeIds: string[]; times?: Record<string, string> }[]) {
+export function applySuggestion(plan: { dayId: string; placeIds: string[]; times?: Record<string, string>; startId?: string | null; endId?: string | null }[]) {
   const byDay = new Map(plan.map((p) => [p.dayId, p]))
   update((s) => ({
     ...s,
@@ -572,6 +577,8 @@ export function applySuggestion(plan: { dayId: string; placeIds: string[]; times
             ...d,
             // Times you fixed yourself in the draft (a booking, a tour) are kept on the day's plan.
             items: byDay.get(d.id)!.placeIds.map((placeId) => ({ id: newId(), placeId, note: '', done: false, time: byDay.get(d.id)!.times?.[placeId] })),
+            startPlaceId: byDay.get(d.id)!.startId,
+            endPlaceId: byDay.get(d.id)!.endId,
           }
         : d,
     ),
