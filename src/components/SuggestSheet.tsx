@@ -114,7 +114,7 @@ function DraftRow({
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id })
   return (
-    <div ref={setNodeRef} style={{ transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.6 : 1 }} className={'draft-row' + (focused ? ' focused' : '')}>
+    <div ref={setNodeRef} style={{ transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.6 : 1 }} className={'draft-row' + (focused ? ' focused' : '')} data-slot={id}>
       {leg && (
         <span
           className="leg-hint muted"
@@ -231,7 +231,7 @@ function DraftPicker({
               <TagIcon tag={tagOf(p)} size={26} />
               <span className="pick-head">
                 {p.name}
-                {on && <small className="muted">on {on} — tap to move it here</small>}
+                {on && <small className="muted">already on {on} — tap to add it again</small>}
               </span>
             </button>
           )
@@ -360,7 +360,7 @@ export function SuggestSheet({ trip, stop, onClose }: { trip: Trip; stop: Stop; 
           if (!aside && d.dayId === toDayId) {
             return {
               ...d,
-              placeIds: [...d.placeIds, placeId],
+              placeIds: [...d.placeIds, nextSlot(d.placeIds, baseId(placeId))],
               labels: label ? { ...(d.labels ?? {}), [placeId]: label } : d.labels,
               times: time ? { ...(d.times ?? {}), [placeId]: time } : d.times,
             }
@@ -421,7 +421,7 @@ export function SuggestSheet({ trip, stop, onClose }: { trip: Trip; stop: Stop; 
   }
   // The nearest restaurant still left over for this day (not closed that date).
   function mealFor(d: Suggestion['days'][number]): { place: Place; km: number } | undefined {
-    const near = d.placeIds.map((id) => placeById.get(id)).filter((x): x is Place => !!x)
+    const near = d.placeIds.map(placeOf).filter((x): x is Place => !!x)
     return (plan?.unscheduled ?? [])
       .map((id) => placeById.get(id))
       .filter((p): p is Place => !!p && p.tag === 'Food' && hoursOn(p.details?.hours, d.date).status !== 'closed')
@@ -485,9 +485,27 @@ export function SuggestSheet({ trip, stop, onClose }: { trip: Trip; stop: Stop; 
     setNotice('')
   }
 
+  // The same place can sit on a day more than once (drop your bags at the hotel, go back to check in).
+  // Each entry after the first gets an id like "<place>~2", which carries its own time, label and pin.
+  const baseId = (id: string) => id.split('~')[0]
+  const placeOf = (id: string): Place | undefined => {
+    const p = placeById.get(baseId(id))
+    return p && (p.id === id ? p : { ...p, id })
+  }
+  const nextSlot = (placeIds: string[], placeId: string) => {
+    if (!placeIds.some((x) => baseId(x) === placeId)) return placeId
+    let n = 2
+    while (placeIds.includes(`${placeId}~${n}`)) n++
+    return `${placeId}~${n}`
+  }
+
   // Re-plan around the places you've pinned (one day, or every day that has a pin).
   const replanCtx = (): ReplanCtx => ({
-    placeById,
+    // slots like "<place>~2" are places in their own right as far as re-planning is concerned
+    placeById: new Map([
+      ...placeById,
+      ...(plan?.days ?? []).flatMap((d) => d.placeIds.filter((id) => id.includes('~')).flatMap((id) => { const p = placeOf(id); return p ? [[id, p] as const] : [] })),
+    ]),
     pins,
     pace,
     prefs,
@@ -533,7 +551,9 @@ export function SuggestSheet({ trip, stop, onClose }: { trip: Trip; stop: Stop; 
       p && {
         ...p,
         days: p.days.map((d) => (d.dayId === dayId ? { ...d, placeIds: d.placeIds.filter((x) => x !== placeId) } : d)),
-        unscheduled: [...p.unscheduled, placeId],
+        unscheduled: p.unscheduled.includes(baseId(placeId)) || p.days.some((x) => x.placeIds.some((y) => baseId(y) === baseId(placeId) && y !== placeId))
+          ? p.unscheduled
+          : [...p.unscheduled, baseId(placeId)],
       },
     )
   }
@@ -541,7 +561,7 @@ export function SuggestSheet({ trip, stop, onClose }: { trip: Trip; stop: Stop; 
     setPlan((p) =>
       p && {
         ...p,
-        days: p.days.map((d) => (d.dayId === dayId ? { ...d, placeIds: [...d.placeIds, placeId] } : d)),
+        days: p.days.map((d) => (d.dayId === dayId ? { ...d, placeIds: [...d.placeIds, nextSlot(d.placeIds, placeId)] } : d)),
         unscheduled: p.unscheduled.filter((x) => x !== placeId),
       },
     )
@@ -555,7 +575,7 @@ export function SuggestSheet({ trip, stop, onClose }: { trip: Trip; stop: Stop; 
     return plan.days
       .filter((d) => d.mode !== 'off' && hoursOn(p.details?.hours, d.date).status !== 'closed')
       .map((d) => {
-        const near = [...d.placeIds.map((id) => placeById.get(id)), ...(d.placeIds.length === 0 && hotel ? [hotel] : [])]
+        const near = [...d.placeIds.map(placeOf), ...(d.placeIds.length === 0 && hotel ? [hotel] : [])]
           .filter((x): x is Place => !!x)
           .map((x) => ({ x, km: distanceKm(p, x) }))
           .sort((a, b) => a.km - b.km)[0]
@@ -575,7 +595,7 @@ export function SuggestSheet({ trip, stop, onClose }: { trip: Trip; stop: Stop; 
     .map((d) => ({
       dayId: d.dayId,
       label: shortDate(d.date),
-      places: d.placeIds.map((id) => placeById.get(id)).filter((x): x is Place => !!x),
+      places: d.placeIds.map(placeOf).filter((x): x is Place => !!x),
     }))
 
   // The journeys that land on a date, and the ones that set off from it.
@@ -588,7 +608,7 @@ export function SuggestSheet({ trip, stop, onClose }: { trip: Trip; stop: Stop; 
   function spareFor(d: Suggestion['days'][number], limit: number) {
     if (!plan) return []
     const hotel = places.find((x) => x.id === stayForStop(trip, stop)?.placeId)
-    const anchors = [...d.placeIds.map((id) => placeById.get(id)), ...(d.placeIds.length === 0 && hotel ? [hotel] : [])].filter((x): x is Place => !!x)
+    const anchors = [...d.placeIds.map(placeOf), ...(d.placeIds.length === 0 && hotel ? [hotel] : [])].filter((x): x is Place => !!x)
     return plan.unscheduled
       .map((id) => placeById.get(id))
       .filter((x): x is Place => !!x && hoursOn(x.details?.hours, d.date).status !== 'closed')
@@ -761,7 +781,7 @@ export function SuggestSheet({ trip, stop, onClose }: { trip: Trip; stop: Stop; 
               <div className="draft-days">
             {plan.days.map((d) => {
               const anchor = d.anchorId ? placeById.get(d.anchorId) : undefined
-              const ordered = d.placeIds.map((id) => placeById.get(id)).filter((x): x is Place => !!x)
+              const ordered = d.placeIds.map(placeOf).filter((x): x is Place => !!x)
               const startId = endpointOf(d, 'start')
               const endId = endpointOf(d, 'end')
               const startAt = startId ? placeById.get(startId) : undefined
@@ -842,7 +862,7 @@ export function SuggestSheet({ trip, stop, onClose }: { trip: Trip; stop: Stop; 
                   >
                     <SortableContext items={d.placeIds} strategy={verticalListSortingStrategy}>
                       {d.placeIds.map((id, n) => {
-                        const pl = placeById.get(id)
+                        const pl = placeOf(id)
                         return (
                           <DraftRow
                             key={id}
@@ -966,6 +986,10 @@ export function SuggestSheet({ trip, stop, onClose }: { trip: Trip; stop: Stop; 
                       anchor={activeDay.anchorId ? placeById.get(activeDay.anchorId) : undefined}
                       onAdd={(id) => addToPlanDay(activeDay.dayId, id)}
                       onPickDay={setMapDayId}
+                      onPickPlace={(id) => {
+                        setFocusId(id)
+                        document.querySelector(`[data-slot="${id.replace(/"/g, '')}"]`)?.scrollIntoView({ block: 'center', behavior: 'smooth' })
+                      }}
                     />
                     <div className="day-key">
                       {mapDays.map((d, i) => (
@@ -992,13 +1016,11 @@ export function SuggestSheet({ trip, stop, onClose }: { trip: Trip; stop: Stop; 
                   places={stopPlaces}
                   dayLabel={shortDate(plan.days.find((d) => d.dayId === pickFor)?.date ?? '')}
                   whereIs={(id) => {
-                    const on = plan.days.find((d) => d.placeIds.includes(id))
-                    return on ? shortDate(on.date) : undefined
+                    const days = plan.days.filter((d) => d.placeIds.some((x) => baseId(x) === id))
+                    return days.length > 0 ? days.map((d) => shortDate(d.date)).join(', ') : undefined
                   }}
                   onPick={(id) => {
-                    const on = plan.days.find((d) => d.placeIds.includes(id))
-                    if (on && on.dayId !== pickFor) moveToDay(on.dayId, id, pickFor)
-                    else if (!on) addToPlanDay(pickFor, id)
+                    addToPlanDay(pickFor, id) // already on a day? this adds it again, as its own stop
                     setPickFor(null)
                   }}
                   onClose={() => setPickFor(null)}
@@ -1021,7 +1043,7 @@ export function SuggestSheet({ trip, stop, onClose }: { trip: Trip; stop: Stop; 
               <button
                 className="primary"
                 onClick={() => {
-                  applySuggestion(plan.days.filter((d) => d.mode !== 'off').map((d) => ({ dayId: d.dayId, placeIds: d.placeIds, times: d.times, bands: d.bands, startId: d.startId, endId: d.endId })))
+                  applySuggestion(plan.days.filter((d) => d.mode !== 'off').map((d) => ({ dayId: d.dayId, placeIds: d.placeIds.map(baseId), times: d.times, bands: d.bands, startId: d.startId, endId: d.endId })))
                   onClose()
                 }}
               >

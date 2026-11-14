@@ -21,6 +21,7 @@ export function DraftMap({
   anchor,
   onAdd,
   onPickDay,
+  onPickPlace,
 }: {
   days: MapDay[]
   activeId?: string
@@ -29,14 +30,15 @@ export function DraftMap({
   anchor?: Place
   onAdd: (placeId: string) => void
   onPickDay: (dayId: string) => void
+  onPickPlace?: (placeId: string) => void
 }) {
   // "Day" zooms to the day you're on; "Whole trip" pulls back so every day's pins fit.
   const [fit, setFit] = useState<'day' | 'trip'>('day')
   const el = useRef<HTMLDivElement>(null)
   const map = useRef<L.Map | null>(null)
   const layer = useRef<L.LayerGroup | null>(null)
-  const cb = useRef({ onAdd, onPickDay })
-  cb.current = { onAdd, onPickDay }
+  const cb = useRef({ onAdd, onPickDay, onPickPlace })
+  cb.current = { onAdd, onPickDay, onPickPlace }
   const markers = useRef(new Map<string, L.Marker>())
 
   useEffect(() => {
@@ -92,7 +94,11 @@ export function DraftMap({
         iconSize: [30, 30],
         iconAnchor: [15, 15],
       })
-      markers.current.set(p.id, L.marker([p.lat, p.lon], { icon, title: p.name }).addTo(g))
+      const mk = L.marker([p.lat, p.lon], { icon, title: p.name })
+        .addTo(g)
+        .bindTooltip(`${i + 1}. ${p.name}`, { direction: 'top', offset: [0, -14] })
+        .on('click', () => cb.current.onPickPlace?.(p.id))
+      markers.current.set(p.id, mk)
     })
     for (const p of spare) {
       const icon = L.divIcon({ className: 'num-pin spare-pin', html: '<span>+</span>', iconSize: [26, 26], iconAnchor: [13, 13] })
